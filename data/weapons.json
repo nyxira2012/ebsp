@@ -1,0 +1,62 @@
+[
+    {
+        "id": "wpn_beam_rifle",
+        "name": "光束步枪",
+        "type": "RIFLE",
+        "power": 800,
+        "en_cost": 20,
+        "range": {
+            "min": 1000,
+            "max": 6000
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_beam_saber",
+        "name": "光束军刀",
+        "type": "MELEE",
+        "power": 1200,
+        "en_cost": 15,
+        "range": {
+            "min": 0,
+            "max": 2000
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_machine_gun",
+        "name": "120mm机炮",
+        "type": "RIFLE",
+        "power": 700,
+        "en_cost": 18,
+        "range": {
+            "min": 1000,
+            "max": 6000
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_heat_axe",
+        "name": "热能斧",
+        "type": "MELEE",
+        "power": 1100,
+        "en_cost": 20,
+        "range": {
+            "min": 0,
+            "max": 2000
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_bazooka",
+        "name": "光束火箭炮",
+        "type": "HEAVY",
+        "power": 1400,
+        "en_cost": 35,
+        "range": {
+            "min": 3000,
+            "max": 8000
+        },
+        "hit_penalty": 0.0
+    }
+]

@@ -1,0 +1,32 @@
+[
+    {
+        "id": "pilot_amuro",
+        "name": "阿姆罗·雷",
+        "stats": {
+            "shooting": 85,
+            "melee": 70,
+            "awakening": 90,
+            "defense": 65,
+            "reaction": 88
+        },
+        "proficiency": {
+            "weapon": 800,
+            "mecha": 3500
+        }
+    },
+    {
+        "id": "pilot_char",
+        "name": "夏亚·阿兹纳布尔",
+        "stats": {
+            "shooting": 90,
+            "melee": 80,
+            "awakening": 85,
+            "defense": 70,
+            "reaction": 92
+        },
+        "proficiency": {
+            "weapon": 900,
+            "mecha": 3800
+        }
+    }
+]

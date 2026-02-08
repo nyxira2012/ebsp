@@ -1,0 +1,61 @@
+[
+    {
+        "id": "mech_rx78",
+        "name": "RX-78-2 高达",
+        "pilot_id": "pilot_amuro",
+        "stats": {
+            "hp": 5000,
+            "en": 200,
+            "mobility": 85,
+            "armor": 120
+        },
+        "attributes": {
+            "hit": 15.0,
+            "precision": 30.0,
+            "crit": 25.0
+        },
+        "defense": {
+            "dodge": 22.0,
+            "parry": 15.0,
+            "block": 25.0,
+            "block_val": 100
+        },
+        "weapon_ids": [
+            "wpn_beam_rifle",
+            "wpn_beam_saber"
+        ],
+        "traits": [
+            "trait_learning_computer"
+        ]
+    },
+    {
+        "id": "mech_zaku",
+        "name": "MS-06S 扎古II (指挥官机)",
+        "pilot_id": "pilot_char",
+        "stats": {
+            "hp": 5500,
+            "en": 180,
+            "mobility": 90,
+            "armor": 150
+        },
+        "attributes": {
+            "hit": 18.0,
+            "precision": 28.0,
+            "crit": 30.0
+        },
+        "defense": {
+            "dodge": 20.0,
+            "parry": 12.0,
+            "block": 28.0,
+            "block_val": 120
+        },
+        "weapon_ids": [
+            "wpn_machine_gun",
+            "wpn_heat_axe",
+            "wpn_bazooka"
+        ],
+        "traits": [
+            "trait_enhanced_armor"
+        ]
+    }
+]
