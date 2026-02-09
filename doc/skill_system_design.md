@@ -1,0 +1,765 @@
+# 游戏技能系统设计文档 v4.5
+> 基于圆桌判定的完整技能系统架构
+
+## 1. 系统概述
+
+基于 Pipeline（流水线）架构的回合制战斗系统，核心设计哲学是 **逻辑与数值分离**：
+- 战斗主循环只负责流程控制和"埋点"（Hooks）
+- 所有的数值修正、机制判定均通过 **技能效果（Effects）** 挂载到钩子点上实现
+- 支持四大类技能效果：临时增加数值、概率增加数值、临时确定判定、概率确定判定
+
+---
+
+## 2. 圆桌判定完整要素
+
+### 2.1 圆桌判定的六个结果
+
+圆桌判定按优先级顺序依次检查：
+
+| 优先级 | 结果 | 说明 | 计算要素 |
+|-------|------|------|---------|
+| 1 | **Miss（未命中）** | 攻击未击中目标 | 基础未命中率 + 未命中修正 - 命中修正 |
+| 2 | **Dodge（躲闪）** | 完全闪避攻击 | 躲闪基础值 × (1 - 精准削减) |
+| 3 | **Parry（招架）** | 完全招架攻击，增加大量气力 | 招架基础值 × (1 - 精准削减)，上限50% |
+| 4 | **Block（格挡）** | 格挡减少伤害 | 格挡基础值 × (1 - 精准削减)，上限80% |
+| 5 | **Crit（暴击）** | 暴击伤害 | 暴击率 × 剩余空间 |
+| 6 | **Hit（普通命中）** | 正常命中 | 剩余全部空间 |
+
+### 2.2 精准削减机制
+
+精准值会削减 Dodge/Parry/Block 的概率：
+```
+实际防御概率 = 基础防御概率 × (1 - 精准削减比例)
+```
+
+**关键**：精准削减只影响 Dodge/Parry/Block，不影响 Miss、 hit和 Crit
+**顺序**：计算顺序，
+1. 基础防御概率（机体固有）
+2. 防御概率修正（防御方 HOOK_PRE_DODGE_RATE 等）
+3. 应用精准削减（基于攻击方精准值）
+---
+
+## 3. 战斗流程与钩子体系
+
+### 3.1 完整的战斗流程图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段一：先手判定                                             │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_INITIATIVE_CHECK  →  检查是否强制先手（突袭、威压）     │
+│ HOOK_INITIATIVE_SCORE  →  修正先手得分（反应值、机动性）     │
+│ [确定先手方]                                                │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段二：命中判定准备                                         │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_PRE_MISS_RATE      →  修正未命中率（脱力、熟练度）     │
+│ HOOK_PRE_HIT_RATE       →  修正命中率（必中、集中）          │
+│ HOOK_PRE_PRECISION      →  修正精准值（精密射击）            │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段三：防御概率计算                                         │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_PRE_DODGE_RATE     →  修正躲闪率（必闪、分身）          │
+│ HOOK_PRE_PARRY_RATE     →  修正招架率（见切、武术）          │
+│ HOOK_PRE_BLOCK_RATE     →  修正格挡率（盾牌防御）            │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段四：暴击计算                                             │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_PRE_CRIT_RATE      →  修正暴击率（热血、斗志）          │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段五：圆桌判定                                             │
+├─────────────────────────────────────────────────────────────┤
+│ [生成 0-100 随机数]                                         │
+│ [按优先级依次检查：Miss → Dodge → Parry → Block → Crit → Hit] │
+│ HOOK_OVERRIDE_RESULT    →  强制判定结果（必中、必闪）        │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段六：判定后修正                                           │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_POST_ROLL_RESULT   →  扭转判定结果（分身、直击）        │
+│ [确定最终判定结果：Miss/Dodge/Parry/Block/Crit/Hit]         │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段七：基础伤害计算                                         │
+├─────────────────────────────────────────────────────────────┤
+│ [武器威力 + 驾驶员属性 × 2]                                 │
+│ HOOK_PRE_WEAPON_POWER   →  修正武器威力（强力武器）          │
+│ HOOK_PRE_STAT_BONUS     →  修正属性加成（格斗/射击值）       │
+│ [应用气力修正]                                              │
+│ HOOK_PRE_WILL_MODIFIER  →  修正气力系数（觉醒）              │
+│ → base_damage                                            │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段八：伤害倍率修正                                         │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_PRE_DAMAGE_MULT    →  修正伤害倍率（热血 x2）           │
+│ [圆桌判定中的 Crit 确定后，伤害计算阶段只调整倍率值]                                  │
+│ HOOK_PRE_CRIT_MULTIPLIER → 修正暴击倍率（1.5 → 2.0）         │
+│ → final_damage_before_mitigation                           │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段九：护甲减伤                                             │
+├─────────────────────────────────────────────────────────────┤
+│ [计算护甲减伤比例]                                          │
+│ HOOK_PRE_ARMOR_VALUE     →  修正护甲值（装甲强化）           │
+│ HOOK_PRE_DEFENSE_LEVEL  →  修正防御等级（铁壁）             │
+│ HOOK_PRE_MITIGATION      →  修正减伤比例（铁壁 0.25）        │
+│ → damage_after_armor                                     │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段十：格挡减伤                                             │
+├─────────────────────────────────────────────────────────────┤
+│ [如果是格挡，减去格挡值]                                     │
+│ HOOK_PRE_BLOCK_VALUE     →  修正格挡值（强化盾牌）           │
+│ → damage_after_block                                     │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段十一：伤害抵消                                           │
+├─────────────────────────────────────────────────────────────┤
+│ HOOK_ON_DAMAGE_TAKEN    →  伤害抵消（I力场、能量壁垒）       │
+│ → final_damage                                           │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段十二：结算                                               │
+├─────────────────────────────────────────────────────────────┤
+│ [应用伤害，更新 HP]                                         │
+│ HOOK_ON_DAMAGE_DEALT     →  造成伤害后（吸血）              │
+│ HOOK_ON_KILL             →  击坠敌机时（幸运、努力）         │
+│ HOOK_ON_ATTACK_END       →  攻击结束（补给、EN回收）         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 钩子点详细定义
+
+#### 阶段一：先手判定
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_INITIATIVE_CHECK` | 双方基础先手值 | 强制指定的先手方 (Optional) | 突袭、威压 |
+| `HOOK_INITIATIVE_SCORE` | 基础先手得分 | 修正后的得分 | 反应值强化、推进器过载 |
+
+#### 阶段二：命中判定准备
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_MISS_RATE` | 基础未命中率 | 修正后的未命中率 | 脱力、武器熟练度 |
+| `HOOK_PRE_HIT_RATE` | 命中加成值 | 修正后的命中加成值（命中值提升后仍然需要圆桌判定） | 集中 |
+| `HOOK_PRE_PRECISION` | 基础精准值 | 修正后的精准值 | 精密射击、弱点看破 |
+
+#### 阶段三：防御概率计算
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_DODGE_RATE` | 基础躲闪率 | 修正后的躲闪率 | 必闪、分身、高机动 |
+| `HOOK_PRE_PARRY_RATE` | 基础招架率 | 修正后的招架率 | 见切、武术、战斗本能 |
+| `HOOK_PRE_BLOCK_RATE` | 基础格挡率 | 修正后的格挡率 | 盾牌防御、堡垒 |
+
+#### 阶段四：暴击计算
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_CRIT_RATE` | 基础暴击率 | 修正后的暴击率 | 热血、斗志、狩猎 |
+
+#### 阶段五：圆桌判定
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_OVERRIDE_RESULT` | 原始判定逻辑 | 强制判定结果 (Flag) | 必中、必闪、强制格挡 |
+
+#### 阶段六：判定后修正
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_POST_ROLL_RESULT` | 原始判定结果 | 修改后的结果 | 分身（HIT→DODGE）、直击（PARRY/BLOCK→HIT） |
+
+#### 阶段七：基础伤害计算
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_WEAPON_POWER` | 武器威力 | 修正后的威力 | 强力武器、超 force |
+| `HOOK_PRE_STAT_BONUS` | 属性加成值 | 修正后的加成 | 格斗/射击值强化 |
+| `HOOK_PRE_WILL_MODIFIER` | 气力修正系数 | 修正后的系数 | 觉醒、超能力 |
+
+#### 阶段八：伤害倍率修正
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_DAMAGE_MULT` | 当前伤害值 | 修正后的伤害值 | 热血（×2）、气势（×1.5） |
+| `HOOK_PRE_CRIT_MULTIPLIER` | 暴击倍率 | 修正后的暴击倍率 | 暴击倍率提升（1.5→2.0） |
+
+#### 阶段九：护甲减伤
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_ARMOR_VALUE` | 护甲值 | 修正后的护甲值 | 装甲强化、合金装甲 |
+| `HOOK_PRE_DEFENSE_LEVEL` | 防御等级 | 修正后的防御等级 | 防御指令、堡垒模式 |
+| `HOOK_PRE_MITIGATION` | 减伤比例 | 修正后的减伤比例 | 铁壁（0.25）、I力场 |
+
+#### 阶段十：格挡减伤
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_PRE_BLOCK_VALUE` | 格挡值 | 修正后的格挡值 | 强化盾牌、能量盾 |
+
+#### 阶段十一：伤害抵消
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_ON_DAMAGE_TAKEN` | 最终伤害值 | 裁定后的伤害值 | I力场（<2000归0）、能量壁垒、不屈（保留10点） |
+
+#### 阶段十二：结算
+
+| 钩子点 | 输入 | 输出 | 典型技能 |
+|-------|------|------|---------|
+| `HOOK_ON_DAMAGE_DEALT` | 造成伤害值 | (副作用) | 吸血、SP吸收 |
+| `HOOK_ON_KILL` | None | None | 幸运（双倍金钱）、努力（双倍经验） |
+| `HOOK_ON_ATTACK_END` | None | None | 补给（EN回复）、气力觉醒 |
+
+---
+
+## 4. 数据模型
+
+### 4.1 Effect（原子效果）
+
+**核心字段**：
+- `id` / `source_id`: 标识
+- `priority` (0-100): 优先级，越大越后执行
+- `hook`: 挂载点名称
+- `trigger_chance`: 触发概率 (0-1)
+- `operation`: 操作类型 → `add`(加法) / `mul`(乘法) / `override`(覆盖) / `callback`(回调)
+- `value`: 数值或回调函数名
+- `conditions`: 触发条件列表
+- `target`: `"self"`(自己) / `"enemy"`(对方)
+- `charges`: 剩余次数 (-1=无限)
+- `side_effects`: 副作用列表
+- `duration`: 持续回合数 (-1=永久)
+
+### 4.2 BattleContext 扩展
+
+**状态生命周期类型**：
+- `ATTACK_BASED`: 每次攻击结束时清理
+- `TURN_BASED`: 每回合结束时清理
+- `BATTLE_BASED`: 整场战斗结束时清理
+- `GLOBAL`: 永不清理（慎用）
+
+**核心字段**：
+- `shared_state`: 跨Effect状态共享（带生命周期）
+- `hook_stack`: 递归防护栈
+- `current_round`: 当前回合数
+- `cached_results`: 钩子点计算结果缓存
+
+**生命周期清理策略**：
+
+| 生命周期类型 | 清理时机 | 典型用途 |
+|------------|---------|---------|
+| `ATTACK_BASED` | HOOK_ON_ATTACK_END | 临时攻击加成 |
+| `TURN_BASED` | 每回合结束时 | 回合内计数器 |
+| `BATTLE_BASED` | 整场战斗结束 | 战斗长期状态（如学习电脑层数） |
+| `GLOBAL` | 永不清理 | 全局标识（慎用） |
+
+**清理触发器位置**：在 `process_hook` 中根据钩子点触发清理
+- `HOOK_ON_ATTACK_END` → 清理 ATTACK_BASED
+- `HOOK_ON_TURN_END` → 清理 TURN_BASED
+- `HOOK_ON_BATTLE_END` → 清理 BATTLE_BASED
+
+### 4.3 Condition（条件定义）
+
+Effect 生效的前置检查：
+
+#### 4.3.1 基础条件类型
+
+| 条件类型 | 字段 | 说明 | 示例 |
+|---------|------|------|------|
+| HP条件 | `hp_threshold` | HP < x% 或 HP > x% | 狂战士（HP<30%） |
+| 气力条件 | `will_threshold` | 气力 > x 或 < x | 觉醒（气力>130） |
+| 武器标签 | `weapon_tag` | 武器包含特定标签 | 光束武器专用 |
+| 伤害类型 | `damage_type` | 伤害类型匹配 | I力场（光束） |
+| 回合条件 | `round_number` | 当前回合 = x 或 > x | 突击（第1回合） |
+| 判定结果 | `attack_result` | 圆桌判定结果匹配 | 气合（命中后） |
+
+#### 4.3.2 对方属性条件（新增）
+
+| 条件类型 | 字段 | 说明 | 示例 |
+|---------|------|------|------|
+| 对方气力 | `enemy_will_threshold` | 对方气力 > x 或 < x | 压力（对方气力低） |
+| 对方属性值 | `enemy_stat_check` | 检查对方修正后的属性值 | 见切（对方命中率<30%） |
+| 跨钩子引用 | `ref_hook` | 引用其他钩子点的计算结果 | 见切（引用对方命中率） |
+
+**示例**：
+- 压力：`{"type": "enemy_will_below_self"}`
+- 见切：`{"type": "ref_hook", "hook": "HOOK_PRE_HIT_RATE", "target": "enemy", "op": "<", "val": 0.3}`
+
+#### 4.3.3 武器属性条件（新增）
+
+| 条件类型 | 字段 | 说明 | 示例 |
+|---------|------|------|------|
+| 武器类型 | `weapon_type` | 武器类型匹配 | 格斗专用 |
+| 武器分类 | `weapon_class` | 武器分类（近战/远战） | 狙击镜头（远距离） |
+| 射程范围 | `weapon_range` | 射程范围匹配 | 远距离武器 |
+| 大功率武器 | `is_high_power` | 大功率消耗武器 | 散热溢出 |
+
+### 4.4 SideEffect（副作用定义）
+
+Effect 触发后的副作用，用于消耗资源、修改状态等。
+
+#### 4.4.1 副作用类型
+
+| 副作用类型 | 说明 | 参数 | 示例 |
+|-----------|------|------|------|
+| `consume_en` | 消耗EN | `val`: 数量 | PS装甲（消耗10EN） |
+| `restore_en` | 回复EN | `val`: 数量或比例 | 核融合炉（回复15%） |
+| `modify_will` | 修改气力 | `val`: 变化量 | 气合（+2气力） |
+| `consume_charges` | 消耗次数 | `val`: 数量 | PS装甲（消耗1次） |
+| `modify_stat` | 修改属性 | `stat`: 属性名, `val`: 值 | 学习电脑（+2%命中） |
+
+#### 4.4.2 副作用目标
+
+副作用可以作用于不同对象：
+
+| 目标值 | 说明 | 示例 |
+|-------|------|------|
+| `self` | 自己 | 消耗自己的EN |
+| `enemy` | 对方 | 削减对方气力 |
+| `both` | 双方 | 同时影响双方 |
+
+**示例**：
+- PS装甲：`{"hook": "HOOK_ON_DAMAGE_TAKEN", "operation": "callback", "value": "cb_ps_armor", "charges": 3, "side_effects": [{"type": "consume_en", "val": 10}, {"type": "consume_charges", "val": 1}]}`
+- 气合：`{"hook": "HOOK_ON_ATTACK_END", "conditions": [{"type": "attack_result", "val": ["HIT", "CRIT"]}], "side_effects": [{"type": "modify_will", "val": 2}]}`
+
+---
+
+## 5. 核心算法逻辑
+
+### 5.1 EffectProcessor 处理流程（扩展版）
+
+1. **Fetch**: 从 Registry 获取 hook_name 下的所有 Effects
+2. **Filter**: 剔除无效 Effect (duration=0 / conditions不满足 / charges=0)
+3. **Sort**: 按 priority 升序 (0→100, 低优先级先计算)
+4. **Execute**: 遍历执行
+   - 检查 target → 确定作用对象
+   - 概率判定 → 若 random() > trigger_chance 则跳过
+   - 应用操作 → add/mul/override/callback
+   - 处理副作用 → 消耗EN、修改气力等
+   - 消耗次数 → charges -= 1
+5. **Return**: 返回最终值
+
+#### 5.1.1 冲突解决机制（Override Conflict Resolution）
+
+**解决策略（两层优先级）**：
+
+1. **攻击/防御优先权**
+   - 在同 Priority 下，**攻击方优先**
+2. **Sub-Priority（子优先级）**
+   - 引入 `sub_priority` 字段（0-1000）
+   - 格式：`(priority, sub_priority)` 二元组排序
+   - 默认值：`sub_priority = 500`
+
+### 5.2 跨钩子点引用机制
+
+**解决方案**：使用 `cached_results` 缓存 + 递归死锁防护
+
+**缓存机制**：
+- 每个 hook 计算后将结果存入 `context.cached_results[hook_name]`
+- 条件检查时直接从缓存读取并比较
+
+**递归死锁防护（三层）**：
+1. **引用方向限制**: 只允许引用已计算完毕的阶段
+2. **深度限制**: 超过3层递归返回默认值
+3. **快照机制**: 只能读取Base Value或上回合缓存
+
+**阶段依赖规则**：
+- 阶段二可引用阶段一
+- 阶段三可引用阶段一、二
+- 阶段四可引用阶段一、二、三
+- 阶段五-十二可引用阶段一-四
+
+**见切示例**：`{"hook": "HOOK_PRE_EVADE_RATE", "conditions": [{"type": "ref_hook", "hook": "HOOK_PRE_HIT_RATE", "target": "enemy", "op": "<", "val": 0.3}]}`
+
+### 5.3 副作用处理机制
+
+**副作用执行时机**：在 Effect 应用后立即执行
+
+```python
+def apply_side_effects(effect, context, target_mecha):
+    """应用副作用到目标机体"""
+    for side_effect in effect.side_effects:
+        effect_type = side_effect["type"]
+        val = side_effect.get("val", 0)
+
+        if effect_type == "consume_en":
+            target_mecha.consume_en(val)
+
+        elif effect_type == "restore_en":
+            restore = int(target_mecha.max_en * val) if val < 1 else val
+            target_mecha.current_en = min(target_mecha.max_en,
+                                          target_mecha.current_en + restore)
+
+        elif effect_type == "modify_will":
+            target_mecha.modify_will(val)
+
+        elif effect_type == "modify_stat":
+            stat_name = side_effect["stat"]
+            target_mecha.stat_modifiers[stat_name] = \
+                target_mecha.stat_modifiers.get(stat_name, 0) + val
+```
+
+**目标选择**：
+```python
+def get_target_mecha(effect, context, current_mecha):
+    """根据 effect.target 获取目标机体"""
+    if effect.target == "enemy":
+        # 如果当前是 attacker，返回 defender
+        return context.defender if current_mecha == context.attacker else context.attacker
+    else:
+        return current_mecha
+```
+
+### 5.4 使用次数机制
+
+**计数器管理**：
+
+```python
+def process_hook(hook_name, initial_value, context):
+    for effect in sorted_effects:
+        # 检查次数
+        if effect.charges == 0:
+            continue
+
+        # 应用效果
+        current_value = apply_effect(effect, current_value, context)
+
+        # 消耗次数
+        if effect.consume_on_trigger:
+            effect.charges -= 1
+            if effect.charges == 0:
+                # 次数用完，移除效果
+                remove_effect(effect)
+```
+
+**初始化**：
+```python
+# PS装甲：3次
+Effect(
+    id="ps_armor",
+    hook="HOOK_ON_DAMAGE_TAKEN",
+    charges=3,
+    consume_on_trigger=True
+)
+```
+
+### 5.5 优先级分层标准
+
+| 优先级范围 | 层次名称 | 适用场景 | 典型技能 |
+|-----------|---------|---------|---------|
+| 0-20 | Passives | 机体固有被动 | 装甲补正、OS修正 |
+| 21-50 | Buffs | 普通精神指令 | 集中、加速 |
+| 51-80 | Multipliers | 强力倍率 | 热血、暴击修正 |
+| 81-99 | Conditional | 概率防御机制 | 分身、护盾 |
+| 100 | Absolute | 绝对判定 | 必中、必闪、不屈 |
+
+---
+
+## 6. 四大技能效果类型实现
+
+### 6.1 临时增加数值
+
+**定义**：在持续时间内，对某个属性进行修正
+
+**实现方式**：`effect_type = "modifier"`, `chance = 1.0`
+
+**典型技能**：
+- 集中（命中+30%、回避+30%）
+  ```json
+  {
+    "hook": "HOOK_PRE_HIT_RATE",
+    "operation": "add",
+    "value": 30.0,
+    "priority": 30
+  }
+  ```
+- 热血（伤害×2）
+  ```json
+  {
+    "hook": "HOOK_PRE_DAMAGE_MULT",
+    "operation": "mul",
+    "value": 2.0,
+    "priority": 60
+  }
+  ```
+- 铁壁（受伤0.25倍）
+  ```json
+  {
+    "hook": "HOOK_PRE_MITIGATION",
+    "operation": "override",
+    "value": 0.25,
+    "priority": 60
+  }
+  ```
+
+### 6.2 概率增加数值
+
+**定义**：以一定概率触发属性修正
+
+**实现方式**：`effect_type = "prob"`, `chance < 1.0`
+
+**典型技能**：
+- 狂战士（HP<30%，40%概率伤害×1.5）
+  ```json
+  {
+    "hook": "HOOK_PRE_DAMAGE_MULT",
+    "operation": "mul",
+    "value": 1.5,
+    "trigger_chance": 0.4,
+    "conditions": [{"type": "hp_threshold", "val": 0.3}],
+    "priority": 60
+  }
+  ```
+- 幸运射击（30%概率命中+50%）
+  ```json
+  {
+    "hook": "HOOK_PRE_HIT_RATE",
+    "operation": "add",
+    "value": 50.0,
+    "trigger_chance": 0.3,
+    "priority": 40
+  }
+  ```
+
+### 6.3 临时确定判定
+
+**定义**：强制设定某个判定结果
+
+**实现方式**：`effect_type = "force"`, `operation = "override/callback"`, `priority = 100`
+
+**典型技能**：
+- 必中（命中率100%）
+  ```json
+  {
+    "hook": "HOOK_PRE_HIT_RATE",
+    "operation": "override",
+    "value": 100.0,
+    "priority": 100
+  }
+  ```
+- 必闪（躲闪率+100%）
+  ```json
+  {
+    "hook": "HOOK_PRE_DODGE_RATE",
+    "operation": "add",
+    "value": 100.0,
+    "priority": 100
+  }
+  ```
+- 强制格挡（强制格挡）
+  ```json
+  {
+    "hook": "HOOK_OVERRIDE_RESULT",
+    "operation": "callback",
+    "value": "cb_force_block",
+    "priority": 95
+  }
+  ```
+
+### 6.4 概率确定判定
+
+**定义**：以一定概率强制设定结果
+
+**实现方式**：`effect_type = "prob"`, `chance < 1.0`, `operation = "callback"`, `priority = 81-99`
+
+**典型技能**：
+- 分身（50%概率完全回避）
+  ```json
+  {
+    "hook": "HOOK_POST_ROLL_RESULT",
+    "operation": "callback",
+    "value": "cb_bunshin",
+    "trigger_chance": 0.5,
+    "priority": 95
+  }
+  ```
+- I力场（抵消2000以下光束伤害）
+  ```json
+  {
+    "hook": "HOOK_ON_DAMAGE_TAKEN",
+    "operation": "callback",
+    "value": "cb_i_field",
+    "conditions": [
+      {"type": "damage_type", "val": "beam"},
+      {"type": "damage_below", "val": 2000}
+    ],
+    "priority": 80
+  }
+  ```
+
+---
+
+## 7. 开发指令
+
+### 7.1 Phase 1: 补充钩子点（基础）
+
+**文件**: `src/combat/resolver.py`, `src/combat/engine.py`
+
+**任务**：
+1. 添加 `HOOK_PRE_MISS_RATE`（未命中率）
+2. 添加 `HOOK_PRE_PARRY_RATE`（招架率）
+3. 添加 `HOOK_PRE_BLOCK_RATE`（格挡率）
+4. 添加 `HOOK_POST_ROLL_RESULT`（判定后修正）
+5. 添加 `HOOK_ON_DAMAGE_TAKEN`（伤害抵消）
+6. 添加 `HOOK_ON_KILL`（击坠）
+7. 添加 `HOOK_ON_ATTACK_END`（攻击结束）
+
+### 7.2 Phase 2: 扩展 Effect 模型（核心）
+
+**文件**: `src/models.py`
+
+**任务**：
+1. 添加 `Effect` 类的完整字段定义
+2. 实现 `check_conditions()` 方法
+3. 更新 `EffectManager` 支持新字段
+
+### 7.3 Phase 3: 创建 EffectProcessor（关键）
+
+**文件**: `src/skills.py`（新建 `processor.py`）
+
+**任务**：
+1. 创建 `EffectProcessor` 类
+2. 实现 `process_hook()` 方法（包含排序、概率、操作运算）
+3. 迁移现有硬编码效果到新系统
+
+### 7.4 Phase 4: 实现回调函数（演示）
+
+**文件**: `src/callbacks.py`（新建）
+
+**任务**：
+1. 实现 `cb_bunshin`（分身）
+2. 实现 `cb_i_field`（I力场）
+3. 实现 `cb_force_block`（强制格挡）
+
+### 7.5 Phase 5: 数据驱动配置（可选）
+
+**文件**: `data/skills.json`, `src/loader.py`
+
+**任务**：
+1. 创建技能配置 JSON
+2. 实现 `EffectLoader` 类
+3. 在 `DataLoader` 中集成
+
+---
+
+## 8. 典型技能实现示例
+
+### 8.1 精神指令：集中
+
+```json
+{
+  "spirit_focus": {
+    "name": "集中",
+    "sp_cost": 15,
+    "effects": [
+      {
+        "hook": "HOOK_PRE_HIT_RATE",
+        "operation": "add",
+        "value": 30.0,
+        "duration": 1,
+        "priority": 30
+      },
+      {
+        "hook": "HOOK_PRE_DODGE_RATE",
+        "operation": "add",
+        "value": 30.0,
+        "duration": 1,
+        "priority": 30
+      }
+    ]
+  }
+}
+```
+
+### 8.2 特性：分身
+
+```json
+{
+  "trait_bunshin": {
+    "name": "分身",
+    "effects": [
+      {
+        "hook": "HOOK_POST_ROLL_RESULT",
+        "operation": "callback",
+        "value": "cb_bunshin",
+        "trigger_chance": 0.5,
+        "duration": -1,
+        "priority": 95
+      }
+    ]
+  }
+}
+```
+
+**回调实现**：
+```python
+def cb_bunshin(current_result, context):
+    """分身：50%概率将 HIT 扭转为 DODGE"""
+    if current_result == AttackResult.HIT:
+        return AttackResult.DODGE
+    return current_result
+```
+
+### 8.3 特性：I力场
+
+```json
+{
+  "trait_i_field": {
+    "name": "I力场",
+    "effects": [
+      {
+        "hook": "HOOK_ON_DAMAGE_TAKEN",
+        "operation": "callback",
+        "value": "cb_i_field",
+        "conditions": [
+          {"type": "damage_type", "val": "beam"},
+          {"type": "damage_below", "val": 2000}
+        ],
+        "duration": -1,
+        "priority": 80
+      }
+    ]
+  }
+}
+```
+
+**回调实现**：
+```python
+def cb_i_field(damage, context):
+    """I力场：抵消2000以下的光束伤害"""
+    if context.weapon.weapon_type in [WeaponType.BEAM, WeaponType.BEAM_SABER]:
+        if damage < 2000:
+            return 0
+    return damage
+```
+
+#### UI 表现钩子（预留）
+
+战斗不仅是数值计算，还有视觉演出。UI 表现钩子允许技能效果向战斗系统传递动画和视觉反馈指令。
+---
+
+**文档版本**: v4.5
+**核心改进**:
+1. 覆盖圆桌判定的所有要素（Miss/Dodge/Parry/Block/Crit/Hit）
+2. 覆盖伤害计算的所有要素（武器威力、属性加成、气力、倍率、护甲、格挡、抵消）
+3. 明确了 30 个钩子点的输入输出契约
+4. 提供了四类技能效果的完整实现路径
