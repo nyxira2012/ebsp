@@ -28,5 +28,20 @@
             "weapon": 900,
             "mecha": 3800
         }
+    },
+    {
+        "id": "pilot_dummy",
+        "name": "木桩驾驶员",
+        "stats": {
+            "shooting": 10,
+            "melee": 10,
+            "awakening": 0,
+            "defense": 50,
+            "reaction": 50
+        },
+        "proficiency": {
+            "weapon": 10,
+            "mecha": 10
+        }
     }
 ]

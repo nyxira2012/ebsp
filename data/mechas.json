@@ -57,5 +57,31 @@
         "traits": [
             "trait_enhanced_armor"
         ]
+    },
+    {
+        "id": "mech_dummy",
+        "name": "木桩机体 (1M HP)",
+        "pilot_id": "pilot_dummy",
+        "stats": {
+            "hp": 1000000,
+            "en": 9999,
+            "mobility": 10,
+            "armor": 400
+        },
+        "attributes": {
+            "hit": 0.0,
+            "precision": 0.0,
+            "crit": 0.0
+        },
+        "defense": {
+            "dodge": 5.0,
+            "parry": 5.0,
+            "block": 5.0,
+            "block_val": 0
+        },
+        "weapon_ids": [
+            "wpn_dummy"
+        ],
+        "traits": []
     }
 ]

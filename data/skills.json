@@ -1,0 +1,413 @@
+{
+    "spirit_strike": [
+        {
+            "id": "spirit_strike",
+            "name": "必中",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "set",
+            "value": 100.0,
+            "duration": 1,
+            "priority": 100
+        }
+    ],
+    "spirit_alert": [
+        {
+            "id": "spirit_alert",
+            "name": "必闪",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "set",
+            "value": 0.0,
+            "duration": 1,
+            "charges": 1,
+            "priority": 100
+        }
+    ],
+    "spirit_valor": [
+        {
+            "id": "spirit_valor",
+            "name": "热血",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "mul",
+            "value": 2.0,
+            "duration": 1,
+            "charges": 1,
+            "priority": 60
+        }
+    ],
+    "spirit_iron_wall": [
+        {
+            "id": "spirit_iron_wall",
+            "name": "铁壁",
+            "hook": "HOOK_PRE_MITIGATION",
+            "operation": "max",
+            "value": 0.75,
+            "duration": 1,
+            "priority": 70
+        }
+    ],
+    "spirit_focus": [
+        {
+            "id": "spirit_focus_hit",
+            "name": "集中(命中)",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 30.0,
+            "duration": 1,
+            "sub_priority": 501
+        },
+        {
+            "id": "spirit_focus_eva",
+            "name": "集中(回避)",
+            "hook": "HOOK_PRE_DODGE_RATE",
+            "operation": "add",
+            "value": 30.0,
+            "duration": 1
+        }
+    ],
+    "spirit_zeal": [
+        {
+            "id": "spirit_zeal",
+            "name": "加速",
+            "hook": "HOOK_INITIATIVE_SCORE",
+            "operation": "add",
+            "value": 50.0,
+            "duration": 1
+        }
+    ],
+    "spirit_charge": [
+        {
+            "id": "spirit_charge",
+            "name": "突击",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 20.0,
+            "duration": 1
+        }
+    ],
+    "spirit_luck": [
+        {
+            "id": "spirit_luck",
+            "name": "幸运",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "mul",
+            "value": 1.2,
+            "duration": 1,
+            "charges": 1
+        }
+    ],
+    "spirit_flash": [
+        {
+            "id": "spirit_strike",
+            "name": "必中",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "set",
+            "value": 100.0,
+            "duration": 1,
+            "priority": 100
+        },
+        {
+            "id": "spirit_alert",
+            "name": "必闪",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "set",
+            "value": 0.0,
+            "duration": 1,
+            "charges": 1,
+            "priority": 100
+        }
+    ],
+    "spirit_persist": [
+        {
+            "id": "spirit_persist",
+            "name": "不屈",
+            "hook": "HOOK_ON_DAMAGE_TAKEN",
+            "operation": "set",
+            "value": 10,
+            "duration": 1,
+            "charges": 1,
+            "priority": 100
+        }
+    ],
+    "trait_nt": [
+        {
+            "id": "trait_nt_hit",
+            "name": "新人类(命中)",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 15.0,
+            "duration": -1,
+            "priority": 10
+        },
+        {
+            "id": "trait_nt_eva",
+            "name": "新人类(回避)",
+            "hook": "HOOK_PRE_DODGE_RATE",
+            "operation": "add",
+            "value": 15.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "trait_expert": [
+        {
+            "id": "trait_exp_dmg",
+            "name": "精英(伤害)",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "add",
+            "value": 0.1,
+            "duration": -1
+        },
+        {
+            "id": "trait_exp_save",
+            "name": "精英(节能)",
+            "hook": "HOOK_PRE_EN_COST_MULT",
+            "operation": "mul",
+            "value": 0.9,
+            "duration": -1
+        }
+    ],
+    "trait_seed": [
+        {
+            "id": "trait_seed_burst",
+            "name": "SEED爆发",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "mul",
+            "value": 1.25,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "hp_threshold",
+                    "val": 0.5,
+                    "op": "<"
+                }
+            ]
+        }
+    ],
+    "trait_zero": [
+        {
+            "id": "trait_zero",
+            "name": "ZERO系统",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 40.0,
+            "duration": -1,
+            "side_effects": [
+                {
+                    "type": "modify_will",
+                    "val": -2
+                }
+            ]
+        }
+    ],
+    "trait_transam": [
+        {
+            "id": "trait_transam_init",
+            "name": "Trans-AM(加速)",
+            "hook": "HOOK_INITIATIVE_SCORE",
+            "operation": "add",
+            "value": 60.0,
+            "duration": -1
+        },
+        {
+            "id": "trait_transam_eva",
+            "name": "Trans-AM(回避)",
+            "hook": "HOOK_PRE_DODGE_RATE",
+            "operation": "add",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_ps_armor": [
+        {
+            "id": "trait_ps_armor",
+            "name": "PS装甲",
+            "hook": "HOOK_PRE_MITIGATION",
+            "operation": "max",
+            "value": 0.3,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "weapon_type",
+                    "val": "MELEE",
+                    "op": "=="
+                }
+            ]
+        }
+    ],
+    "trait_ifield": [
+        {
+            "id": "trait_ifield",
+            "name": "I-Field",
+            "hook": "HOOK_PRE_MITIGATION",
+            "operation": "max",
+            "value": 0.4,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "weapon_type",
+                    "val": "RIFLE",
+                    "op": "=="
+                }
+            ]
+        }
+    ],
+    "trait_funnels": [
+        {
+            "id": "trait_funnels",
+            "name": "浮游炮精准",
+            "hook": "HOOK_PRE_PRECISION",
+            "operation": "add",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_potential": [
+        {
+            "id": "trait_potential",
+            "name": "底力",
+            "hook": "HOOK_PRE_MITIGATION",
+            "operation": "callback",
+            "value": "cb_potential",
+            "duration": -1
+        }
+    ],
+    "trait_hero": [
+        {
+            "id": "trait_hero_crit",
+            "name": "勇者(暴击)",
+            "hook": "HOOK_PRE_CRIT_RATE",
+            "operation": "add",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_berserk": [
+        {
+            "id": "trait_berserk_atk",
+            "name": "狂暴(攻击)",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "mul",
+            "value": 1.5,
+            "duration": -1
+        },
+        {
+            "id": "trait_berserk_eva",
+            "name": "狂暴(减防)",
+            "hook": "HOOK_PRE_DODGE_RATE",
+            "operation": "sub",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_solar": [
+        {
+            "id": "trait_solar",
+            "name": "GN炉",
+            "hook": "HOOK_ON_TURN_END",
+            "operation": "callback",
+            "value": "cb_gn_recover",
+            "duration": -1
+        }
+    ],
+    "trait_bio_sensor": [
+        {
+            "id": "trait_bio_sensor",
+            "name": "生物感应器",
+            "hook": "HOOK_PRE_PRECISION",
+            "operation": "add",
+            "value": 25.0,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 130,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "trait_heavy_armor": [
+        {
+            "id": "trait_heavy_armor",
+            "name": "厚重装甲",
+            "hook": "HOOK_PRE_DEFENSE_LEVEL",
+            "operation": "add",
+            "value": 600.0,
+            "duration": -1
+        }
+    ],
+    "trait_sniper": [
+        {
+            "id": "trait_sniper",
+            "name": "狙击手(命中)",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 25.0,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "round_number",
+                    "val": 3,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "trait_learning": [
+        {
+            "id": "trait_learning",
+            "name": "学习电脑",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "callback",
+            "value": "cb_learning",
+            "duration": -1
+        }
+    ],
+    "trait_counter": [
+        {
+            "id": "trait_counter",
+            "name": "反击加成",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "add",
+            "value": 0.15,
+            "duration": -1
+        }
+    ],
+    "trait_shield": [
+        {
+            "id": "trait_shield",
+            "name": "盾牌强化(格挡)",
+            "hook": "HOOK_PRE_BLOCK_RATE",
+            "operation": "add",
+            "value": 25.0,
+            "duration": -1
+        }
+    ],
+    "trait_multi": [
+        {
+            "id": "trait_multi",
+            "name": "多重锁定",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "add",
+            "value": 0.2,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 140,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "trait_guard": [
+        {
+            "id": "trait_guard",
+            "name": "防御",
+            "hook": "HOOK_PRE_MITIGATION",
+            "operation": "add",
+            "value": 0.15,
+            "duration": -1
+        }
+    ]
+}

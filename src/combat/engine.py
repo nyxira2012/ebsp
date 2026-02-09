@@ -63,12 +63,19 @@ class InitiativeCalculator:
             self._update_winner('A')
             return (mecha_a, mecha_b, InitiativeReason.FORCED_SWITCH)
         
-        # 检查技能: 强制先攻
-        if mecha_a.hooks.get('HOOK_FORCE_INITIATIVE', False):
+        # 检查技能: 强制先攻 (HOOK_INITIATIVE_CHECK)
+        # 这里的钩子如果返回 True，表示强制该机体先手
+        # 构建简单上下文
+        ctx_a = BattleContext(round_number=round_number, distance=0, attacker=mecha_a)
+        ctx_b = BattleContext(round_number=round_number, distance=0, attacker=mecha_b)
+        
+        force_a = SkillRegistry.process_hook("HOOK_INITIATIVE_CHECK", False, ctx_a)
+        if force_a:
             self._update_winner('A')
             return (mecha_a, mecha_b, InitiativeReason.PERFORMANCE)
-        
-        if mecha_b.hooks.get('HOOK_FORCE_INITIATIVE', False):
+            
+        force_b = SkillRegistry.process_hook("HOOK_INITIATIVE_CHECK", False, ctx_b)
+        if force_b:
             self._update_winner('B')
             return (mecha_b, mecha_a, InitiativeReason.PERFORMANCE)
         
@@ -126,11 +133,10 @@ class InitiativeCalculator:
 
         final_score = base_score + will_bonus + random_event
         
-        # HOOK: 先攻值计算 (ON_INITIATIVE_SCORE)
-        # 构建一个临时上下文，只包含相关机体作为 attacker (方便 skills.py 识别)
-        # 或者我们需要约定: 在 Initiative 阶段，context.attacker 指的是 "当前正在计算先攻的人"
+        # HOOK: 先攻得分修正 (HOOK_INITIATIVE_SCORE)
+        # 在 Initiative 阶段，context.attacker 指的是 "当前正在计算先攻的人"
         ctx = BattleContext(round_number=0, distance=0, attacker=mecha)
-        final_score = SkillRegistry.process_hook("ON_INITIATIVE_SCORE", final_score, ctx)
+        final_score = SkillRegistry.process_hook("HOOK_INITIATIVE_SCORE", final_score, ctx)
 
         return final_score
     
@@ -288,17 +294,36 @@ class BattleSimulator:
         print("=" * 80)
         print()
 
-        while self.round_number < Config.MAX_ROUNDS:
-            self.round_number += 1
+        # 2. 循环执行回合
+        # HOOK: 初始回合上限判定 (HOOK_MAX_ROUNDS)
+        max_rounds = SkillRegistry.process_hook("HOOK_MAX_ROUNDS", Config.MAX_ROUNDS, 
+                                              BattleContext(round_number=0, distance=0, attacker=self.mecha_a, defender=self.mecha_b))
 
-            # 检查战斗是否结束
+        while True:
+            # 状态检查: 是否有人击破
             if not self.mecha_a.is_alive() or not self.mecha_b.is_alive():
                 break
+                
+            # 回合上限检查
+            if self.round_number >= max_rounds:
+                # HOOK: 强制继续战斗判定 (如：死斗/剧情需要)
+                ctx = BattleContext(round_number=self.round_number, distance=0, attacker=self.mecha_a, defender=self.mecha_b)
+                should_maintain = SkillRegistry.process_hook("HOOK_CHECK_MAINTAIN_BATTLE", False, ctx)
+                if not should_maintain:
+                    break
+
+            self.round_number += 1
 
             # 执行回合
             self._execute_round()
 
             print()
+
+        # HOOK: 战斗结束 (HOOK_ON_BATTLE_END)
+        # 用于清理 BATTLE_BASED 状态 (如 学习电脑层数)
+        # 此时 round_number 可能已经达到 MAX，或者有一方死亡
+        final_ctx = BattleContext(round_number=self.round_number, distance=0, attacker=self.mecha_a, defender=self.mecha_b)
+        SkillRegistry.process_hook("HOOK_ON_BATTLE_END", None, final_ctx)
 
         # 战斗结算
         self._conclude_battle()
@@ -354,6 +379,11 @@ class BattleSimulator:
         # 5. 回合结束 - 气力基础增长
         self.mecha_a.modify_will(1)
         self.mecha_b.modify_will(1)
+
+        # HOOK: 回合结束 (HOOK_ON_TURN_END)
+        # 用于清理 TURN_BASED 状态，或触发每回合结束的效果 (如 EN回复)
+        ctx = BattleContext(round_number=self.round_number, distance=distance, attacker=self.mecha_a, defender=self.mecha_b)
+        SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
 
         # 6. 效果结算 (Tick)
         EffectManager.tick_effects(self.mecha_a)
@@ -417,25 +447,26 @@ class BattleSimulator:
         print(f"{'[先攻]' if is_first else '[反击]'} {attacker.name} 使用 【{weapon.name}】"
               f" (威力:{weapon.power}, EN消耗:{weapon.en_cost})")
 
-        # 2. 检查EN
-        if not attacker.can_attack(weapon):
-            print(f"   ❌ EN不足! 无法攻击 (当前EN: {attacker.current_en})")
-            # TODO: 实现战术脱离逻辑
-            return
-
-        # 3. 消耗EN
-        attacker.consume_en(weapon.en_cost)
-
         # 4. 创建战场上下文
         ctx: BattleContext = BattleContext(
             round_number=self.round_number,
             distance=distance,
             attacker=attacker,
             defender=defender,
-            weapon=weapon,
-            initiative_holder=attacker if is_first else defender,
-            initiative_reason=InitiativeReason.PERFORMANCE  # 占位
+            weapon=weapon
         )
+
+        # 5. 消耗 EN
+        weapon_cost = float(weapon.en_cost)
+        # HOOK: 修正 EN 消耗 (例如 节能)
+        weapon_cost = SkillRegistry.process_hook("HOOK_PRE_EN_COST_MULT", weapon_cost, ctx)
+        
+        # 检查 EN (修正后的消耗)
+        if attacker.current_en < int(weapon_cost):
+            print(f"   ❌ EN不足! 无法攻击 (当前EN: {attacker.current_en}, 需要: {int(weapon_cost)})")
+            return
+            
+        attacker.consume_en(int(weapon_cost))
 
         # 5. 圆桌判定
         result, damage = AttackTableResolver.resolve_attack(ctx)
@@ -464,6 +495,19 @@ class BattleSimulator:
               f"Roll点: {ctx.roll} | 伤害: {damage} | "
               f"气力变化: ⚡{attacker.name}({ctx.attacker_will_delta:+d}) "
               f"⚡{defender.name}({ctx.defender_will_delta:+d})")
+
+        # 9. 结算钩子 (HOOK_ON_DAMAGE_DEALT, HOOK_ON_KILL, HOOK_ON_ATTACK_END)
+        
+        # HOOK: 造成伤害后
+        if damage > 0:
+            SkillRegistry.process_hook("HOOK_ON_DAMAGE_DEALT", damage, ctx)
+            
+        # HOOK: 击坠判定
+        if not defender.is_alive():
+            SkillRegistry.process_hook("HOOK_ON_KILL", None, ctx)
+            
+        # HOOK: 攻击结束 (常用于清理 ATTACK_BASED 状态，或触发再动等)
+        SkillRegistry.process_hook("HOOK_ON_ATTACK_END", None, ctx)
     
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。

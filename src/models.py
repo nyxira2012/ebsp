@@ -65,12 +65,72 @@ class Modifier:
 
 @dataclass
 class Effect:
-    """状态效果 (Buff/Debuff)"""
-    id: str                     # 效果ID (e.g., "spirit_valor")
+    """状态效果 (Buff/Debuff/Trait Effect)
+    
+    完整的效果数据模型，支持：
+    - 钩子点挂载（hook）
+    - 多种操作类型（add/mul/override/callback）
+    - 概率触发（trigger_chance）
+    - 条件检查（conditions）
+    - 副作用（side_effects）
+    - 次数限制（charges）
+    - 优先级控制（priority + sub_priority）
+    """
+    id: str                     # 效果ID (e.g., "spirit_valor", "trait_bunshin")
     name: str                   # 显示名称
-    duration: int               # 持续回合数
-    priority: int = 0           # 结算优先级
-    payload: dict = field(default_factory=dict) # 携带的额外数据
+    hook: str                   # 挂载的钩子点名称 (e.g., "HOOK_PRE_DAMAGE_MULT")
+    operation: str              # 操作类型: "add"(加法) / "mul"(乘法) / "override"(覆盖) / "callback"(回调)
+    value: float | str          # 数值或回调函数名 (float for add/mul/override, str for callback)
+    
+    # 优先级控制
+    priority: int = 50          # 主优先级 (0-100): 0=被动, 21-50=Buff, 51-80=倍率, 81-99=条件, 100=绝对
+    sub_priority: int = 500     # 子优先级 (0-1000): 同 priority 下的排序，默认 500
+    
+    # 触发控制
+    trigger_chance: float = 1.0 # 触发概率 (0.0-1.0): 1.0=必定触发, 0.5=50%概率
+    target: str = "self"        # 作用目标: "self"=自己, "enemy"=对方, "both"=双方
+    
+    # 生命周期
+    duration: int = 1           # 持续回合数: -1=永久, 0=已失效, >0=剩余回合
+    charges: int = -1           # 生效次数 (-1=无限, >0=有限次数): -1=无限, 0=已用完, >0=剩余次数
+    
+    # 条件与副作用
+    conditions: list[dict[str, Any]] = field(default_factory=list)  # 触发条件列表
+    side_effects: list[dict[str, Any]] = field(default_factory=list)  # 副作用列表
+    
+    # 兼容性字段
+    payload: dict[str, Any] = field(default_factory=dict)  # 额外数据（向后兼容）
+
+
+@dataclass
+class Condition:
+    """效果触发条件
+    
+    用于检查 Effect 是否应该触发。
+    支持多种条件类型：HP阈值、气力阈值、武器属性、对方状态等。
+    """
+    type: str                   # 条件类型 (e.g., "hp_threshold", "will_threshold", "weapon_tag")
+    val: Any                    # 条件值（根据类型不同而不同）
+    op: str = ">"               # 比较操作符: ">", "<", "==", ">=", "<=", "!="
+    
+    # 可选字段
+    target: str = "self"        # 检查目标: "self"=自己, "enemy"=对方
+    ref_hook: str | None = None # 跨钩子引用: 引用其他钩子点的计算结果
+
+
+@dataclass
+class SideEffect:
+    """效果副作用
+    
+    Effect 触发后产生的副作用，用于消耗资源、修改状态等。
+    例如：消耗EN、回复气力、累积计数器等。
+    """
+    type: str                   # 副作用类型 (e.g., "consume_en", "modify_will", "modify_stat")
+    val: float                  # 副作用数值
+    target: str = "self"        # 作用目标: "self"=自己, "enemy"=对方, "both"=双方
+    
+    # 可选字段（用于特定副作用类型）
+    stat: str | None = None     # 对于 "modify_stat" 类型，指定要修改的属性名
 
 
 @dataclass
@@ -286,7 +346,15 @@ class Mecha:
 
 @dataclass
 class BattleContext:
-    """战场快照 - 单回合上下文"""
+    """战场快照 - 单回合上下文
+    
+    包含完整的战斗状态和上下文信息，支持：
+    - 基础战斗信息（回合数、距离、地形）
+    - 双方机体和武器
+    - 判定结果和伤害
+    - 共享状态和缓存（用于跨钩子通信）
+    - 递归防护（防止钩子死锁）
+    """
     round_number: int
     distance: int
     terrain: Terrain = Terrain.SPACE
@@ -305,12 +373,27 @@ class BattleContext:
     
     # 气力变动
     attacker_will_delta: int = 0
-    # 气力变动
-    attacker_will_delta: int = 0
     defender_will_delta: int = 0
 
-    # 扩展上下文
+    # 扩展上下文（向后兼容）
     modifiers: dict[str, Any] = field(default_factory=dict) # 临时的战斗修正
     event_flags: set[str] = field(default_factory=set)      # 战斗事件标记 (e.g. "COUNTER_TRIGGERED")
+    
+    # ========== 新增字段（技能系统支持） ==========
+    
+    # 共享状态字典 - 用于跨 Effect 通信和状态共享
+    # 例如：学习电脑累积层数、连续攻击计数等
+    # 格式: {(effect_id, state_key, lifecycle): value}
+    shared_state: dict[tuple[str, str, str], Any] = field(default_factory=dict)
+    
+    # 钩子栈 - 防止递归死锁
+    # 记录当前正在处理的钩子点调用链，防止循环引用
+    hook_stack: list[str] = field(default_factory=list)
+    
+    # 缓存结果字典 - 用于跨钩子引用
+    # 存储每个钩子点的计算结果，供后续钩子点查询
+    # 格式: {hook_name: calculated_value}
+    cached_results: dict[str, Any] = field(default_factory=dict)
+
 
 
