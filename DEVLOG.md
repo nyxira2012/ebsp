@@ -2,6 +2,73 @@
 
 ---
 
+## 2025-02-10 测试框架现代化：从 unittest 迁移到 pytest
+
+> **项目快照**：代码文件 13 个（2607 行）| 设计文档 4 个（1670 行）
+
+### 逻辑变化与核心思路
+
+1. **测试基础设施的全面重构**
+   - **逻辑变化**：从标准库的 unittest 迁移到 pytest 框架，删除了8个旧的 unittest 测试文件，新增了11个 pytest 测试文件（共5475行）。新增 `pytest.ini` 配置文件和 722 行的 `conftest.py` 共享配置。
+   - **设计思路**：unittest 在实际使用中暴露了三个核心痛点：（1）测试数据重复编写，每个测试都要手动创建 `Mecha`、`Pilot` 等对象；（2）随机数（RNG）难以控制，导致测试结果不稳定；（3）缺少测试标记，无法针对性地运行某类测试。pytest 的 fixture 机制和参数化测试能力更契合回合制游戏的测试需求。
+
+2. **测试数据的标准化复用（Fixture体系）**
+   - **逻辑变化**：在 `conftest.py` 中定义了大量可复用的 Fixtures，覆盖了游戏中的各种场景：
+     - 基础对象：`basic_pilot`、`basic_mecha`、`basic_weapon`
+     - 特殊机体：`low_hp_mecha`（30% HP，测试底力技能）、`high_will_mecha`（气力150，测试大招）、`high_hit_mecha`（命中率80%）、`high_dodge_mecha`（躲闪率50%）
+     - 边界条件：`zero_hp_mecha`、`zero_en_mecha`、`max_will_mecha`
+     - 效果对象：`effect_add_hit`、`effect_mul_damage`、`effect_set_hit`、`effect_conditional_low_hp` 等
+     - 完整机体：`gundam_rx78`（带王牌驾驶员和完整武器配置）、`zaku_ii`（平衡型机体）
+   - **设计思路**：建立测试数据标准库，避免每个测试都瞎编数据。通过 Fixture 的依赖注入机制（如 `basic_mecha(basic_pilot)`），实现测试数据的组合和复用。例如 `low_hp_mecha` 可以直接继承 `basic_pilot`，无需重复定义驾驶员属性。
+
+3. **随机数的严格 Mock 机制**
+   - **逻辑变化**：所有涉及随机性的测试都使用 `@patch('random.uniform', return_value=0.5)` 强制固定随机结果。例如 `test_miss_result` 中，通过 `mock_uniform.return_value = 0.5` 确保攻击落在 Miss 区间。
+   - **设计思路**：回合制游戏充满随机（命中率80%、暴击率25%），测试不能随机。必须 Mock 掉所有 RNG，确保测试结果100%可复现。这样当测试 Fail 时，我们能确定是代码逻辑出错了，而不是运气不好。这是 CI/CD 自动化的前提条件。
+
+4. **测试分层的清晰化**
+   - **逻辑变化**：测试文件按职责划分为：
+     - `test_unit_models.py`：数据结构单元测试（Pilot、Mecha、Weapon 的字段验证）
+     - `test_combat_resolver.py`：圆桌判定逻辑测试（Miss/Dodge/Parry/Block/Crit/Hit 六种结果）
+     - `test_resolver_coverage.py`：熟练度/地形/武器类型覆盖测试
+     - `test_side_effects.py`：副作用测试（HP/EN/Will 变化）
+     - `test_complex_scenarios.py`：复杂场景集成测试（RX-78 vs 扎古，多回合完整战斗）
+     - `test_integration_complex.py`：多技能组合测试
+   - **设计思路**：不追求100%覆盖率，只测核心的战斗逻辑和技能数值。UI显示、配置加载、日志记录等辅助功能完全不用测，避免过度设计。测试是为了保证"改动代码时游戏别崩"，而不是为了刷覆盖率。
+
+5. **自动化清理与隔离性保障**
+   - **逻辑变化**：在 `conftest.py` 中定义了 `@pytest.fixture(autouse=True)` 的 `reset_skill_registry()`，在每个测试结束后自动清理 `SkillRegistry._hooks` 和 `SkillRegistry._callbacks`。
+   - **设计思路**：防止测试之间的相互污染。例如测试A注册了一个"底力"技能的回调，如果测试B执行时没有清理，可能会意外触发测试A的回调，导致测试B失败。自动清理机制确保每个测试都在干净的环境中运行。
+
+6. **新增 pytest_framework_plan.md 测试指南**
+   - **逻辑变化**：新增测试指南文档（4154字节），定义了测试的目录结构、命名规范、核心策略。
+   - **设计思路**：为 AI 和人类开发者提供统一的测试编写规范。核心原则是"不做过度设计"，强调三个关键点：
+     - 必须 Mock 随机性（RNG）
+     - 复用 Fixtures，禁止硬编码测试数据
+     - 关注"数值变化"和"状态流转"，而非代码语法
+   - 提供了测试分层路线图：阶段一（核心算子：伤害公式、命中公式）→阶段二（技能效果：几百个技能的生效验证）→阶段三（游戏循环：完整回合的集成测试）
+
+7. **新增 sim/ 模拟器目录**
+   - **逻辑变化**：新增 `sim_attack_table.py`（14615字节）和 `sim_challenge_boss.py`（9723字节）。
+   - **设计思路**：模拟器与测试不同，测试是为了验证正确性，模拟器是为了探索数值分布。`sim_attack_table.py` 运行 5000+ 次迭代统计，验证攻击判定表在不同数值分布下的表现是否符合概率预期（标准场景、高命中、高闪避、极端压制）。这是数值策划的工具，不属于自动化测试范畴。
+
+8. **测试标记系统与分组执行**
+   - **逻辑变化**：在 `pytest.ini` 中定义了测试标记（unit、integration、combat、skill、stress、slow），支持通过 `pytest -m combat` 只运行战斗相关测试。
+   - **设计思路**：提高开发效率。在开发战斗系统时，只运行 combat 标记的测试，避免被集成测试拖慢速度。在提交前运行完整测试套件，确保没有破坏现有功能。
+
+**技术要点**
+- pytest 的 fixture 机制比 unittest 的 setUp/tearDown 更灵活，支持依赖注入和作用域控制
+- 使用 `@pytest.mark.parametrize` 支持参数化测试，例如一次性测试所有地形的修正效果
+- 通过 `autouse=True` 实现自动清理，无需在每个测试中手动调用 tearDown
+- 测试命名更加清晰：`test_<行为>_<预期结果>`（如 `test_attack_hit_should_reduce_hp`），通过命名就能理解测试意图
+
+**后续计划**
+根据 `pytest_framework_plan.md` 的路线图：
+1. 阶段一：核心算子测试（伤害公式、命中公式、距离修正）
+2. 阶段二：技能效果测试（几百个技能的生效验证，如"底力L9且HP<10%时防御力x1.5"）
+3. 阶段三：游戏循环测试（完整回合的集成测试，验证双方最终HP/EN变化）
+
+---
+
 ## 2026-02-10 技能系统全面落成与数据驱动重构
 
 > **项目快照**：代码文件 24 个（3847 行）| 设计文档 5 个（1335 行）

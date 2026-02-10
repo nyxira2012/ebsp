@@ -25,10 +25,10 @@ class Config:
     
     # ========== 圆桌基础概率 ==========
     BASE_MISS_RATE = 12.0       # 基础未命中率 %
-    BASE_DODGE_RATE = 22.0      # 基础躲闪率 %
-    BASE_PARRY_RATE = 15.0      # 基础招架率 %
-    BASE_BLOCK_RATE = 20.0      # 基础格挡率 %
-    BASE_CRIT_RATE = 25.0       # 基础暴击率 %
+    BASE_DODGE_RATE = 6.0      # 基础躲闪率 %
+    BASE_PARRY_RATE = 5.0      # 基础招架率 %
+    BASE_BLOCK_RATE = 5.0      # 基础格挡率 %
+    BASE_CRIT_RATE = 5.0       # 基础暴击率 %
     
     # ========== 护甲系数 ==========
     # 减伤公式: 减伤% = 护甲 / (护甲 + K)

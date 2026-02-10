@@ -239,6 +239,7 @@
 **核心字段**：
 - `id` / `source_id`: 标识
 - `priority` (0-100): 优先级，越大越后执行
+- `sub_priority` (0-1000): 子优先级，用于同 priority 下的精细控制，默认值 500
 - `hook`: 挂载点名称
 - `trigger_chance`: 触发概率 (0-1)
 - `operation`: 操作类型 → `add`(加法) / `mul`(乘法) / `override`(覆盖) / `callback`(回调)
@@ -248,6 +249,7 @@
 - `charges`: 剩余次数 (-1=无限)
 - `side_effects`: 副作用列表
 - `duration`: 持续回合数 (-1=永久)
+- `payload`: 额外数据存储字段，用于向后兼容和扩展
 
 ### 4.2 BattleContext 扩展
 
@@ -326,6 +328,7 @@ Effect 触发后的副作用，用于消耗资源、修改状态等。
 | `modify_will` | 修改气力 | `val`: 变化量 | 气合（+2气力） |
 | `consume_charges` | 消耗次数 | `val`: 数量 | PS装甲（消耗1次） |
 | `modify_stat` | 修改属性 | `stat`: 属性名, `val`: 值 | 学习电脑（+2%命中） |
+| `apply_effect` | 施加新效果 | `effect_id`: 效果ID, `duration`: 持续回合 | 护甲破碎（施加防御Debuff） |
 
 #### 4.4.2 副作用目标
 

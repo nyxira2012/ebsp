@@ -56,10 +56,9 @@ class EffectFactory:
                 )
                 effects.append(eff)
         else:
-            # 兼容性处理或占位符
-            # print(f"⚠️  未找到技能定义: {effect_id}")
-            effects.append(Effect(id=effect_id, name=effect_id, duration=duration))
-            
+            # 未定义的效果ID返回空列表
+            return []
+
         return effects
 
     @classmethod

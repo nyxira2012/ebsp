@@ -7,7 +7,116 @@ from .calculator import CombatCalculator
 
 class AttackTableResolver:
     """圆桌判定系统 (核心难点)"""
-    
+
+    @staticmethod
+    def _calculate_segments(ctx: BattleContext) -> dict:
+        """计算圆桌判定的各个段 (内部方法)
+
+        计算并返回圆桌判定中各个段的阈值范围。
+
+        Args:
+            ctx: 战场上下文
+
+        Returns:
+            dict: 包含各个段的名称、阈值范围的字典
+        """
+        attacker = ctx.attacker
+        defender = ctx.defender
+
+        # === 1. 计算 MISS 段 ===
+        base_miss: float = CombatCalculator.calculate_proficiency_miss_penalty(
+            attacker.pilot.weapon_proficiency
+        )
+        miss_rate = SkillRegistry.process_hook("HOOK_PRE_MISS_RATE", base_miss, ctx)
+
+        hit_bonus: float = attacker.hit_rate
+        hit_bonus = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", hit_bonus, ctx)
+
+        miss_rate = max(0.0, miss_rate - hit_bonus)
+
+        # === 2. 计算防御段 ===
+        precision_reduction: float = CombatCalculator.calculate_precision_reduction(attacker.precision)
+        precision_reduction = SkillRegistry.process_hook("HOOK_PRE_PRECISION", precision_reduction, ctx)
+
+        # DODGE
+        dodge_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
+            defender.pilot.mecha_proficiency,
+            Config.BASE_DODGE_RATE
+        )
+        dodge_total: float = dodge_base + defender.dodge_rate
+        dodge_total = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", dodge_total, ctx)
+        dodge_rate: float = max(0.0, dodge_total * (1 - precision_reduction))
+
+        # PARRY
+        parry_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
+            defender.pilot.mecha_proficiency,
+            Config.BASE_PARRY_RATE
+        )
+        parry_total: float = parry_base + defender.parry_rate
+        parry_total = SkillRegistry.process_hook("HOOK_PRE_PARRY_RATE", parry_total, ctx)
+        parry_rate: float = max(0.0, min(50.0, parry_total * (1 - precision_reduction)))
+
+        # BLOCK
+        block_base: float = Config.BASE_BLOCK_RATE + defender.block_rate
+        block_base = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_base, ctx)
+        block_rate: float = max(0.0, min(80.0, block_base * (1 - precision_reduction)))
+
+        # === 3. 计算 CRIT 段 ===
+        crit_rate: float = Config.BASE_CRIT_RATE + attacker.crit_rate
+        crit_rate = SkillRegistry.process_hook("HOOK_PRE_CRIT_RATE", crit_rate, ctx)
+
+        # === 4. 构建圆桌段 ===
+        segments = {}
+        current = 0.0
+
+        if miss_rate > 0:
+            segments['MISS'] = {'rate': miss_rate, 'start': current, 'end': current + miss_rate}
+            current += miss_rate
+
+        if dodge_rate > 0:
+            segments['DODGE'] = {'rate': dodge_rate, 'start': current, 'end': current + dodge_rate}
+            current += dodge_rate
+
+        if parry_rate > 0:
+            segments['PARRY'] = {'rate': parry_rate, 'start': current, 'end': current + parry_rate}
+            current += parry_rate
+
+        if block_rate > 0:
+            segments['BLOCK'] = {'rate': block_rate, 'start': current, 'end': current + block_rate}
+            current += block_rate
+
+        if crit_rate > 0:
+            # CRIT 可能被前面的段挤压
+            available_space = max(0, 100 - current)
+            actual_crit_rate = min(crit_rate, available_space)
+            segments['CRIT'] = {'rate': actual_crit_rate, 'start': current, 'end': current + actual_crit_rate}
+            current += actual_crit_rate
+
+        # HIT (剩余空间)
+        hit_space = max(0, 100 - current)
+        if hit_space > 0:
+            segments['HIT'] = {'rate': hit_space, 'start': current, 'end': 100}
+            current += hit_space
+
+        segments['total'] = current
+
+        return segments
+
+    @staticmethod
+    def calculate_attack_table_segments(ctx: BattleContext) -> dict:
+        """计算圆桌判定的各个段 (公共方法)
+
+        用于显示和分析圆桌判定的组成，返回各个段的理论值。
+        模拟器和测试工具使用此方法来获取圆桌判定的理论分布。
+
+        Args:
+            ctx: 战场上下文
+
+        Returns:
+            dict: 包含各个段的名称、阈值范围的字典
+        """
+        return AttackTableResolver._calculate_segments(ctx)
+
     @staticmethod
     def resolve_attack(ctx: BattleContext) -> tuple[AttackResult, int]:
         """使用圆桌判定法计算单次攻击的结果和伤害。
@@ -17,7 +126,7 @@ class AttackTableResolver:
         2. Dodge (躲闪) - 受机体熟练度影响,被精准削减
         3. Parry (招架) - 受机体熟练度影响,被精准削减,上限50%
         4. Block (格挡) - 被精准削减,上限80%
-        5. Crit (暴击) - 占据剩余空间的暴击率比例
+        5. Crit (暴击) - 按优先级顺序被前面的段挤压
         6. Hit (普通命中) - 剩余全部空间
 
         算法思路:
@@ -53,44 +162,45 @@ class AttackTableResolver:
         # HOOK: 命中率修正 (PRE_HIT_RATE)
         hit_bonus = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", hit_bonus, ctx)
 
-        if hit_bonus >= 100.0:
-            # 必中逻辑：清空所有防御切片
-            miss_rate = 0.0
-            dodge_rate = 0.0
-            parry_rate = 0.0
-            block_rate = 0.0 
-        else:
-            # 命中加成首先抵消 Miss
-            miss_rate = max(0.0, miss_rate - hit_bonus)
+        # 命中加成首先抵消 Miss（必中只影响MISS段，不影响防御判定）
+        miss_rate = max(0.0, miss_rate - hit_bonus)
 
-            # === 2. 计算防御概率 (受精准削减) ===
-            precision_reduction: float = CombatCalculator.calculate_precision_reduction(attacker.precision)
-            precision_reduction = SkillRegistry.process_hook("HOOK_PRE_PRECISION", precision_reduction, ctx)
+        # === 2. 计算防御概率 (受精准削减) ===
+        precision_reduction: float = CombatCalculator.calculate_precision_reduction(attacker.precision)
+        precision_reduction = SkillRegistry.process_hook("HOOK_PRE_PRECISION", precision_reduction, ctx)
 
-            # 躲闪率 (Dodge)
-            dodge_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-                defender.pilot.mecha_proficiency,
-                Config.BASE_DODGE_RATE
-            )
-            dodge_base = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", dodge_base, ctx)
-            dodge_rate: float = max(0.0, dodge_base * (1 - precision_reduction))
-            
-            # 招架率 (Parry)
-            parry_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-                defender.pilot.mecha_proficiency,
-                Config.BASE_PARRY_RATE
-            )
-            parry_base = SkillRegistry.process_hook("HOOK_PRE_PARRY_RATE", parry_base, ctx)
-            parry_rate: float = max(0.0, min(50.0, parry_base * (1 - precision_reduction)))
-            
-            # 格挡率 (Block)
-            block_base: float = defender.block_rate
-            block_base = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_base, ctx)
-            block_rate: float = max(0.0, min(80.0, block_base * (1 - precision_reduction)))
+        # 躲闪率 (Dodge)
+        # 计算基础值（受机体熟练度影响）
+        dodge_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
+            defender.pilot.mecha_proficiency,
+            Config.BASE_DODGE_RATE
+        )
+        # 加上机体提供的加成值
+        dodge_total: float = dodge_base + defender.dodge_rate
+        dodge_total = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", dodge_total, ctx)
+        dodge_rate: float = max(0.0, dodge_total * (1 - precision_reduction))
+
+        # 招架率 (Parry)
+        # 计算基础值（受机体熟练度影响）
+        parry_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
+            defender.pilot.mecha_proficiency,
+            Config.BASE_PARRY_RATE
+        )
+        # 加上机体提供的加成值
+        parry_total: float = parry_base + defender.parry_rate
+        parry_total = SkillRegistry.process_hook("HOOK_PRE_PARRY_RATE", parry_total, ctx)
+        parry_rate: float = max(0.0, min(50.0, parry_total * (1 - precision_reduction)))
+
+        # 格挡率 (Block)
+        # 基础值 + 机体提供的加成值
+        block_base: float = Config.BASE_BLOCK_RATE + defender.block_rate
+        block_base = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_base, ctx)
+        block_rate: float = max(0.0, min(80.0, block_base * (1 - precision_reduction)))
 
         # === 3. 暴击率 (Crit) ===
-        # 暴击现在拥有绝对宽度，不再按剩余比例缩放
-        crit_rate: float = min(100.0, attacker.crit_rate)
+        # 暴击率按优先级顺序被前面的段挤压，不占绝对宽度
+        # 基础值 + 攻击方提供的加成值
+        crit_rate: float = Config.BASE_CRIT_RATE + attacker.crit_rate
         crit_rate = SkillRegistry.process_hook("HOOK_PRE_CRIT_RATE", crit_rate, ctx)
         
         # === 4. 圆桌判定 (Standard One-Roll Table) ===
@@ -119,20 +229,27 @@ class AttackTableResolver:
         # HOOK: 判定后修正 (POST_ROLL_RESULT)
         # 允许把 Hit 变成 Dodge (分身)，或者 Parry 变成 Hit (直击)
         final_result = SkillRegistry.process_hook("HOOK_POST_ROLL_RESULT", final_result, ctx)
-        
+
         # === 5. 执行结果逻辑 ===
+        result, damage = (AttackResult.MISS, 0)
         if final_result == AttackResult.MISS:
-            return AttackTableResolver._resolve_miss(ctx)
+            result, damage = AttackTableResolver._resolve_miss(ctx)
         elif final_result == AttackResult.DODGE:
-            return AttackTableResolver._resolve_dodge(ctx)
+            result, damage = AttackTableResolver._resolve_dodge(ctx)
         elif final_result == AttackResult.PARRY:
-            return AttackTableResolver._resolve_parry(ctx)
+            result, damage = AttackTableResolver._resolve_parry(ctx)
         elif final_result == AttackResult.BLOCK:
-            return AttackTableResolver._resolve_block(ctx)
+            result, damage = AttackTableResolver._resolve_block(ctx)
         elif final_result == AttackResult.CRIT:
-            return AttackTableResolver._resolve_crit(ctx)
+            result, damage = AttackTableResolver._resolve_crit(ctx)
         else: # HIT
-            return AttackTableResolver._resolve_hit(ctx)
+            result, damage = AttackTableResolver._resolve_hit(ctx)
+
+        # 存储结果到 context
+        ctx.attack_result = result
+        ctx.damage = damage
+
+        return result, damage
     
     
     @staticmethod
@@ -199,6 +316,9 @@ class AttackTableResolver:
         # HOOK: 防御等级修正
         defense_level = float(defender.defense_level)
         defense_level = SkillRegistry.process_hook("HOOK_PRE_DEFENSE_LEVEL", defense_level, ctx)
+
+        # HOOK: 护甲值修正 (装甲强化、合金装甲等)
+        defense_level = SkillRegistry.process_hook("HOOK_PRE_ARMOR_VALUE", defense_level, ctx)
 
         # 气力对防御的修正
         will_def_modifier: float = CombatCalculator.calculate_will_defense_modifier(defender.current_will)

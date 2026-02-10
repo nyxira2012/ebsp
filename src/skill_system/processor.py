@@ -14,9 +14,9 @@ class EffectProcessor:
     @staticmethod
     def process(hook_name: str, input_value: Any, context: BattleContext) -> Any:
         """处理指定钩子上的所有效果"""
-        
+
         # 1. 防止无限递归 (如果 hook_stack 中出现超过阈值的同名 hook)
-        if context.hook_stack.count(hook_name) > 3:
+        if context.hook_stack.count(hook_name) >= 3:
             # print(f"WARNING: Hook recursion detected: {hook_name}")
             return input_value
         
@@ -45,14 +45,20 @@ class EffectProcessor:
             current_value = input_value
             
             # 4. 依次执行 Effect
+            import random
             for effect, owner in valid_effects:
                 # 再次检查 (防止副作用修改了后面 Effect 的状态?)
                 if effect.duration == 0 or effect.charges == 0:
                     continue
-                
+
+                # 检查触发概率
+                if effect.trigger_chance < 1.0:
+                    if random.random() >= effect.trigger_chance:
+                        continue  # 未通过概率判定，跳过
+
                 # 记录旧值用于显示
                 old_value = current_value
-                
+
                 # 执行修改逻辑
                 new_value = EffectProcessor._apply_operation(effect, current_value, context, owner)
                 
