@@ -1,0 +1,42 @@
+[
+    {
+        "id": "w_beam_rifle",
+        "name": "光束步枪",
+        "type": "WEAPON",
+        "weapon_type": "射击",
+        "weapon_power": 1500,
+        "weapon_range_min": 1000,
+        "weapon_range_max": 6000,
+        "weapon_en_cost": 15,
+        "weapon_anim_id": "a_beam_rifle"
+    },
+    {
+        "id": "w_beam_saber",
+        "name": "光束军刀",
+        "type": "WEAPON",
+        "weapon_type": "格斗",
+        "weapon_power": 1800,
+        "weapon_range_min": 0,
+        "weapon_range_max": 1500,
+        "weapon_en_cost": 10,
+        "weapon_anim_id": "a_beam_saber"
+    },
+    {
+        "id": "e_booster",
+        "name": "增压器",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_mobility": 10.0,
+            "final_hit": 5.0
+        }
+    },
+    {
+        "id": "e_chobham_armor",
+        "name": "乔巴姆装甲",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_max_hp": 1000,
+            "final_armor": 200
+        }
+    }
+]

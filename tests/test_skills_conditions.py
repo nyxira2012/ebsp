@@ -172,20 +172,21 @@ class TestEnemyWillThresholdCondition:
         """测试敌方气力低"""
         # 创建一个低气力的敌方机体
         enemy = Mecha(
-            id="m_enemy", name="Enemy", pilot=ace_pilot,
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100,
+            instance_id="m_enemy", mecha_name="Enemy", main_portrait="m_enemy_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
             current_will=80  # 低气力
         )
 
         basic_context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=basic_mecha, defender=enemy,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         condition = {"type": "enemy_will_threshold", "val": 100, "op": "<"}
@@ -203,19 +204,21 @@ class TestEnemyStatCheckCondition:
         """测试敌方属性检查"""
         # 创建一个高射击的敌方机体
         enemy = Mecha(
-            id="m_enemy", name="Enemy", pilot=ace_pilot,  # ace_pilot有180射击
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_enemy", mecha_name="Enemy", main_portrait="m_enemy_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            pilot_stats_backup={"stat_shooting": 180} # ace_pilot has 180 shooting
         )
 
         basic_context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=basic_mecha, defender=enemy,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         condition = {"type": "enemy_stat_check", "stat": "stat_shooting", "val": 150, "op": ">"}
@@ -257,22 +260,22 @@ class TestWeaponTypeCondition:
         condition = {"type": "weapon_type", "val": "MELEE"}
         assert ConditionChecker.check([condition], basic_context, basic_context.attacker) is True
 
-    def test_weapon_type_rifle(self, basic_context, rifle_weapon):
+    def test_weapon_type_shooting(self, basic_context, rifle_weapon):
         """测试射击武器类型"""
         basic_context.weapon = rifle_weapon
-        condition = {"type": "weapon_type", "val": "RIFLE"}
+        condition = {"type": "weapon_type", "val": "SHOOTING"}
         assert ConditionChecker.check([condition], basic_context, basic_context.attacker) is True
 
     def test_weapon_type_no_match(self, basic_context, melee_weapon):
         """测试武器类型不匹配"""
         basic_context.weapon = melee_weapon
-        condition = {"type": "weapon_type", "val": "RIFLE"}
+        condition = {"type": "weapon_type", "val": "SHOOTING"}
         assert ConditionChecker.check([condition], basic_context, basic_context.attacker) is False
 
     def test_weapon_no_weapon(self, basic_context):
         """测试无武器"""
         basic_context.weapon = None
-        condition = {"type": "weapon_type", "val": "RIFLE"}
+        condition = {"type": "weapon_type", "val": "SHOOTING"}
         assert ConditionChecker.check([condition], basic_context, basic_context.attacker) is False
 
 
@@ -369,8 +372,9 @@ class TestTargetSelection:
         basic_context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=basic_mecha, defender=enemy,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         condition = {"type": "will_threshold", "val": 100, "op": "<", "target": "enemy"}

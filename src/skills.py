@@ -19,7 +19,14 @@ class SkillRegistry:
 
     @classmethod
     def register_hook(cls, hook_point: str) -> Callable:
-        """装饰器: 注册钩子处理函数"""
+        """装饰器：注册传统的钩子处理函数。
+
+        Args:
+            hook_point: 钩子点名称。
+
+        Returns:
+            Callable: 装饰器函数。
+        """
         def decorator(func: HookCallback) -> HookCallback:
             if hook_point not in cls._hooks:
                 cls._hooks[hook_point] = []
@@ -29,7 +36,14 @@ class SkillRegistry:
 
     @classmethod
     def register_callback(cls, callback_id: str) -> Callable:
-        """注册回调函数 (供 Effect operation='callback' 使用)"""
+        """装饰器：注册供 Effect 使用的回调函数。
+
+        Args:
+            callback_id: 回调函数的唯一标识符 (对应 JSON 中的 value)。
+
+        Returns:
+            Callable: 装饰器函数。
+        """
         def decorator(func: Callable) -> Callable:
             cls._callbacks[callback_id] = func
             return func
@@ -42,7 +56,20 @@ class SkillRegistry:
 
     @classmethod
     def process_hook(cls, hook_point: str, initial_value: Any, context: BattleContext) -> Any:
-        """执行指定钩子点的所有回调，流水线式处理数值 (委托给 EffectProcessor)"""
+        """执行指定钩子点的所有逻辑，返回最终计算结果。
+
+        处理流程：
+        1. 执行传统的修饰器钩子库 (_hooks)。
+        2. 委托给 EffectProcessor 处理机体携带的动态 Effect。
+
+        Args:
+            hook_point: 钩子点名称。
+            initial_value: 初始数值。
+            context: 战斗上下文快照。
+
+        Returns:
+            Any: 经过流水线处理后的最终数值。
+        """
         
         # 1. 遍历全局/被动钩子 (Legacy support)
         value = initial_value
@@ -59,8 +86,19 @@ class SkillRegistry:
         return value
 
 @SkillRegistry.register_callback("cb_potential")
-def cb_potential(val, ctx, owner):
-    """底力: HP越低减伤越高"""
+def cb_potential(val: Any, ctx: BattleContext, owner: Mecha) -> Any:
+    """底力回调：根据当前 HP 百分比提升数值 (减伤等)。
+
+    公式: bonus = 0.5 * ((1 - HP_ratio) ^ 2)
+
+    Args:
+        val: 原始数值。
+        ctx: 战斗上下文。
+        owner: 效果持有人。
+
+    Returns:
+        Any: 修正后的数值。
+    """
     ratio = 1.0 - (owner.current_hp / owner.max_hp)
     bonus = 0.5 * (ratio ** 2)
     return val + bonus
@@ -84,7 +122,15 @@ class EffectManager:
     
     @staticmethod
     def add_effect(target: Mecha, effect_id: str, duration: int = 1) -> None:
-        """添加状态效果 (通过 EffectFactory 创建)"""
+        """为目标机体添加状态效果。
+
+        如果目标已存在同名效果，则取两者的最大剩余时长进行刷新。
+
+        Args:
+            target: 目标机体。
+            effect_id: 效果 ID (来自配置)。
+            duration: 持续回合数。
+        """
         # 使用工厂创建标准 Effect 列表
         new_effects = EffectFactory.create_effect(effect_id, duration)
         
@@ -106,7 +152,13 @@ class EffectManager:
 
     @staticmethod
     def tick_effects(target: Mecha) -> None:
-        """回合结束/开始时更新效果持续时间"""
+        """更新机体所有效果的持续时间，并在过期时移除。
+
+        永久效果 (duration = -1) 不受影响。
+
+        Args:
+            target: 目标机体。
+        """
         active_effects = []
         for effect in target.effects:
             # 永久效果 (-1) 不减少
@@ -134,8 +186,12 @@ class TraitManager:
     
     @staticmethod
     def apply_traits(mecha: Mecha) -> None:
-        """为机体应用所有特性效果 (数据驱动)"""
-        if not mecha.traits:
+        """初始化机体自带的特性，将其转化为持久效果 (Effect)。
+
+        Args:
+            mecha: 目标机体。
+        """
+        if not mecha.skills:
             return
             
         print(f"   [System] 为 {mecha.name} 初始化特性效果...")
@@ -145,7 +201,7 @@ class TraitManager:
         
         from .skill_system.effect_factory import EffectFactory
         
-        for trait_id in mecha.traits:
+        for trait_id in mecha.skills:
             # 从工厂获取特性对应的效果
             new_effects = EffectFactory.create_trait_effects(trait_id)
             

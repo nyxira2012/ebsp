@@ -248,13 +248,16 @@ class WeaponSelector:
             Weapon: 保底撞击武器对象
         """
         return Weapon(
-            id="wpn_fallback",
+            uid="wpn_fallback_uid",
+            definition_id="wpn_fallback",
             name="撞击",
-            weapon_type=WeaponType.FALLBACK,
-            power=50,  # 低威力
+            type=WeaponType.FALLBACK,
+            final_power=50,  # 低威力
             en_cost=0,  # 0消耗
             range_min=0,
-            range_max=10000
+            range_max=10000,
+            will_req=0,
+            anim_id="default"
         )
 
 

@@ -30,8 +30,9 @@ class TestMultiRoundBattle:
 
     def test_three_round_battle_with_en_management(self, heavy_mecha, basic_mecha):
         """测试3回合战斗：验证EN消耗、HP变化、气力增长"""
-        heavy_weapon = Weapon(id="w_heavy", name="Heavy Cannon", weapon_type=WeaponType.HEAVY,
-                             power=3000, en_cost=30, range_min=1, range_max=5)
+        heavy_weapon = Weapon(uid="w_heavy_uid", definition_id="w_heavy", name="Heavy Cannon", type=WeaponType.SHOOTING,
+                             final_power=3000, en_cost=30, range_min=1, range_max=5000,
+                             will_req=0, anim_id="default")
         basic_mecha.weapons = [heavy_weapon]
 
         sim = BattleSimulator(heavy_mecha, basic_mecha)
@@ -45,11 +46,11 @@ class TestMultiRoundBattle:
     def test_will_growth_across_rounds(self, basic_mecha):
         """测试气力在多回合中的增长"""
         opponent = Mecha(
-            id="m_opp", name="Opponent", pilot=basic_mecha.pilot,
-            max_hp=5000, current_hp=5000, max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_opp", mecha_name="Opponent", main_portrait="m_opp_img",
+            final_max_hp=5000, current_hp=5000, final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100
         )
 
         initial_will = basic_mecha.current_will
@@ -152,20 +153,22 @@ class TestStatePersistence:
     def test_effect_survives_weapon_switch(self, ace_pilot):
         """测试效果在武器切换后依然有效"""
         attacker = Mecha(
-            id="m_attacker", name="Attacker", pilot=ace_pilot,
-            max_hp=5000, current_hp=5000, max_en=100, current_en=100,
-            hit_rate=20.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_attacker", mecha_name="Attacker", main_portrait="m_atk_img",
+            final_max_hp=5000, current_hp=5000, max_en=100, current_en=100,
+            final_hit=20.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100
         )
 
         EffectManager.add_effect(attacker, "spirit_strike")
         assert len(attacker.effects) > 0
 
-        rifle = Weapon(id="w_rifle", name="Beam Rifle", weapon_type=WeaponType.RIFLE,
-                      power=1000, en_cost=10, range_min=1, range_max=5)
-        saber = Weapon(id="w_saber", name="Beam Saber", weapon_type=WeaponType.MELEE,
-                      power=1500, en_cost=15, range_min=1, range_max=2)
+        rifle = Weapon(uid="w_rifle_uid", definition_id="w_rifle", name="Beam Rifle", type=WeaponType.SHOOTING,
+                      final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                      will_req=0, anim_id="default")
+        saber = Weapon(uid="w_saber_uid", definition_id="w_saber", name="Beam Saber", type=WeaponType.MELEE,
+                      final_power=1500, en_cost=15, range_min=1, range_max=2000,
+                      will_req=0, anim_id="default")
         attacker.weapons = [rifle, saber]
 
         assert len(attacker.effects) > 0, "切换武器后效果应该保留"

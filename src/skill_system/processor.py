@@ -13,7 +13,19 @@ class EffectProcessor:
     
     @staticmethod
     def process(hook_name: str, input_value: Any, context: BattleContext) -> Any:
-        """处理指定钩子上的所有效果"""
+        """处理指定钩子上的所有相关效果。
+
+        按照优先级和子优先级对所有有效效果进行排序并依次应用。支持数值运算、
+        布尔运算和回调函数。包含递归保护机制。
+
+        Args:
+            hook_name: 钩子点名称 (例如 'HOOK_PRE_DAMAGE_MULT')
+            input_value: 初始数值或对象
+            context: 战斗上下文快照
+
+        Returns:
+            Any: 经过所有效果处理后的最终值
+        """
 
         # 1. 防止无限递归 (如果 hook_stack 中出现超过阈值的同名 hook)
         if context.hook_stack.count(hook_name) >= 3:
@@ -100,12 +112,16 @@ class EffectProcessor:
 
     @staticmethod
     def _collect_effects(context: BattleContext) -> List[tuple[Effect, Mecha]]:
-        """从战场上下文中收集所有相关的 Effect
-        
-        收集范围:
-        1. 攻击方
-        2. 防御方
-        3. 战场全局效果 (TODO)
+        """从战场上下文中收集所有相关的效果及其持有者。
+
+        当前收集范围包括攻击方和防御方的所有当前效果。使用 set 防止
+        同一机体在复杂测试场景下被重复处理。
+
+        Args:
+            context: 战斗上下文快照
+
+        Returns:
+            List[tuple[Effect, Mecha]]: 效果及其持有机体的元组列表
         """
         effects = []
         
@@ -131,7 +147,22 @@ class EffectProcessor:
 
     @staticmethod
     def _apply_operation(effect: Effect, current_value: Any, context: BattleContext, owner: Mecha) -> Any:
-        """应用单个 Effect 的操作"""
+        """应用单个效果的具体操作逻辑。
+
+        支持以下操作类型：
+        - 数值: add, sub, mul, div, set, min, max
+        - 布尔: and, or, not, set
+        - 回调: callback (通过 SkillRegistry 查找)
+
+        Args:
+            effect: 效果对象
+            current_value: 当前值
+            context: 战斗上下文
+            owner: 效果持有机体
+
+        Returns:
+            Any: 操作执行后的新数值
+        """
         op = effect.operation
         val = effect.value
         

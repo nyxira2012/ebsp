@@ -2,86 +2,54 @@
     {
         "id": "mech_rx78",
         "name": "RX-78-2 高达",
-        "pilot_id": "pilot_amuro",
-        "stats": {
-            "hp": 5000,
-            "en": 200,
-            "mobility": 85,
-            "armor": 120
-        },
-        "attributes": {
-            "hit": 15.0,
-            "precision": 30.0,
-            "crit": 25.0
-        },
-        "defense": {
-            "dodge": 22.0,
-            "parry": 15.0,
-            "block": 25.0,
-            "block_val": 100
-        },
-        "weapon_ids": [
-            "wpn_beam_rifle",
-            "wpn_beam_saber"
+        "portrait_id": "p_m_rx78",
+        "model_asset": "gundam_rx78",
+        "init_hp": 5000,
+        "init_en": 200,
+        "init_armor": 1200,
+        "init_mobility": 85,
+        "init_hit": 15.0,
+        "init_precision": 30.0,
+        "init_crit": 25.0,
+        "init_dodge": 22.0,
+        "init_parry": 15.0,
+        "init_block": 25.0,
+        "init_block_red": 100,
+        "slots": [
+            "WEAPON",
+            "WEAPON",
+            "EQUIP",
+            "EQUIP"
         ],
-        "traits": [
-            "trait_learning_computer"
+        "fixed_weapons": [
+            "w_beam_rifle",
+            "w_beam_saber"
         ]
     },
     {
         "id": "mech_zaku",
-        "name": "MS-06S 扎古II (指挥官机)",
-        "pilot_id": "pilot_char",
-        "stats": {
-            "hp": 5500,
-            "en": 180,
-            "mobility": 90,
-            "armor": 150
-        },
-        "attributes": {
-            "hit": 18.0,
-            "precision": 28.0,
-            "crit": 30.0
-        },
-        "defense": {
-            "dodge": 20.0,
-            "parry": 12.0,
-            "block": 28.0,
-            "block_val": 120
-        },
-        "weapon_ids": [
-            "wpn_machine_gun",
-            "wpn_heat_axe",
-            "wpn_bazooka"
+        "name": "MS-06S 扎古II (夏亚专用)",
+        "portrait_id": "p_m_zaku",
+        "model_asset": "zaku_ii_char",
+        "init_hp": 5500,
+        "init_en": 180,
+        "init_armor": 1500,
+        "init_mobility": 90,
+        "init_hit": 18.0,
+        "init_precision": 28.0,
+        "init_crit": 30.0,
+        "init_dodge": 20.0,
+        "init_parry": 12.0,
+        "init_block": 28.0,
+        "init_block_red": 120,
+        "slots": [
+            "WEAPON",
+            "EQUIP",
+            "EQUIP"
         ],
-        "traits": [
-            "trait_enhanced_armor"
+        "fixed_weapons": [
+            "w_machine_gun",
+            "w_heat_hawk"
         ]
-    },
-    {
-        "id": "mech_dummy",
-        "name": "木桩机体 (1M HP)",
-        "pilot_id": "pilot_dummy",
-        "stats": {
-            "hp": 1000000,
-            "en": 9999,
-            "mobility": 10,
-            "armor": 400
-        },
-        "attributes": {
-            "hit": 0.0,
-            "precision": 0.0,
-            "crit": 0.0
-        },
-        "defense": {
-            "dodge": 5.0,
-            "parry": 5.0,
-            "block": 5.0,
-            "block_val": 0
-        },
-        "weapon_ids": [
-            "wpn_dummy"
-        ],
-        "traits": []
     }
 ]

@@ -14,7 +14,16 @@ class ConditionChecker:
     
     @staticmethod
     def check(conditions: list[dict], context: BattleContext, owner: Mecha) -> bool:
-        """检查所有条件是否满足"""
+        """检查效果的所有触发条件是否满足。
+
+        Args:
+            conditions: 条件配置字典列表 (来自 JSON)
+            context: 战斗上下文快照
+            owner: 效果持有人 (机体)
+
+        Returns:
+            bool: 所有条件均满足返回 True，否则返回 False
+        """
         for cond in conditions:
             if not ConditionChecker._check_single(cond, context, owner):
                 return False
@@ -22,7 +31,18 @@ class ConditionChecker:
     
     @staticmethod
     def _check_single(condition: dict, context: BattleContext, owner: Mecha) -> bool:
-        """检查单个条件"""
+        """检查单个条件是否满足。
+
+        根据条件类型动态调用对应的检查函数。
+
+        Args:
+            condition: 单个条件配置字典
+            context: 战斗上下文快照
+            owner: 效果持有人
+
+        Returns:
+            bool: 该条件满足返回 True，否则返回 False
+        """
         cond_type = condition.get("type")
         
         # 获取条件检查函数 (例如 hp_threshold -> _check_hp_threshold)
@@ -33,7 +53,18 @@ class ConditionChecker:
 
     @staticmethod
     def _get_target(condition: dict, context: BattleContext, owner: Mecha) -> Mecha | None:
-        """获取条件检查的目标机体 (self/enemy)"""
+        """根据条件配置获取检查的目标对象。
+
+        支持 "self" (效果持有人) 和 "enemy" (持有人的对手)。
+
+        Args:
+            condition: 条件配置字典
+            context: 战斗上下文快照
+            owner: 效果持有人
+
+        Returns:
+            Mecha | None: 目标机体对象，若无法识别则返回 None
+        """
         target_type = condition.get("target", "self")
         
         if target_type == "self":
@@ -180,7 +211,16 @@ class ConditionChecker:
 
     @staticmethod
     def _compare(val1: Any, val2: Any, op: str = ">") -> bool:
-        """通用比较函数"""
+        """通用的数值比较逻辑。
+
+        Args:
+            val1: 左操作数
+            val2: 右操作数
+            op: 比较运算符，支持 ">", "<", "==", ">=", "<=", "!="
+
+        Returns:
+            bool: 比较结果，若类型不匹配引发异常则返回 False
+        """
         try:
             if op == ">": return val1 > val2
             if op == "<": return val1 < val2

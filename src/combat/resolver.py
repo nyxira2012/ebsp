@@ -278,7 +278,7 @@ class AttackTableResolver:
         stat_bonus: float = 0.0
         if weapon.weapon_type == WeaponType.MELEE:
             stat_bonus = attacker.pilot.get_effective_stat('stat_melee')
-        elif weapon.weapon_type in [WeaponType.RIFLE, WeaponType.HEAVY]:
+        elif weapon.weapon_type == WeaponType.SHOOTING:
             stat_bonus = attacker.pilot.get_effective_stat('stat_shooting')
             
         # HOOK: 属性加成修正

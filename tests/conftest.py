@@ -20,8 +20,9 @@ sys.path.insert(0, str(project_root))
 # 导入项目模块
 # ============================================================================
 from src.models import (
-    Mecha, Pilot, Weapon, WeaponType,
-    BattleContext, Effect, Terrain
+    MechaSnapshot, PilotConfig, WeaponSnapshot, WeaponType,
+    BattleContext, Effect, Terrain, SlotType,
+    Mecha, Pilot, Weapon
 )
 from src.skills import SkillRegistry, EffectManager, TraitManager
 from src.combat.engine import BattleSimulator
@@ -47,69 +48,91 @@ def reset_skill_registry():
 
 @pytest.fixture
 def basic_pilot():
-    """基础驾驶员（标准属性）"""
-    return Pilot(
-        id="p_test", name="TestPilot",
+    """基础驾驶员（标准属性）- 使用 PilotConfig"""
+    return PilotConfig(
+        id="p_test", name="TestPilot", portrait_id="p_001",
         stat_shooting=100, stat_melee=100, stat_reaction=100,
         stat_awakening=100, stat_defense=100
     )
 
 @pytest.fixture
 def ace_pilot():
-    """王牌驾驶员（高属性，用于测试高级功能）"""
-    return Pilot(
-        id="p_ace", name="AcePilot",
+    """王牌驾驶员（高属性）"""
+    return PilotConfig(
+        id="p_ace", name="AcePilot", portrait_id="p_002",
         stat_shooting=180, stat_melee=180, stat_reaction=170,
         stat_awakening=150, stat_defense=120
     )
 
 @pytest.fixture
 def basic_mecha(basic_pilot):
-    """基础机体（标准属性）"""
-    return Mecha(
-        id="m_test", name="TestMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """基础机体快照"""
+    # 模拟 pilot_stats_backup
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
+    
+    return MechaSnapshot(
+        instance_id="m_test", mecha_name="TestMecha", 
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def heavy_mecha():
     """重型机体（高血量高防御，用于多回合测试）"""
     pilot = Pilot(
-        id="p_heavy", name="HeavyPilot",
+        id="p_heavy", name="HeavyPilot", portrait_id="p_heavy_img",
         stat_shooting=100, stat_melee=100, stat_reaction=100,
         stat_awakening=100, stat_defense=100
     )
     return Mecha(
-        id="m_heavy", name="HeavyMecha", pilot=pilot,
-        max_hp=50000, current_hp=50000,
-        max_en=100, current_en=100,
-        hit_rate=20.0, precision=10.0, crit_rate=0.0,
-        dodge_rate=0.0, parry_rate=0.0, block_rate=0.0,
-        defense_level=2000, mobility=50
+        instance_id="m_heavy", mecha_name="HeavyMecha", 
+        main_portrait="m_heavy_img", model_asset="default",
+        final_max_hp=50000, current_hp=50000,
+        final_max_en=100, current_en=100,
+        final_hit=20.0, final_precision=10.0, final_crit=0.0,
+        final_dodge=0.0, final_parry=0.0, final_block=0.0,
+        final_armor=2000, final_mobility=50,
+        block_reduction=1000,
+        pilot_stats_backup={
+            "stat_shooting": pilot.stat_shooting,
+            "stat_melee": pilot.stat_melee,
+            "stat_reaction": pilot.stat_reaction,
+            "stat_awakening": pilot.stat_awakening,
+            "stat_defense": pilot.stat_defense,
+        }
     )
 
 @pytest.fixture
 def basic_weapon():
     """基础武器（光束步枪）"""
-    return Weapon(
-        id="w_rifle", name="Beam Rifle",
-        weapon_type=WeaponType.RIFLE,
-        power=1000, en_cost=10,
-        range_min=1000, range_max=6000
+    return WeaponSnapshot(
+        uid="w_rifle_uid", definition_id="w_rifle", name="Beam Rifle",
+        type=WeaponType.SHOOTING,
+        final_power=1000, en_cost=10,
+        range_min=1000, range_max=6000,
+        will_req=0, anim_id="anim_01"
     )
 
 @pytest.fixture
 def heavy_weapon():
-    """重型武器（火箭筒，高伤害高消耗）"""
-    return Weapon(
-        id="w_bazooka", name="Hyper Bazooka",
-        weapon_type=WeaponType.HEAVY,
-        power=4000, en_cost=50,
-        range_min=2, range_max=6
+    """重型武器（火箭筒）- 这里的分类可能需要后续调整，暂用 SPECIAL 或 SHOOTING"""
+    return WeaponSnapshot(
+        uid="w_bazooka_uid", definition_id="w_bazooka", name="Hyper Bazooka",
+        type=WeaponType.SHOOTING, # 这里以前是 HEAVY，现在只有 MELEE/SHOOTING/SPECIAL
+        final_power=4000, en_cost=50,
+        range_min=2000, range_max=6000, # 射程调整适配新逻辑
+        will_req=0, anim_id="anim_02"
     )
 
 @pytest.fixture
@@ -179,66 +202,83 @@ def create_spirit_effect(spirit_id: str, duration: int = 1):
 
 @pytest.fixture
 def high_hit_mecha(basic_pilot):
-    """高命中率机体 (hit_rate=80)"""
-    return Mecha(
-        id="m_high_hit", name="HighHitMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=80.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """高命中率机体"""
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_defense": basic_pilot.stat_defense,
+        # ... others
+    }
+    return MechaSnapshot(
+        instance_id="m_high_hit", mecha_name="HighHitMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=80.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def high_dodge_mecha(basic_pilot):
-    """高躲闪机体 (dodge_rate=50)"""
-    return Mecha(
-        id="m_high_dodge", name="HighDodgeMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=50.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    return MechaSnapshot(
+        instance_id="m_high_dodge", mecha_name="HighDodgeMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=50.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
 @pytest.fixture
 def crit_mecha(basic_pilot):
-    """高暴击机体 (crit_rate=30)"""
-    return Mecha(
-        id="m_crit", name="CritMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=20.0, precision=10.0, crit_rate=30.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    return MechaSnapshot(
+        instance_id="m_crit", mecha_name="CritMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=20.0, final_precision=10.0, final_crit=30.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
 @pytest.fixture
 def low_hp_mecha(basic_pilot):
-    """低HP机体 (HP=30%)"""
-    mecha = Mecha(
-        id="m_low_hp", name="LowHPMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=1500,  # 30% HP
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """低HP机体 (30% HP)"""
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        # ... simplified 
+    }
+    return MechaSnapshot(
+        instance_id="m_low_hp", mecha_name="LowHPMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=1500, # 30%
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup=pilot_stats
     )
-    return mecha
 
 @pytest.fixture
 def high_will_mecha(basic_pilot):
-    """高气力机体 (will=150)"""
-    mecha = Mecha(
-        id="m_high_will", name="HighWillMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100,
-        current_will=150
+    """高气力机体"""
+    pilot_stats = { "stat_shooting": basic_pilot.stat_shooting } # simplified
+    snap = MechaSnapshot(
+        instance_id="m_high_will", mecha_name="HighWillMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup=pilot_stats
     )
-    return mecha
+    snap.current_will = 150
+    return snap
 
 
 # ============================================================================
@@ -248,51 +288,54 @@ def high_will_mecha(basic_pilot):
 @pytest.fixture
 def melee_weapon():
     """格斗武器 (1000-1800m)"""
-    return Weapon(
-        id="w_saber", name="Beam Saber",
-        weapon_type=WeaponType.MELEE,
-        power=1500, en_cost=15,
-        range_min=1000, range_max=1800
+    return WeaponSnapshot(
+        uid="w_saber_uid", definition_id="w_saber", name="Beam Saber",
+        type=WeaponType.MELEE,
+        final_power=1500, en_cost=15,
+        range_min=1000, range_max=1800,
+        will_req=0, anim_id="anim_saber"
     )
 
 @pytest.fixture
 def rifle_weapon():
     """射击武器 (1000-6000m)"""
-    return Weapon(
-        id="w_rifle", name="Beam Rifle",
-        weapon_type=WeaponType.RIFLE,
-        power=1200, en_cost=10,
-        range_min=1000, range_max=6000
+    return WeaponSnapshot(
+        uid="w_rifle_uid", definition_id="w_rifle", name="Beam Rifle",
+        type=WeaponType.SHOOTING,
+        final_power=1200, en_cost=10,
+        range_min=1000, range_max=6000,
+        will_req=0, anim_id="anim_rifle"
     )
 
 @pytest.fixture
 def sniper_weapon():
-    """狙击武器 (3000-8000m)"""
-    return Weapon(
-        id="w_sniper", name="Sniper Rifle",
-        weapon_type=WeaponType.HEAVY,
-        power=2500, en_cost=30,
-        range_min=3000, range_max=8000
+    """狙击武器 (SHOOTING type, long range)"""
+    return WeaponSnapshot(
+        uid="w_sniper_uid", definition_id="w_sniper", name="Sniper Rifle",
+        type=WeaponType.SHOOTING, # 原 HEAVY，现归为 SHOOTING 或 SPECIAL
+        final_power=2500, en_cost=30,
+        range_min=3000, range_max=8000,
+        will_req=0, anim_id="anim_sniper"
     )
 
 @pytest.fixture
 def beam_weapon():
-    """光束武器 (用于I力场测试)"""
-    return Weapon(
-        id="w_beam", name="Beam Cannon",
-        weapon_type=WeaponType.RIFLE,
-        power=1800, en_cost=20,
-        range_min=2000, range_max=5000
+    """光束武器"""
+    return WeaponSnapshot(
+        uid="w_beam_uid", definition_id="w_beam", name="Beam Cannon",
+        type=WeaponType.SHOOTING,
+        final_power=1800, en_cost=20,
+        range_min=2000, range_max=5000, will_req=0, anim_id="anim_beam"
     )
 
 @pytest.fixture
 def low_damage_weapon():
-    """低伤害武器 (伤害<2000, 用于I力场测试)"""
-    return Weapon(
-        id="w_weak", name="Weak Gun",
-        weapon_type=WeaponType.RIFLE,
-        power=800, en_cost=5,
-        range_min=500, range_max=2000
+    """低伤害武器"""
+    return WeaponSnapshot(
+        uid="w_weak_uid", definition_id="w_weak", name="Weak Gun",
+        type=WeaponType.SHOOTING,
+        final_power=800, en_cost=5,
+        range_min=500, range_max=2000, will_req=0, anim_id="anim_weak"
     )
 
 
@@ -445,41 +488,47 @@ def out_of_range_context(basic_mecha, rifle_weapon):
 @pytest.fixture
 def zero_hp_mecha(basic_pilot):
     """HP=0的机体"""
-    return Mecha(
-        id="m_zero_hp", name="ZeroHPMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=0,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    return MechaSnapshot(
+        instance_id="m_zero_hp", mecha_name="ZeroHPMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=0,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={"stat_defense": basic_pilot.stat_defense}
     )
 
 @pytest.fixture
 def zero_en_mecha(basic_pilot):
     """EN=0的机体"""
-    return Mecha(
-        id="m_zero_en", name="ZeroENMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=0,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    return MechaSnapshot(
+        instance_id="m_zero_en", mecha_name="ZeroENMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=0,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
 @pytest.fixture
 def max_will_mecha(basic_pilot):
-    """气力=最大值的机体"""
+    """最大气力机体"""
     from src.config import Config
-    mecha = Mecha(
-        id="m_max_will", name="MaxWillMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100,
-        current_will=Config.WILL_MAX
+    snap = MechaSnapshot(
+        instance_id="m_max_will", mecha_name="MaxWillMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
-    return mecha
+    snap.current_will = Config.WILL_MAX
+    return snap
 
 
 # ============================================================================
@@ -488,46 +537,39 @@ def max_will_mecha(basic_pilot):
 
 @pytest.fixture
 def standard_pilot():
-    """标准驾驶员（带熟练度属性）"""
-    return Pilot(
-        id="p_standard", name="StandardPilot",
+    """标准驾驶员（旧字段 weapon_proficiency 和 mecha_proficiency 已移除/不在 PilotConfig 中）"""
+    # 如果这些是测试必须的，可能需要在 PilotConfig 中临时加回或者测试逻辑更改
+    # 暂时只初始化基础属性
+    return PilotConfig(
+        id="p_standard", name="StandardPilot", portrait_id="p_std",
         stat_shooting=100, stat_melee=100, stat_reaction=100,
-        stat_awakening=100, stat_defense=100,
-        weapon_proficiency=500,
-        mecha_proficiency=2000
+        stat_awakening=100, stat_defense=100
     )
 
 @pytest.fixture
 def high_proficiency_pilot():
     """高熟练度驾驶员"""
-    return Pilot(
-        id="p_high_prof", name="HighProficiencyPilot",
+    return PilotConfig(
+        id="p_high_prof", name="HighProficiencyPilot", portrait_id="p_high",
         stat_shooting=180, stat_melee=180, stat_reaction=170,
-        stat_awakening=150, stat_defense=120,
-        weapon_proficiency=1000,
-        mecha_proficiency=4000
+        stat_awakening=150, stat_defense=120
     )
 
 @pytest.fixture
 def low_proficiency_pilot():
     """低熟练度驾驶员"""
-    return Pilot(
-        id="p_rookie", name="RookiePilot",
+    return PilotConfig(
+        id="p_rookie", name="RookiePilot", portrait_id="p_low",
         stat_shooting=50, stat_melee=50, stat_reaction=50,
         stat_awakening=50, stat_defense=50,
-        weapon_proficiency=100,
-        mecha_proficiency=500
     )
 
 @pytest.fixture
 def normal_pilot():
-    """普通驾驶员（用于复杂场景测试）"""
-    return Pilot(
-        id="p_normal", name="NormalPilot",
+    return PilotConfig(
+        id="p_normal", name="NormalPilot", portrait_id="p_norm",
         stat_shooting=100, stat_melee=100, stat_reaction=100,
         stat_awakening=100, stat_defense=100,
-        weapon_proficiency=500,
-        mecha_proficiency=2000
     )
 
 
@@ -537,38 +579,44 @@ def normal_pilot():
 
 @pytest.fixture
 def balanced_mecha(standard_pilot):
-    """平衡机体（标准属性）"""
-    return Mecha(
-        id="m_balanced", name="BalancedMecha", pilot=standard_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """平衡机体"""
+    return MechaSnapshot(
+        instance_id="m_balanced", mecha_name="BalancedMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={"stat_shooting": standard_pilot.stat_shooting}
     )
 
 @pytest.fixture
 def offensive_mecha(standard_pilot):
-    """进攻型机体（高命中、高暴击、低防御）"""
-    return Mecha(
-        id="m_offensive", name="OffensiveMecha", pilot=standard_pilot,
-        max_hp=4000, current_hp=4000,
-        max_en=100, current_en=100,
-        hit_rate=30.0, precision=20.0, crit_rate=20.0,
-        dodge_rate=5.0, parry_rate=5.0, block_rate=5.0,
-        defense_level=800, mobility=120
+    """进攻型机体"""
+    return MechaSnapshot(
+        instance_id="m_offensive", mecha_name="OffensiveMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=4000, current_hp=4000,
+        final_max_en=100, current_en=100,
+        final_armor=800, final_mobility=120,
+        final_hit=30.0, final_precision=20.0, final_crit=20.0,
+        final_dodge=5.0, final_parry=5.0, final_block=5.0, block_reduction=400,
+        pilot_stats_backup={"stat_shooting": standard_pilot.stat_shooting}
     )
 
 @pytest.fixture
 def defensive_mecha(standard_pilot):
-    """防御型机体（低命中、高闪避、高格挡）"""
-    return Mecha(
-        id="m_defensive", name="DefensiveMecha", pilot=standard_pilot,
-        max_hp=6000, current_hp=6000,
-        max_en=100, current_en=100,
-        hit_rate=5.0, precision=5.0, crit_rate=0.0,
-        dodge_rate=30.0, parry_rate=25.0, block_rate=20.0,
-        defense_level=1500, mobility=80
+    """防御型机体"""
+    return MechaSnapshot(
+        instance_id="m_defensive", mecha_name="DefensiveMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=6000, current_hp=6000,
+        final_max_en=100, current_en=100,
+        final_armor=1500, final_mobility=80,
+        final_hit=5.0, final_precision=5.0, final_crit=0.0,
+        final_dodge=30.0, final_parry=25.0, final_block=20.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
 
@@ -578,16 +626,19 @@ def defensive_mecha(standard_pilot):
 
 @pytest.fixture
 def full_mecha(basic_pilot):
-    """满资源机体（HP/EN/Will都是满值）"""
-    return Mecha(
-        id="m_full", name="FullMecha", pilot=basic_pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100,
-        current_will=120
+    """满资源机体"""
+    snap = MechaSnapshot(
+        instance_id="m_full", mecha_name="FullMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
+    snap.current_will = 120
+    return snap
 
 
 # ============================================================================
@@ -596,32 +647,35 @@ def full_mecha(basic_pilot):
 
 @pytest.fixture
 def gundam_rx78(ace_pilot):
-    """RX-78高达（进攻型，用于复杂场景测试）"""
-    mecha = Mecha(
-        id="m_rx78", name="RX-78高达",
-        pilot=ace_pilot,
-        max_hp=5500, current_hp=5500,
-        max_en=120, current_en=120,
-        hit_rate=25.0, precision=20.0, crit_rate=15.0,
-        dodge_rate=15.0, parry_rate=10.0, block_rate=5.0,
-        defense_level=1200, mobility=120,
-        traits=["trait_newtype", "trait_gundam"]
+    """RX-78高达"""
+    pilot_stats = {"stat_shooting": ace_pilot.stat_shooting}
+    mecha = MechaSnapshot(
+        instance_id="m_rx78", mecha_name="RX-78高达",
+        main_portrait="m_gundam", model_asset="gundam",
+        final_max_hp=5500, current_hp=5500,
+        final_max_en=120, current_en=120,
+        final_armor=1200, final_mobility=120,
+        final_hit=25.0, final_precision=20.0, final_crit=15.0,
+        final_dodge=15.0, final_parry=10.0, final_block=5.0, block_reduction=600,
+        pilot_stats_backup=pilot_stats
     )
+    # Traits (legacy support or new system) can be added via skills or manually
+    mecha.skills = ["trait_newtype", "trait_gundam"]
 
     # 添加武器
-    beam_rifle = Weapon(
-        id="w_beam_rifle", name="光束步枪",
-        weapon_type=WeaponType.RIFLE,
-        power=1500, en_cost=12,
-        range_min=1000, range_max=6000,
-        hit_penalty=0.0
+    beam_rifle = WeaponSnapshot(
+        uid="w_br_01", definition_id="w_beam_rifle", name="光束步枪",
+        type=WeaponType.SHOOTING,
+        final_power=1500, en_cost=12,
+        range_min=1000, range_max=6000, will_req=0, anim_id="a_br",
+        hit_mod=0.0
     )
-    beam_saber = Weapon(
-        id="w_beam_saber", name="光束军刀",
-        weapon_type=WeaponType.MELEE,
-        power=2000, en_cost=15,
-        range_min=1000, range_max=1800,
-        hit_penalty=5.0
+    beam_saber = WeaponSnapshot(
+        uid="w_bs_01", definition_id="w_beam_saber", name="光束军刀",
+        type=WeaponType.MELEE,
+        final_power=2000, en_cost=15,
+        range_min=1000, range_max=1800, will_req=0, anim_id="a_bs",
+        hit_mod=5.0
     )
 
     mecha.weapons = [beam_rifle, beam_saber]
@@ -629,31 +683,32 @@ def gundam_rx78(ace_pilot):
 
 @pytest.fixture
 def zaku_ii(normal_pilot):
-    """扎古II（平衡型，用于复杂场景测试）"""
-    mecha = Mecha(
-        id="m_zaku", name="扎古II",
-        pilot=normal_pilot,
-        max_hp=4500, current_hp=4500,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """扎古II"""
+    mecha = MechaSnapshot(
+        instance_id="m_zaku", mecha_name="扎古II",
+        main_portrait="m_zaku", model_asset="zaku",
+        final_max_hp=4500, current_hp=4500,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
     # 添加武器
-    machine_gun = Weapon(
-        id="w_mgun", name="机关枪",
-        weapon_type=WeaponType.RIFLE,
-        power=800, en_cost=5,
-        range_min=500, range_max=4000,
-        hit_penalty=0.0
+    machine_gun = WeaponSnapshot(
+        uid="w_mg_01", definition_id="w_mgun", name="机关枪",
+        type=WeaponType.SHOOTING,
+        final_power=800, en_cost=5,
+        range_min=500, range_max=4000, will_req=0, anim_id="a_mg",
+        hit_mod=0.0
     )
-    heat_hawk = Weapon(
-        id="w_heat_hawk", name="热能斧",
-        weapon_type=WeaponType.MELEE,
-        power=1200, en_cost=10,
-        range_min=1000, range_max=1500,
-        hit_penalty=10.0
+    heat_hawk = WeaponSnapshot(
+        uid="w_hh_01", definition_id="w_heat_hawk", name="热能斧",
+        type=WeaponType.MELEE,
+        final_power=1200, en_cost=10,
+        range_min=1000, range_max=1500, will_req=0, anim_id="a_hh",
+        hit_mod=10.0
     )
 
     mecha.weapons = [machine_gun, heat_hawk]
@@ -666,15 +721,16 @@ def zaku_ii(normal_pilot):
 
 @pytest.fixture
 def standard_context(balanced_mecha):
-    """标准战斗上下文（用于 test_resolver_coverage.py）"""
-    defender = Mecha(
-        id="m_defender", name="Defender",
-        pilot=balanced_mecha.pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """标准战斗上下文"""
+    defender = MechaSnapshot(
+        instance_id="m_defender", mecha_name="Defender",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, int_block_reduction=500,
+        pilot_stats_backup=balanced_mecha.pilot_stats_backup
     )
 
     return BattleContext(
@@ -688,15 +744,16 @@ def standard_context(balanced_mecha):
 
 @pytest.fixture
 def full_context(full_mecha):
-    """满资源战斗上下文（用于 test_side_effects.py）"""
-    defender = Mecha(
-        id="m_enemy", name="EnemyMecha",
-        pilot=full_mecha.pilot,
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+    """满资源战斗上下文"""
+    defender = MechaSnapshot(
+        instance_id="m_enemy", mecha_name="EnemyMecha",
+        main_portrait="m_001", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_armor=1000, final_mobility=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+        pilot_stats_backup={}
     )
 
     return BattleContext(

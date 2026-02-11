@@ -475,19 +475,20 @@ class TestTargetSelection:
     def test_target_self(self, basic_mecha, ace_pilot):
         """测试目标是自己"""
         enemy = Mecha(
-            id="m_enemy", name="Enemy", pilot=ace_pilot,
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_enemy", mecha_name="Enemy", main_portrait="m_enemy_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100
         )
 
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=basic_mecha, defender=enemy,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         # 攻击方添加一个对自己生效的效果
@@ -505,19 +506,20 @@ class TestTargetSelection:
     def test_target_enemy(self, basic_mecha, ace_pilot):
         """测试目标是敌人"""
         enemy = Mecha(
-            id="m_enemy", name="Enemy", pilot=ace_pilot,
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_enemy", mecha_name="Enemy", main_portrait="m_enemy_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100
         )
 
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=basic_mecha, defender=enemy,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         # 攻击方添加一个对敌人生效的效果

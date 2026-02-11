@@ -2,46 +2,40 @@
     {
         "id": "pilot_amuro",
         "name": "阿姆罗·雷",
-        "stats": {
-            "shooting": 85,
-            "melee": 70,
-            "awakening": 90,
-            "defense": 65,
-            "reaction": 88
-        },
-        "proficiency": {
-            "weapon": 800,
-            "mecha": 3500
-        }
+        "portrait_id": "p_amuro",
+        "stat_shooting": 85,
+        "stat_melee": 70,
+        "stat_awakening": 90,
+        "stat_defense": 65,
+        "stat_reaction": 88,
+        "innate_skills": [
+            "trait_newtype",
+            "skill_focus"
+        ]
     },
     {
         "id": "pilot_char",
         "name": "夏亚·阿兹纳布尔",
-        "stats": {
-            "shooting": 90,
-            "melee": 80,
-            "awakening": 85,
-            "defense": 70,
-            "reaction": 92
-        },
-        "proficiency": {
-            "weapon": 900,
-            "mecha": 3800
-        }
+        "portrait_id": "p_char",
+        "stat_shooting": 90,
+        "stat_melee": 80,
+        "stat_awakening": 85,
+        "stat_defense": 70,
+        "stat_reaction": 92,
+        "innate_skills": [
+            "trait_newtype",
+            "skill_red_comet"
+        ]
     },
     {
         "id": "pilot_dummy",
         "name": "木桩驾驶员",
-        "stats": {
-            "shooting": 10,
-            "melee": 10,
-            "awakening": 0,
-            "defense": 50,
-            "reaction": 50
-        },
-        "proficiency": {
-            "weapon": 10,
-            "mecha": 10
-        }
+        "portrait_id": "p_dummy",
+        "stat_shooting": 10,
+        "stat_melee": 10,
+        "stat_awakening": 0,
+        "stat_defense": 50,
+        "stat_reaction": 50,
+        "innate_skills": []
     }
 ]

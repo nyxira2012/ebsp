@@ -11,7 +11,10 @@ class EffectFactory:
 
     @classmethod
     def _load_data(cls):
-        """加载技能 JSON 数据"""
+        """加载技能数据文件 (data/skills.json)。
+
+        如果数据已加载则跳过。如果文件不存在或加载失败，会输出警告或错误信息。
+        """
         if cls._data_loaded:
             return
             
@@ -30,7 +33,18 @@ class EffectFactory:
 
     @classmethod
     def create_effect(cls, effect_id: str, duration: int = 1) -> List[Effect]:
-        """根据 ID 从 JSON 数据中创建 Effect 对象"""
+        """根据效果 ID 从 JSON 配置中创建标准效果对象列表。
+
+        如果 ID 存在于配置中，会遍历其包含的所有子效果定义并实例化为 Effect 对象。
+        支持从 JSON 中覆盖 duration、charges、priority 等默认数值。
+
+        Args:
+            effect_id: 技能或精神指令的唯一标识符
+            duration: 默认持续回合数，若 JSON 中未指定则使用此值
+
+        Returns:
+            List[Effect]: 生成的效果对象列表，若 ID 不存在则返回空列表
+        """
         cls._load_data()
         
         effects: List[Effect] = []
@@ -63,7 +77,14 @@ class EffectFactory:
 
     @classmethod
     def create_trait_effects(cls, trait_id: str) -> List[Effect]:
-        """创建特性的永久效果 (复用 create_effect 逻辑)"""
+        """根据特性 ID 创建永久性的效果对象列表。
+
+        Args:
+            trait_id: 机体或驾驶员特性的唯一标识符
+
+        Returns:
+            List[Effect]: 生成的永久效果列表
+        """
         # 特性的 duration 通常在 JSON 中定义为 -1
         return cls.create_effect(trait_id, duration=-1)
 

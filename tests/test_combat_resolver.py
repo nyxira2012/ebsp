@@ -329,28 +329,48 @@ class TestEdgeCases:
     def test_zero_hp_defender(self, basic_pilot):
         """测试防御方HP为0"""
         attacker = Mecha(
-            id="m_attacker", name="Attacker", pilot=basic_pilot,
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_attacker", mecha_name="Attacker", 
+            main_portrait="m_atk_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": basic_pilot.stat_shooting,
+                "stat_melee": basic_pilot.stat_melee,
+                "stat_reaction": basic_pilot.stat_reaction,
+                "stat_awakening": basic_pilot.stat_awakening,
+                "stat_defense": basic_pilot.stat_defense,
+            }
         )
 
         defender = Mecha(
-            id="m_defender", name="Defender", pilot=basic_pilot,
-            max_hp=5000, current_hp=0,  # 已死亡
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_defender", mecha_name="Defender", 
+            main_portrait="m_def_img", model_asset="default",
+            final_max_hp=5000, current_hp=0,  # 已死亡
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": basic_pilot.stat_shooting,
+                "stat_melee": basic_pilot.stat_melee,
+                "stat_reaction": basic_pilot.stat_reaction,
+                "stat_awakening": basic_pilot.stat_awakening,
+                "stat_defense": basic_pilot.stat_defense,
+            }
         )
 
+        from src.models import WeaponSnapshot as Weapon
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
             attacker=attacker, defender=defender,
-            weapon=Weapon(id="w", name="W", weapon_type=WeaponType.RIFLE,
-                        power=1000, en_cost=10, range_min=1, range_max=5)
+            weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
+                        final_power=1000, en_cost=10, range_min=1, range_max=5000,
+                        will_req=0, anim_id="default")
         )
 
         result, damage = AttackTableResolver.resolve_attack(context)

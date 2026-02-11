@@ -4,7 +4,7 @@ Skills系统集成测试
 """
 
 import pytest
-from src.models import Mecha, Pilot, BattleContext
+from src.models import Mecha, Pilot, BattleContext, Terrain
 from src.skills import (
     SkillRegistry, EffectManager, TraitManager, SpiritCommands
 )
@@ -19,7 +19,7 @@ from src.skill_system.effect_factory import EffectFactory
 def pilot_with_traits():
     """有特性的驾驶员"""
     return Pilot(
-        id="p_newtype", name="NewtypePilot",
+        id="p_newtype", name="NewtypePilot", portrait_id="p_newtype_img",
         stat_shooting=150, stat_melee=120, stat_reaction=140,
         stat_awakening=130, stat_defense=110
     )
@@ -29,13 +29,22 @@ def pilot_with_traits():
 def mecha_for_traits(pilot_with_traits):
     """有特性的机体"""
     mecha = Mecha(
-        id="m_newtype_mecha", name="NewtypeMecha", pilot=pilot_with_traits,
-        max_hp=5000, current_hp=5000,
-        max_en=120, current_en=120,
-        hit_rate=15.0, precision=15.0, crit_rate=10.0,
-        dodge_rate=15.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1200, mobility=110,
-        traits=["trait_newtype", "trait_expert_rifle"]  # 多特性
+        instance_id="m_newtype_mecha", mecha_name="NewtypeMecha", 
+        main_portrait="m_newtype_img", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=120, current_en=120,
+        final_hit=15.0, final_precision=15.0, final_crit=10.0,
+        final_dodge=15.0, final_parry=10.0, final_block=10.0,
+        final_armor=1200, final_mobility=110,
+        block_reduction=500,
+        skills=["trait_newtype", "trait_expert_rifle"],  # 多特性
+        pilot_stats_backup={
+            "stat_shooting": pilot_with_traits.stat_shooting,
+            "stat_melee": pilot_with_traits.stat_melee,
+            "stat_reaction": pilot_with_traits.stat_reaction,
+            "stat_awakening": pilot_with_traits.stat_awakening,
+            "stat_defense": pilot_with_traits.stat_defense,
+        }
     )
     return mecha
 
@@ -43,37 +52,55 @@ def mecha_for_traits(pilot_with_traits):
 @pytest.fixture
 def battle_context():
     """战斗上下文"""
+    attacker_pilot = Pilot(
+        id="p_atk", name="AtkPilot", portrait_id="p_atk_img",
+        stat_shooting=100, stat_melee=100, stat_reaction=100,
+        stat_awakening=100, stat_defense=100
+    )
     attacker = Mecha(
-        id="m_attacker", name="Attacker",
-        pilot=Pilot(
-            id="p_atk", name="AtkPilot",
-            stat_shooting=100, stat_melee=100, stat_reaction=100,
-            stat_awakening=100, stat_defense=100
-        ),
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=20.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+        instance_id="m_attacker", mecha_name="Attacker",
+        main_portrait="m_atk_img", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_hit=20.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0,
+        final_armor=1000, final_mobility=100,
+        block_reduction=500,
+        pilot_stats_backup={
+            "stat_shooting": attacker_pilot.stat_shooting,
+            "stat_melee": attacker_pilot.stat_melee,
+            "stat_reaction": attacker_pilot.stat_reaction,
+            "stat_awakening": attacker_pilot.stat_awakening,
+            "stat_defense": attacker_pilot.stat_defense,
+        }
+    )
+    defender_pilot = Pilot(
+        id="p_def", name="DefPilot", portrait_id="p_def_img",
+        stat_shooting=100, stat_melee=100, stat_reaction=100,
+        stat_awakening=100, stat_defense=100
     )
     defender = Mecha(
-        id="m_defender", name="Defender",
-        pilot=Pilot(
-            id="p_def", name="DefPilot",
-            stat_shooting=100, stat_melee=100, stat_reaction=100,
-            stat_awakening=100, stat_defense=100
-        ),
-        max_hp=5000, current_hp=5000,
-        max_en=100, current_en=100,
-        hit_rate=10.0, precision=10.0, crit_rate=5.0,
-        dodge_rate=20.0, parry_rate=15.0, block_rate=10.0,
-        defense_level=1000, mobility=100
+        instance_id="m_defender", mecha_name="Defender",
+        main_portrait="m_def_img", model_asset="default",
+        final_max_hp=5000, current_hp=5000,
+        final_max_en=100, current_en=100,
+        final_hit=10.0, final_precision=10.0, final_crit=5.0,
+        final_dodge=20.0, final_parry=15.0, final_block=10.0,
+        final_armor=1000, final_mobility=100,
+        block_reduction=500,
+        pilot_stats_backup={
+            "stat_shooting": defender_pilot.stat_shooting,
+            "stat_melee": defender_pilot.stat_melee,
+            "stat_reaction": defender_pilot.stat_reaction,
+            "stat_awakening": defender_pilot.stat_awakening,
+            "stat_defense": defender_pilot.stat_defense,
+        }
     )
 
     return BattleContext(
         round_number=1,
         distance=1000,
-        terrain=None,
+        terrain=Terrain.SPACE,
         attacker=attacker,
         defender=defender,
         weapon=None
@@ -160,17 +187,21 @@ class TestEffectManagerIntegration:
     def test_add_effect_creates_effects(self):
         """测试添加效果创建Effect对象"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         initial_count = len(mecha.effects)
@@ -188,17 +219,21 @@ class TestEffectManagerIntegration:
     def test_add_effect_refreshes_duration(self):
         """测试添加效果刷新持续时间"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         # 使用 EffectManager 添加一个效果 (duration=1)
@@ -225,17 +260,21 @@ class TestEffectManagerIntegration:
     def test_tick_effects_reduces_duration(self):
         """测试tick减少持续时间"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         # 添加效果
@@ -284,17 +323,21 @@ class TestEffectManagerIntegration:
     def test_tick_effects_removes_expired(self):
         """测试tick移除过期效果"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         # 添加duration=0的效果（已经过期）
@@ -345,18 +388,22 @@ class TestTraitManagerIntegration:
     def test_apply_empty_traits(self):
         """测试应用空特性列表"""
         mecha = Mecha(
-            id="m_no_traits", name="NoTraitsMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100,
-            traits=[]  # 无特性
+            instance_id="m_no_traits", mecha_name="NoTraitsMecha", 
+            main_portrait="m_no_traits_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            skills=[],  # 无特性 (旧版是 traits，新版是 skills)
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         TraitManager.apply_traits(mecha)
@@ -375,17 +422,21 @@ class TestSpiritCommandsIntegration:
     def test_activate_strike(self):
         """测试激活必中"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         initial_count = len(mecha.effects)
@@ -398,17 +449,21 @@ class TestSpiritCommandsIntegration:
     def test_activate_alert(self):
         """测试激活必闪"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         SpiritCommands.activate_alert(mecha)
@@ -419,17 +474,21 @@ class TestSpiritCommandsIntegration:
     def test_activate_valor(self):
         """测试激活热血"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         SpiritCommands.activate_valor(mecha)
@@ -440,17 +499,21 @@ class TestSpiritCommandsIntegration:
     def test_activate_iron_wall(self):
         """测试激活铁壁"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         SpiritCommands.activate_iron_wall(mecha)
@@ -461,17 +524,21 @@ class TestSpiritCommandsIntegration:
     def test_activate_focus(self):
         """测试激活集中"""
         mecha = Mecha(
-            id="m_test", name="TestMecha",
-            pilot=Pilot(
-                id="p_test", name="TestPilot",
-                stat_shooting=100, stat_melee=100, stat_reaction=100,
-                stat_awakening=100, stat_defense=100
-            ),
-            max_hp=5000, current_hp=5000,
-            max_en=100, current_en=100,
-            hit_rate=10.0, precision=10.0, crit_rate=5.0,
-            dodge_rate=10.0, parry_rate=10.0, block_rate=10.0,
-            defense_level=1000, mobility=100
+            instance_id="m_test", mecha_name="TestMecha", 
+            main_portrait="m_test_img", model_asset="default",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0,
+            final_armor=1000, final_mobility=100,
+            block_reduction=500,
+            pilot_stats_backup={
+                "stat_shooting": 100,
+                "stat_melee": 100,
+                "stat_reaction": 100,
+                "stat_awakening": 100,
+                "stat_defense": 100,
+            }
         )
 
         initial_count = len(mecha.effects)

@@ -1,26 +1,34 @@
 """
 数据模型定义
-包含所有枚举类型和数据类 (Dataclasses)
+包含所有枚举类型、配置模型 (Pydantic) 和快照模型 (Snapshot)
 """
 
-from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import List, Dict, Optional, Any
+from pydantic import BaseModel, ConfigDict, Field
+from dataclasses import dataclass, field
 from .config import Config
 
 # ============================================================================
 # 枚举类型 (Enums)
 # ============================================================================
 
-class WeaponType(Enum):
+class WeaponType(str, Enum):
     """武器类型"""
     MELEE = "格斗"      # < 2000m
-    RIFLE = "射击"      # 1000m - 6000m
-    HEAVY = "狙击"      # > 3000m
+    SHOOTING = "射击"   # 1000m - 6000m
+    AWAKENING = "觉醒"  # 浮游炮等
+    SPECIAL = "特殊"    # 地图炮或其他
     FALLBACK = "撞击"   # 保底武器
 
+class SlotType(str, Enum):
+    """槽位类型"""
+    FIXED = "FIXED"     # 固定槽位
+    WEAPON = "WEAPON"   # 武器槽
+    EQUIP = "EQUIP"     # 设备槽
+    SUB_PILOT = "SUB"   # 副驾驶槽 (虚拟)
 
-class AttackResult(Enum):
+class AttackResult(str, Enum):
     """攻击判定结果"""
     MISS = "未命中"
     DODGE = "躲闪"
@@ -29,8 +37,7 @@ class AttackResult(Enum):
     CRIT = "暴击"
     HIT = "命中"
 
-
-class InitiativeReason(Enum):
+class InitiativeReason(str, Enum):
     """先手原因"""
     PERFORMANCE = "机体性能优势"
     PILOT = "驾驶员感知优势"
@@ -38,362 +45,387 @@ class InitiativeReason(Enum):
     COUNTER = "战术反超"
     FORCED_SWITCH = "强制换手机制"
 
-
-class Terrain(Enum):
+class Terrain(str, Enum):
     """地形类型"""
     SPACE = "宇宙"
     SKY = "空中"
     GROUND = "地面"
     WATER = "水下"
-    FOREST = "森林" # 覆盖率高，防御/回避修正
-    BASE = "基地"   # 回复HP/EN，防御修正
-
-
+    FOREST = "森林" 
+    BASE = "基地"   
 
 # ============================================================================
-# 数据模型 (Data Models)
+# 源数据模型 (Source Data Definitions) - Pydantic
 # ============================================================================
 
-@dataclass
-class Modifier:
-    """属性修正值"""
-    stat_name: str              # 属性名称 (e.g., "hit_rate", "defense_level")
-    value: float                # 修正值 (加算)
-    source: str                 # 来源 (e.g., "SKILL_FOCUS", "ITEM_BOOSTER")
-    duration: int = 1           # 持续回合数 (-1 表示无限)
+class MechaConfig(BaseModel):
+    """机体静态配置表"""
+    id: str
+    name: str
+    portrait_id: str
+    model_asset: str = "default_model"
+    
+    # 基础属性 (Level 0)
+    init_hp: int
+    init_en: int
+    init_armor: int
+    init_mobility: int
+    
+    # 判定属性 (硬件修正)
+    init_hit: float         # 命中率修正
+    init_precision: float   # 精准值
+    init_crit: float        # 暴击率
+    
+    # 防御倾向
+    init_dodge: float       # 机体回避
+    init_parry: float       # 机体招架
+    init_block: float       # 机体格挡
+    init_block_red: int     # 机体格挡减伤
+    
+    # 槽位与武器
+    slots: List[str] = []         # ["WEAPON", "EQUIP", "WEAPON"...]
+    fixed_weapons: List[str] = [] # 内置武器 ID 列表
 
+class EquipmentConfig(BaseModel):
+    """装备/部件配置表"""
+    id: str
+    name: str
+    type: str               # WEAPON / EQUIP
+    
+    # 属性修正 (加法叠加)
+    # key 必须匹配 MechaSnapshot 中的属性名 (e.g. "final_max_hp", "final_mobility")
+    # 或者原始属性名 (e.g. "init_hp")，具体由 Factory 处理
+    stat_modifiers: Dict[str, float] = {}
+    
+    # 武器特有属性 (仅当 type="WEAPON" 时有效)
+    weapon_power: Optional[int] = None
+    weapon_range_min: Optional[int] = None
+    weapon_range_max: Optional[int] = None
+    weapon_en_cost: Optional[int] = None
+    weapon_type: Optional[WeaponType] = None 
+    weapon_will_req: int = 0  # 气力需求
+    weapon_tags: List[str] = []
+    weapon_anim_id: str = "default_anim" 
+    
+    # 携带技能
+    passive_skills: List[str] = []
 
-@dataclass
-class Effect:
-    """状态效果 (Buff/Debuff/Trait Effect)
+class PilotConfig(BaseModel):
+    """驾驶员配置表"""
+    id: str
+    name: str
+    portrait_id: str
     
-    完整的效果数据模型，支持：
-    - 钩子点挂载（hook）
-    - 多种操作类型（add/mul/override/callback）
-    - 概率触发（trigger_chance）
-    - 条件检查（conditions）
-    - 副作用（side_effects）
-    - 次数限制（charges）
-    - 优先级控制（priority + sub_priority）
-    """
-    id: str                     # 效果ID (e.g., "spirit_valor", "trait_bunshin")
-    name: str                   # 显示名称
-    hook: str                   # 挂载的钩子点名称 (e.g., "HOOK_PRE_DAMAGE_MULT")
-    operation: str              # 操作类型: "add"(加法) / "mul"(乘法) / "override"(覆盖) / "callback"(回调)
-    value: float | str          # 数值或回调函数名 (float for add/mul/override, str for callback)
+    # 核心五维
+    stat_shooting: int      # 射击 (修正射击威力)
+    stat_melee: int         # 格斗 (修正格斗威力)
+    stat_awakening: int     # 觉醒 (修正觉醒威力 & 直觉)
+    stat_defense: int       # 守备 (修正防御)
+    stat_reaction: int      # 反应 (修正回避/先手)
     
-    # 优先级控制
-    priority: int = 50          # 主优先级 (0-100): 0=被动, 21-50=Buff, 51-80=倍率, 81-99=条件, 100=绝对
-    sub_priority: int = 500     # 子优先级 (0-1000): 同 priority 下的排序，默认 500
+    stat_tech: int = 0      # 技量 (预留，不参与计算)
     
-    # 触发控制
-    trigger_chance: float = 1.0 # 触发概率 (0.0-1.0): 1.0=必定触发, 0.5=50%概率
-    target: str = "self"        # 作用目标: "self"=自己, "enemy"=对方, "both"=双方
+    innate_skills: List[str] = []
     
-    # 生命周期
-    duration: int = 1           # 持续回合数: -1=永久, 0=已失效, >0=剩余回合
-    charges: int = -1           # 生效次数 (-1=无限, >0=有限次数): -1=无限, 0=已用完, >0=剩余次数
-    
-    # 条件与副作用
-    conditions: list[dict[str, Any]] = field(default_factory=list)  # 触发条件列表
-    side_effects: list[dict[str, Any]] = field(default_factory=list)  # 副作用列表
-    
-    # 兼容性字段
-    payload: dict[str, Any] = field(default_factory=dict)  # 额外数据（向后兼容）
+    # 运行时字段 (兼容旧代码/测试)
+    stat_modifiers: Dict[str, float] = Field(default_factory=dict, exclude=True)
+    hooks: Dict[str, float] = Field(default_factory=dict, exclude=True)
 
-
-@dataclass
-class Condition:
-    """效果触发条件
-    
-    用于检查 Effect 是否应该触发。
-    支持多种条件类型：HP阈值、气力阈值、武器属性、对方状态等。
-    """
-    type: str                   # 条件类型 (e.g., "hp_threshold", "will_threshold", "weapon_tag")
-    val: Any                    # 条件值（根据类型不同而不同）
-    op: str = ">"               # 比较操作符: ">", "<", "==", ">=", "<=", "!="
-    
-    # 可选字段
-    target: str = "self"        # 检查目标: "self"=自己, "enemy"=对方
-    ref_hook: str | None = None # 跨钩子引用: 引用其他钩子点的计算结果
-
-
-@dataclass
-class SideEffect:
-    """效果副作用
-    
-    Effect 触发后产生的副作用，用于消耗资源、修改状态等。
-    例如：消耗EN、回复气力、累积计数器等。
-    """
-    type: str                   # 副作用类型 (e.g., "consume_en", "modify_will", "modify_stat")
-    val: float                  # 副作用数值
-    target: str = "self"        # 作用目标: "self"=自己, "enemy"=对方, "both"=双方
-    
-    # 可选字段（用于特定副作用类型）
-    stat: str | None = None     # 对于 "modify_stat" 类型，指定要修改的属性名
-
-
-@dataclass
-class Pilot:
-    """驾驶员数据模型"""
-    id: str                     # 唯一标识符
-    name: str                   # 名称
-    stat_shooting: int          # 射击值 (影响射击类武器)
-    stat_melee: int             # 格斗值 (影响格斗类武器)
-    stat_awakening: int         # 觉醒值 (影响特殊武器和直觉回避)
-    stat_defense: int           # 守备值 (影响减伤和抗暴击)
-    stat_reaction: int          # 反应值 (影响躲闪/招架/格挡/先攻)
-    
-    # 熟练度 (可选，默认值)
-    weapon_proficiency: int = 500   # 武器熟练度 (0-1000)
-    mecha_proficiency: int = 2000   # 机体熟练度 (0-4000)
-    
-    # 动态状态
-    effects: list[Effect] = field(default_factory=list)
-    stat_modifiers: dict[str, float] = field(default_factory=dict)
-
-    # 技能钩子 (保留用于兼容，建议迁移到 Effect 系统)
-    hooks: dict[str, float] = field(default_factory=dict)
-    
-    def get_effective_stat(self, stat_name: str) -> float:
-        """获取包含修正值的属性值"""
-        base_value = getattr(self, stat_name, 0)
-        modifier = self.stat_modifiers.get(stat_name, 0.0)
-        return base_value + modifier
-
-    def __post_init__(self) -> None:
-        """初始化默认钩子"""
+    def model_post_init(self, __context: Any) -> None:
+        """初始化钩子"""
         if not self.hooks:
             self.hooks = {
                 'HOOK_HIT_ADD': 0.0,
                 'HOOK_EVA_ADD': 0.0,
-                'HOOK_DMG_MUL': 1.0,
-                'HOOK_DEF_MUL': 1.0,
-                'HOOK_WILL_ADD': 0.0,
-                'HOOK_EN_COST_MUL': 1.0,
+                'HOOK_CRI_ADD': 0.0,
+                'HOOK_DMG_ADD': 0.0,
             }
 
+    def get_effective_stat(self, stat_name: str) -> int:
+        """获取修正后的属性值"""
+        base_val = getattr(self, stat_name, 0)
+        mod_val = self.stat_modifiers.get(stat_name, 0.0)
+        return int(base_val + mod_val)
 
-@dataclass
-class Weapon:
-    """武器数据模型"""
-    id: str                     # 唯一标识符
-    name: str                   # 名称
-    weapon_type: WeaponType     # 武器类型
-    power: int                  # 威力
-    en_cost: int                # EN消耗
-    range_min: int              # 最小射程 (米)
-    range_max: int              # 最大射程 (米)
-    hit_penalty: float = 0.0    # 命中惩罚 (例如射击类在距离外-30%)
+# ============================================================================
+# 快照模型 (Runtime Snapshots) - Pydantic
+# ============================================================================
+
+class WeaponSnapshot(BaseModel):
+    """武器运行时快照"""
+    uid: str                    # 运行时唯一ID
+    definition_id: str          # 原始配置ID
+    name: str
+    type: WeaponType
     
+    final_power: int            # 加成后的实战威力
+    range_min: int
+    range_max: int
+    en_cost: int                # 统一使用 EN 消耗
+    will_req: int               # 气力需求
+    anim_id: str                # 战斗动画 ID
+    
+    # 额外补正 (通常来自武器自身特性)
+    hit_mod: float = 0.0
+    crit_mod: float = 0.0
+    
+    tags: List[str] = []
+
     def can_use_at_distance(self, distance: int) -> bool:
-        """检查武器在当前距离是否可用。
-
-        Args:
-            distance: 当前交战距离 (米)
-
-        Returns:
-            bool: 距离在武器射程范围内返回 True,否则返回 False
-        """
         return self.range_min <= distance <= self.range_max
+        
+    @property
+    def weapon_type(self) -> WeaponType: return self.type
     
+    @property
+    def power(self) -> int: return self.final_power
+
+    @property
+    def id(self) -> str: return self.definition_id
+
     def get_hit_modifier_at_distance(self, distance: int) -> float:
-        """获取当前距离下的命中修正值。
+        """获取指定距离下的命中补正，超出射程返回 -999"""
+        if self.can_use_at_distance(distance):
+            return 0.0
+        return -999.0
 
-        计算逻辑:
-        - 距离不在射程内: 返回 -999.0 (完全无法使用)
-        - 射击类武器(RIFLE)在边缘距离(<1000m 或 >6000m): 返回配置的惩罚值
-        - 其他情况: 返回武器的默认命中修正
+class MechaSnapshot(BaseModel):
+    """机体运行时快照"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-        Args:
-            distance: 当前交战距离 (米)
+    instance_id: str = "default_id"
+    mecha_name: str = "DefaultMecha"
+    
+    # 资源管理
+    main_portrait: str = "default_portrait"
+    sub_portrait: Optional[str] = None
+    model_asset: str = "default_asset"
+    
+    # 核心状态
+    final_max_hp: int = 1000
+    current_hp: int = 1000
+    final_max_en: int = 100
+    current_en: int = 100
+    current_will: int = 100
+    
+    # 战斗属性
+    final_armor: int = 1000
+    final_mobility: int = 100
+    
+    # 判定倾向 (0-100)
+    final_hit: float = 0.0
+    final_precision: float = 0.0
+    final_crit: float = 0.0
+    
+    final_dodge: float = 0.0
+    final_parry: float = 0.0
+    final_block: float = 0.0
+    block_reduction: int = 0
+    
+    # 容器
+    weapons: List[WeaponSnapshot] = []
+    skills: List[str] = []
+    
+    # 驾驶员属性备份 (用于伤害计算和防御公式)
+    # keys: shooting, melee, awakening, defense, reaction
+    pilot_stats_backup: Dict[str, int] = {} 
+    
+    # 战斗中的动态状态 (不序列化到纯JSON配置，但运行时需要)
+    current_will: int = 100
+    effects: List[Any] = Field(default_factory=list, exclude=True) # 运行时 Effect 对象列表
+    
+    # ========================================================================
+    # 兼容性层 (Compatibility Layer for Legacy Tests/Code)
+    # ========================================================================
+    
+    @property
+    def id(self) -> str: return self.instance_id
+    
+    @property
+    def name(self) -> str: return self.mecha_name
 
-        Returns:
-            float: 命中修正百分比 (例如 -30.0 表示 -30%, -999.0 表示不可用)
-        """
-        if not self.can_use_at_distance(distance):
-            return -999.0  # 完全无法使用
-
-        # 射击类武器在边缘距离有惩罚
-        if self.weapon_type == WeaponType.RIFLE:
-            if distance < 1000 or distance > 6000:
-                return Config.RIFLE_RANGE_PENALTY
-
-        return self.hit_penalty
-
-
-@dataclass
-class Mecha:
-    """机体数据模型"""
-    id: str                     # 唯一标识符
-    name: str                   # 名称
-    pilot: Pilot                # 驾驶员对象
-    
-    # 基础属性
-    max_hp: int
-    current_hp: int
-    max_en: int
-    current_en: int
-    
-    # 攻击属性
-    hit_rate: float             # 命中加成 (减少未命中率)
-    precision: float            # 精准值 (削减对方防御概率)
-    crit_rate: float            # 暴击加成
-    
-    # 防御属性
-    dodge_rate: float           # 躲闪基础值
-    parry_rate: float           # 招架基础值
-    block_rate: float           # 格挡基础值
-    defense_level: int          # 装甲等级
-    
-    # 机体性能
-    mobility: int               # 机动性 (影响先手判定)
-    
-    # 带默认值的字段必须放在最后
-    block_value: int = 0        # 格挡固定减伤值
-    
-    # 武器列表
-    weapons: list[Weapon] = field(default_factory=list)
-    
-    # 战斗状态
-    current_will: int = Config.WILL_INITIAL  # 当前气力
-    
-    # 机体特性 (trait ID 列表)
-    traits: list[str] = field(default_factory=list)
-
-    # 动态状态
-    effects: list[Effect] = field(default_factory=list)
-    stat_modifiers: dict[str, float] = field(default_factory=dict)
-    
-    # 技能钩子 (保留用于兼容)
-    hooks: dict[str, bool | float] = field(default_factory=dict)
-    
-    def get_effective_stat(self, stat_name: str) -> float:
-        """获取包含修正值的属性值"""
-        base_value = getattr(self, stat_name, 0)
-        modifier = self.stat_modifiers.get(stat_name, 0.0)
-        return base_value + modifier
-
-    def __post_init__(self) -> None:
-        """初始化"""
-        if not self.hooks:
-            self.hooks = {
-                'HOOK_FORCE_INITIATIVE': False,
-                'HOOK_IGNORE_ARMOR': False,
-                'HOOK_GUARANTEE_PARRY': False,
-                'HOOK_IGNORE_RANGE_PENALTY': False,
-                'HOOK_SUPPRESS_ESCAPE': False,
-                'HOOK_DEATH_RESIST': False,
-            }
-    
     def is_alive(self) -> bool:
-        """检查机体是否存活。
+        """检查机体是否存活"""
+        return self.current_hp > 0
 
-        Returns:
-            bool: 当前 HP 大于 0 返回 True,否则返回 False
-        """
+    @property
+    def max_hp(self) -> int: return self.final_max_hp
+    @max_hp.setter
+    def max_hp(self, value: int): self.final_max_hp = value
+    
+    @property
+    def max_en(self) -> int: return self.final_max_en
+    @max_en.setter
+    def max_en(self, value: int): self.final_max_en = value
+    
+    @property
+    def hit_rate(self) -> float: return self.final_hit
+    @hit_rate.setter
+    def hit_rate(self, value: float): self.final_hit = value
+    
+    @property
+    def precision(self) -> float: return self.final_precision
+    @precision.setter
+    def precision(self, value: float): self.final_precision = value
+
+    @property
+    def crit_rate(self) -> float: return self.final_crit
+    @crit_rate.setter
+    def crit_rate(self, value: float): self.final_crit = value
+
+    @property
+    def dodge_rate(self) -> float: return self.final_dodge
+    @dodge_rate.setter
+    def dodge_rate(self, value: float): self.final_dodge = value
+
+    @property
+    def parry_rate(self) -> float: return self.final_parry
+    @parry_rate.setter
+    def parry_rate(self, value: float): self.final_parry = value
+
+    @property
+    def block_rate(self) -> float: return self.final_block
+    @block_rate.setter
+    def block_rate(self, value: float): self.final_block = value
+    
+    @property
+    def block_value(self) -> int: return self.block_reduction
+    @block_value.setter
+    def block_value(self, value: int): self.block_reduction = value
+
+    @property
+    def traits(self) -> List[str]: return self.skills
+    @traits.setter
+    def traits(self, value: List[str]): self.skills = value
+    
+    @property
+    def defense_level(self) -> int: return self.final_armor
+    @defense_level.setter
+    def defense_level(self, value: int): self.final_armor = value
+    
+    @property
+    def mobility(self) -> int: return self.final_mobility
+    
+    @property
+    def pilot(self):
+        """Mock pilot object for legacy access like mecha.pilot.stat_shooting"""
+        stats_backup = self.pilot_stats_backup
+        class MockPilot:
+            def __init__(self, stats):
+                self.stat_shooting = stats.get('stat_shooting', 0)
+                self.stat_melee = stats.get('stat_melee', 0)
+                self.stat_awakening = stats.get('stat_awakening', 0)
+                self.stat_defense = stats.get('stat_defense', 0)
+                self.stat_reaction = stats.get('stat_reaction', 0)
+                self.weapon_proficiency = stats.get('weapon_proficiency', 500)
+                self.mecha_proficiency = stats.get('mecha_proficiency', 2000)
+                self._stats = stats
+            
+            def get_effective_stat(self, stat_name: str) -> int:
+                return self._stats.get(stat_name, 0)
+        return MockPilot(stats_backup)
+
+    def is_alive(self) -> bool:
         return self.current_hp > 0
     
     def get_hp_percentage(self) -> float:
-        """获取当前 HP 的百分比。
-
-        Returns:
-            float: HP 百分比 (0.0 - 100.0)
-        """
-        return (self.current_hp / self.max_hp) * 100
+        return (self.current_hp / self.final_max_hp) * 100 if self.final_max_hp > 0 else 0
     
-    def can_attack(self, weapon: Weapon) -> bool:
-        """检查机体是否有足够 EN 发动攻击。
-
-        Args:
-            weapon: 要使用的武器对象
-
-        Returns:
-            bool: 当前 EN 大于等于武器消耗返回 True,否则返回 False
-        """
+    def can_attack(self, weapon: WeaponSnapshot) -> bool:
         return self.current_en >= weapon.en_cost
     
     def consume_en(self, amount: int) -> None:
-        """消耗指定数量的 EN。
-
-        EN 最低降至 0,不会出现负值。
-
-        Args:
-            amount: 要消耗的 EN 数量
-        """
         self.current_en = max(0, self.current_en - amount)
     
     def take_damage(self, damage: int) -> None:
-        """受到伤害,扣除对应 HP。
-
-        HP 最低降至 0,不会出现负值。
-
-        Args:
-            damage: 受到的伤害数值
-        """
         self.current_hp = max(0, self.current_hp - damage)
     
     def modify_will(self, delta: int) -> None:
-        """修改气力值。
-
-        气力会被限制在配置的最小值和最大值之间。
-
-        Args:
-            delta: 气力变化量 (正数为增加,负数为减少)
-        """
+        from .config import Config
         self.current_will = max(Config.WILL_MIN, min(Config.WILL_MAX, self.current_will + delta))
+        
+    def get_pilot_stat(self, stat_name: str) -> int:
+        return self.pilot_stats_backup.get(stat_name, 0)
+    
+    def get_effective_armor(self, will: int) -> int:
+        """核心公式: (装甲 + 守备*1.5) * 气力%"""
+        defense_val = self.pilot_stats_backup.get("stat_defense", 0)
+        base_mitigation = self.final_armor + (defense_val * 1.5)
+        return int(base_mitigation * (will / 100.0))
 
+# ============================================================================
+# 类名别名 (Backward Compatibility Aliases)
+# ============================================================================
+Mecha = MechaSnapshot
+Pilot = PilotConfig
+Weapon = WeaponSnapshot
+
+
+# ============================================================================
+# 技能系统模型 (Skill System Support)
+# ============================================================================
+
+# 注意：为了兼容现有设计文档，暂时保留 dataclass 定义用于内部计算逻辑，
+# 或者后续重构为 Pydantic。目前 BattleContext 仍作为运行时上下文及其复杂。
+
+@dataclass
+class Modifier:
+    """属性修正值 (Legacy/Helper)"""
+    stat_name: str
+    value: float
+    source: str
+    duration: int = 1
 
 @dataclass
 class BattleContext:
-    """战场快照 - 单回合上下文
-    
-    包含完整的战斗状态和上下文信息，支持：
-    - 基础战斗信息（回合数、距离、地形）
-    - 双方机体和武器
-    - 判定结果和伤害
-    - 共享状态和缓存（用于跨钩子通信）
-    - 递归防护（防止钩子死锁）
-    """
+    """战场快照 - 单回合上下文"""
     round_number: int
     distance: int
     terrain: Terrain = Terrain.SPACE
-    attacker: Mecha | None = None
-    defender: Mecha | None = None
-    weapon: Weapon | None = None
+    attacker: Optional['MechaSnapshot'] = None
+    defender: Optional['MechaSnapshot'] = None
+    weapon: Optional['WeaponSnapshot'] = None
     
-    # 先手相关
-    initiative_holder: Mecha | None = None
-    initiative_reason: InitiativeReason | None = None
+    initiative_holder: Optional['MechaSnapshot'] = None
+    initiative_reason: Optional[InitiativeReason] = None
     
-    # 判定结果
     roll: int = 0
-    attack_result: AttackResult | None = None
+    attack_result: Optional[AttackResult] = None
     damage: int = 0
     
-    # 气力变动
     attacker_will_delta: int = 0
     defender_will_delta: int = 0
+    
+    modifiers: Dict[str, Any] = field(default_factory=dict)
+    shared_state: Dict[tuple[str, str, str], Any] = field(default_factory=dict)
+    hook_stack: List[str] = field(default_factory=list)
+    cached_results: Dict[str, Any] = field(default_factory=dict)
 
-    # 扩展上下文（向后兼容）
-    modifiers: dict[str, Any] = field(default_factory=dict) # 临时的战斗修正
-    event_flags: set[str] = field(default_factory=set)      # 战斗事件标记 (e.g. "COUNTER_TRIGGERED")
-    
-    # ========== 新增字段（技能系统支持） ==========
-    
-    # 共享状态字典 - 用于跨 Effect 通信和状态共享
-    # 例如：学习电脑累积层数、连续攻击计数等
-    # 格式: {(effect_id, state_key, lifecycle): value}
-    shared_state: dict[tuple[str, str, str], Any] = field(default_factory=dict)
-    
-    # 钩子栈 - 防止递归死锁
-    # 记录当前正在处理的钩子点调用链，防止循环引用
-    hook_stack: list[str] = field(default_factory=list)
-    
-    # 缓存结果字典 - 用于跨钩子引用
-    # 存储每个钩子点的计算结果，供后续钩子点查询
-    # 格式: {hook_name: calculated_value}
-    cached_results: dict[str, Any] = field(default_factory=dict)
+# 保留 Effect 相关的 Dataclasses 供技能系统使用
+@dataclass
+class Condition:
+    type: str
+    params: Dict[str, Any] = field(default_factory=dict)
 
+@dataclass
+class SideEffect:
+    type: str
+    params: Dict[str, Any] = field(default_factory=dict)
 
+@dataclass
+class Effect:
+    id: str
+    name: str
+    hook: str
+    operation: str
+    value: float | str
+    priority: int = 50
+    sub_priority: int = 500
+    trigger_chance: float = 1.0
+    target: str = "self"
+    duration: int = 1
+    charges: int = -1
+    conditions: List[Condition] = field(default_factory=list)
+    side_effects: List[SideEffect] = field(default_factory=list)
+    payload: Dict[str, Any] = field(default_factory=dict)
 
