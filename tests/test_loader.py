@@ -25,48 +25,40 @@ def temp_data_dir():
     temp_path = Path(temp_dir)
 
     # 创建测试数据文件
-    # 1. pilots.json
+    # 1. pilots.json (PilotConfig - Pydantic v2)
     pilots_data = [
         {
             "id": "p_amuro",
             "name": "阿姆罗",
-            "stats": {
-                "shooting": 180,
-                "melee": 150,
-                "awakening": 120,
-                "defense": 100,
-                "reaction": 160
-            },
-            "proficiency": {
-                "weapon": 800,
-                "mecha": 3000
-            }
+            "portrait_id": "p_amuro",
+            "stat_shooting": 180,
+            "stat_melee": 150,
+            "stat_awakening": 120,
+            "stat_defense": 100,
+            "stat_reaction": 160,
+            "innate_skills": []
         },
         {
             "id": "p_char",
             "name": "夏亚",
-            "stats": {
-                "shooting": 170,
-                "melee": 160,
-                "awakening": 150,
-                "defense": 110,
-                "reaction": 150
-            },
-            "proficiency": {
-                "weapon": 900,
-                "mecha": 2800
-            }
+            "portrait_id": "p_char",
+            "stat_shooting": 170,
+            "stat_melee": 160,
+            "stat_awakening": 150,
+            "stat_defense": 110,
+            "stat_reaction": 150,
+            "innate_skills": []
         },
         {
-            "id": "p_bright",  # 没有proficiency字段
+            "id": "p_bright",
             "name": "布莱特",
-            "stats": {
-                "shooting": 120,
-                "melee": 100,
-                "awakening": 80,
-                "defense": 130,
-                "reaction": 110
-            }
+            "portrait_id": "p_bright",
+            "stat_shooting": 120,
+            "stat_melee": 100,
+            "stat_awakening": 80,
+            "stat_defense": 130,
+            "stat_reaction": 110,
+            "innate_skills": []
         }
     ]
 
@@ -74,112 +66,105 @@ def temp_data_dir():
     with open(pilots_file, 'w', encoding='utf-8') as f:
         json.dump(pilots_data, f, ensure_ascii=False, indent=2)
 
-    # 2. weapons.json
-    weapons_data = [
+    # 2. equipments.json (EquipmentConfig - Pydantic v2)
+    equipments_data = [
         {
             "id": "w_beam_rifle",
             "name": "光束步枪",
-            "type": "RIFLE",
-            "power": 1200,
-            "en_cost": 10,
-            "range": {"min": 1000, "max": 6000},
-            "hit_penalty": 0.0
+            "type": "WEAPON",
+            "weapon_type": "射击",
+            "weapon_power": 1200,
+            "weapon_range_min": 1000,
+            "weapon_range_max": 6000,
+            "weapon_en_cost": 10,
+            "weapon_anim_id": "a_beam_rifle"
         },
         {
             "id": "w_bazooka",
             "name": "火箭筒",
-            "type": "HEAVY",
-            "power": 2500,
-            "en_cost": 25,
-            "range": {"min": 2, "max": 5}
-            # 没有hit_penalty字段
+            "type": "WEAPON",
+            "weapon_type": "特殊",
+            "weapon_power": 2500,
+            "weapon_range_min": 2000,
+            "weapon_range_max": 5000,
+            "weapon_en_cost": 25,
+            "weapon_anim_id": "a_bazooka"
         },
         {
             "id": "w_beam_saber",
             "name": "光束军刀",
-            "type": "MELEE",
-            "power": 1800,
-            "en_cost": 15,
-            "range": {"min": 1000, "max": 1800},
-            "hit_penalty": 5.0
+            "type": "WEAPON",
+            "weapon_type": "格斗",
+            "weapon_power": 1800,
+            "weapon_range_min": 0,
+            "weapon_range_max": 1500,
+            "weapon_en_cost": 15,
+            "weapon_anim_id": "a_beam_saber"
         }
     ]
 
-    weapons_file = temp_path / "weapons.json"
-    with open(weapons_file, 'w', encoding='utf-8') as f:
-        json.dump(weapons_data, f, ensure_ascii=False, indent=2)
+    equipments_file = temp_path / "equipments.json"
+    with open(equipments_file, 'w', encoding='utf-8') as f:
+        json.dump(equipments_data, f, ensure_ascii=False, indent=2)
 
-    # 3. mechas.json
+    # 3. mechas.json (MechaConfig - Pydantic v2)
     mechas_data = [
         {
             "id": "m_rx78",
             "name": "RX-78高达",
-            "pilot_id": "p_amuro",
-            "weapon_ids": ["w_beam_rifle", "w_beam_saber"],
-            "stats": {
-                "hp": 5000,
-                "en": 100,
-                "armor": 1000,
-                "mobility": 100
-            },
-            "attributes": {
-                "hit": 10.0,
-                "precision": 10.0,
-                "crit": 5.0
-            },
-            "defense": {
-                "dodge": 10.0,
-                "parry": 10.0,
-                "block": 10.0,
-                "block_val": 500
-            },
-            "traits": ["trait_newtype"]
+            "portrait_id": "p_m_rx78",
+            "model_asset": "gundam_rx78",
+            "init_hp": 5000,
+            "init_en": 100,
+            "init_armor": 1000,
+            "init_mobility": 100,
+            "init_hit": 10.0,
+            "init_precision": 10.0,
+            "init_crit": 5.0,
+            "init_dodge": 10.0,
+            "init_parry": 10.0,
+            "init_block": 10.0,
+            "init_block_red": 500,
+            "slots": ["WEAPON", "WEAPON"],
+            "fixed_weapons": ["w_beam_rifle", "w_beam_saber"]
         },
         {
             "id": "m_sazabi",
             "name": "沙扎比",
-            "pilot_id": "p_char",
-            "weapon_ids": ["w_bazooka"],
-            "stats": {
-                "hp": 6000,
-                "en": 120,
-                "armor": 1200,
-                "mobility": 90
-            },
-            "attributes": {
-                "hit": 15.0,
-                "precision": 12.0,
-                "crit": 8.0
-            },
-            "defense": {
-                "dodge": 15.0,
-                "parry": 12.0,
-                "block": 8.0
-            }
-            # 没有traits字段
+            "portrait_id": "p_m_sazabi",
+            "model_asset": "sazabi",
+            "init_hp": 6000,
+            "init_en": 120,
+            "init_armor": 1200,
+            "init_mobility": 90,
+            "init_hit": 15.0,
+            "init_precision": 12.0,
+            "init_crit": 8.0,
+            "init_dodge": 15.0,
+            "init_parry": 12.0,
+            "init_block": 8.0,
+            "init_block_red": 400,
+            "slots": ["WEAPON"],
+            "fixed_weapons": ["w_bazooka"]
         },
         {
             "id": "m_white_base",
             "name": "白色基地",
-            "pilot_id": "p_bright",
-            "weapon_ids": [],  # 没有武器
-            "stats": {
-                "hp": 10000,
-                "en": 200,
-                "armor": 2000,
-                "mobility": 50
-            },
-            "attributes": {
-                "hit": 5.0,
-                "precision": 5.0,
-                "crit": 0.0
-            },
-            "defense": {
-                "dodge": 5.0,
-                "parry": 5.0,
-                "block": 20.0,
-                "block_val": 1000
-            }
+            "portrait_id": "p_m_wb",
+            "model_asset": "white_base",
+            "init_hp": 10000,
+            "init_en": 200,
+            "init_armor": 2000,
+            "init_mobility": 50,
+            "init_hit": 5.0,
+            "init_precision": 5.0,
+            "init_crit": 0.0,
+            "init_dodge": 5.0,
+            "init_parry": 5.0,
+            "init_block": 20.0,
+            "init_block_red": 1000,
+            "slots": [],
+            "fixed_weapons": []
         }
     ]
 
@@ -254,16 +239,14 @@ class TestLoadPilots:
         assert amuro.stat_awakening == 120
         assert amuro.stat_defense == 100
         assert amuro.stat_reaction == 160
-        assert amuro.weapon_proficiency == 800
-        assert amuro.mecha_proficiency == 3000
+        # 熟练度字段已从 PilotConfig 移除
 
-    def test_pilot_default_proficiency(self, loader):
-        """测试默认熟练度"""
+    def test_pilot_portrait_id(self, loader):
+        """测试驾驶员头像ID"""
         loader._load_pilots()
 
-        bright = loader.pilots["p_bright"]
-        assert bright.weapon_proficiency == 500  # 默认值
-        assert bright.mecha_proficiency == 2000  # 默认值
+        amuro = loader.pilots["p_amuro"]
+        assert amuro.portrait_id == "p_amuro"
 
     def test_load_pilots_file_not_found(self):
         """测试文件不存在错误"""
@@ -295,26 +278,19 @@ class TestLoadWeapons:
 
         rifle = loader.weapons["w_beam_rifle"]
         assert rifle.name == "光束步枪"
-        assert rifle.weapon_type == WeaponType.RIFLE
-        assert rifle.power == 1200
-        assert rifle.en_cost == 10
-        assert rifle.range_min == 1000
-        assert rifle.range_max == 6000
-        assert rifle.hit_penalty == 0.0
-
-    def test_weapon_default_hit_penalty(self, loader):
-        """测试默认命中惩罚"""
-        loader._load_weapons()
-
-        bazooka = loader.weapons["w_bazooka"]
-        assert bazooka.hit_penalty == 0.0  # 默认值
+        assert rifle.weapon_type == WeaponType.SHOOTING  # 新的枚举值
+        assert rifle.weapon_power == 1200  # 字段名改变
+        assert rifle.weapon_en_cost == 10  # 字段名改变
+        assert rifle.weapon_range_min == 1000  # 字段名改变
+        assert rifle.weapon_range_max == 6000  # 字段名改变
+        assert rifle.weapon_anim_id == "a_beam_rifle"
 
     def test_weapon_type_parsing(self, loader):
         """测试武器类型解析"""
         loader._load_weapons()
 
-        assert loader.weapons["w_beam_rifle"].weapon_type == WeaponType.RIFLE
-        assert loader.weapons["w_bazooka"].weapon_type == WeaponType.HEAVY
+        assert loader.weapons["w_beam_rifle"].weapon_type == WeaponType.SHOOTING
+        assert loader.weapons["w_bazooka"].weapon_type == WeaponType.SPECIAL
         assert loader.weapons["w_beam_saber"].weapon_type == WeaponType.MELEE
 
     def test_load_weapons_file_not_found(self):
@@ -343,61 +319,35 @@ class TestLoadMechas:
 
     def test_mecha_data_correctness(self, loader):
         """测试机体数据正确性"""
-        loader.load_all()
+        loader._load_mechas()
 
         rx78 = loader.mechas["m_rx78"]
         assert rx78.name == "RX-78高达"
-        assert rx78.max_hp == 5000
-        assert rx78.current_hp == 5000
-        assert rx78.max_en == 100
-        assert rx78.current_en == 100
-        assert rx78.hit_rate == 10.0
-        assert rx78.precision == 10.0
-        assert rx78.crit_rate == 5.0
-        assert rx78.dodge_rate == 10.0
-        assert rx78.parry_rate == 10.0
-        assert rx78.block_rate == 10.0
-        assert rx78.defense_level == 1000
-        assert rx78.mobility == 100
-        assert rx78.block_value == 500
+        assert rx78.init_hp == 5000  # 字段名改变
+        assert rx78.init_en == 100  # 字段名改变
+        assert rx78.init_armor == 1000  # 字段名改变
+        assert rx78.init_mobility == 100  # 字段名改变
+        assert rx78.init_hit == 10.0  # 字段名改变
+        assert rx78.init_precision == 10.0  # 字段名改变
+        assert rx78.init_crit == 5.0  # 字段名改变
+        assert rx78.init_dodge == 10.0  # 字段名改变
+        assert rx78.init_parry == 10.0  # 字段名改变
+        assert rx78.init_block == 10.0  # 字段名改变
+        assert rx78.init_block_red == 500  # 字段名改变
+        assert rx78.portrait_id == "p_m_rx78"
+        assert rx78.model_asset == "gundam_rx78"
 
-    def test_mecha_pilot_reference(self, loader):
-        """测试机体驾驶员引用"""
-        loader.load_all()
-
-        rx78 = loader.mechas["m_rx78"]
-        assert rx78.pilot.id == "p_amuro"
-        assert rx78.pilot.name == "阿姆罗"
-
-    def test_mecha_weapons_list(self, loader):
-        """测试机体武器列表"""
-        loader.load_all()
+    def test_mecha_slots_and_weapons(self, loader):
+        """测试机体槽位和内置武器"""
+        loader._load_mechas()
 
         rx78 = loader.mechas["m_rx78"]
-        assert len(rx78.weapons) == 2
-        assert rx78.weapons[0].id == "w_beam_rifle"
-        assert rx78.weapons[1].id == "w_beam_saber"
-
-    def test_mecha_empty_weapons(self, loader):
-        """测试机体无武器"""
-        loader.load_all()
+        assert rx78.slots == ["WEAPON", "WEAPON"]
+        assert rx78.fixed_weapons == ["w_beam_rifle", "w_beam_saber"]
 
         white_base = loader.mechas["m_white_base"]
-        assert len(white_base.weapons) == 0
-
-    def test_mecha_traits(self, loader):
-        """测试机体特性"""
-        loader.load_all()
-
-        rx78 = loader.mechas["m_rx78"]
-        assert rx78.traits == ["trait_newtype"]
-
-    def test_mecha_no_traits_field(self, loader):
-        """测试机体无traits字段"""
-        loader.load_all()
-
-        sazabi = loader.mechas["m_sazabi"]
-        assert sazabi.traits == []  # 默认为空列表
+        assert white_base.slots == []
+        assert white_base.fixed_weapons == []
 
     def test_load_mechas_file_not_found(self):
         """测试文件不存在错误"""
@@ -413,69 +363,9 @@ class TestLoadMechas:
 
 class TestDependencyValidation:
     """测试依赖关系验证"""
-
-    def test_mecha_with_invalid_pilot_id(self, temp_data_dir):
-        """测试引用不存在的驾驶员"""
-        # 创建错误的mechas.json
-        mechas_data = [{
-            "id": "m_invalid",
-            "name": "Invalid Mecha",
-            "pilot_id": "nonexistent_pilot",
-            "weapon_ids": [],
-            "stats": {"hp": 5000, "en": 100, "armor": 1000, "mobility": 100},
-            "attributes": {"hit": 10.0, "precision": 10.0, "crit": 5.0},
-            "defense": {"dodge": 10.0, "parry": 10.0, "block": 10.0}
-        }]
-
-        mechas_file = temp_data_dir / "mechas.json"
-        with open(mechas_file, 'w', encoding='utf-8') as f:
-            json.dump(mechas_data, f, ensure_ascii=False)
-
-        loader = DataLoader(data_dir=str(temp_data_dir))
-        loader._load_pilots()  # 先加载驾驶员
-
-        with pytest.raises(ValueError, match="引用了不存在的驾驶员"):
-            loader._load_mechas()
-
-    def test_mecha_with_invalid_weapon_id(self, temp_data_dir):
-        """测试引用不存在的武器"""
-        # 创建错误的mechas.json
-        mechas_data = [{
-            "id": "m_invalid",
-            "name": "Invalid Mecha",
-            "pilot_id": "p_amuro",  # 需要先加载这个驾驶员
-            "weapon_ids": ["nonexistent_weapon"],
-            "stats": {"hp": 5000, "en": 100, "armor": 1000, "mobility": 100},
-            "attributes": {"hit": 10.0, "precision": 10.0, "crit": 5.0},
-            "defense": {"dodge": 10.0, "parry": 10.0, "block": 10.0}
-        }]
-
-        # 需要先创建有效的pilots.json和加载武器
-        pilots_data = [{
-            "id": "p_amuro",
-            "name": "Amuro",
-            "stats": {"shooting": 100, "melee": 100, "awakening": 100, "defense": 100, "reaction": 100}
-        }]
-        pilots_file = temp_data_dir / "pilots.json"
-        with open(pilots_file, 'w', encoding='utf-8') as f:
-            json.dump(pilots_data, f, ensure_ascii=False)
-
-        weapons_data = []  # 空武器列表
-        weapons_file = temp_data_dir / "weapons.json"
-        with open(weapons_file, 'w', encoding='utf-8') as f:
-            json.dump(weapons_data, f, ensure_ascii=False)
-
-        mechas_file = temp_data_dir / "mechas.json"
-        with open(mechas_file, 'w', encoding='utf-8') as f:
-            json.dump(mechas_data, f, ensure_ascii=False)
-
-        loader = DataLoader(data_dir=str(temp_data_dir))
-        loader.load_all()
-
-        # 应该抛出错误
-        # 注意：load_all不会抛出异常，因为数据已经在加载时处理了
-        # 这里需要检查是否有无效武器
-        assert len(loader.mechas) == 0  # 由于错误应该没有加载成功
+    # 注意：新的 MechaConfig 只存储 ID 字符串，不存储对象引用
+    # 依赖验证在工厂层面处理，不在 DataLoader 中
+    pass
 
 
 # ============================================================================
@@ -497,7 +387,7 @@ class TestDataQueries:
         """测试获取不存在的驾驶员"""
         loader.load_all()
 
-        with pytest.raises(KeyError, match="驾驶员不存在"):
+        with pytest.raises(KeyError, match="驾驶员配置不存在"):
             loader.get_pilot("nonexistent")
 
     def test_get_weapon_success(self, loader):
@@ -512,7 +402,7 @@ class TestDataQueries:
         """测试获取不存在的武器"""
         loader.load_all()
 
-        with pytest.raises(KeyError, match="武器不存在"):
+        with pytest.raises(KeyError, match="装备/武器配置不存在"):
             loader.get_weapon("nonexistent")
 
     def test_get_mecha_success(self, loader):
@@ -527,7 +417,7 @@ class TestDataQueries:
         """测试获取不存在的机体"""
         loader.load_all()
 
-        with pytest.raises(KeyError, match="机体不存在"):
+        with pytest.raises(KeyError, match="机体配置不存在"):
             loader.get_mecha("nonexistent")
 
 
@@ -548,26 +438,21 @@ class TestLoadAll:
 
         # 检查输出
         captured = capsys.readouterr()
-        assert "开始加载数据" in captured.out
-        assert "已加载 3 个驾驶员" in captured.out
-        assert "已加载 3 个武器" in captured.out
-        assert "已加载 3 个机体" in captured.out
-        assert "数据加载完成" in captured.out
+        assert "开始加载静态配置" in captured.out
+        assert "已加载 3 个驾驶员配置" in captured.out
+        assert "已加载 3 个装备/武器配置" in captured.out
+        assert "已加载 3 个机体配置" in captured.out
+        assert "配置加载完成" in captured.out
 
     def test_load_all_dependencies_order(self, loader):
         """测试加载顺序（依赖关系）"""
-        # 机体依赖驾驶员和武器
+        # 机体依赖驾驶员和武器（通过ID引用）
         loader.load_all()
 
-        # 机体的驾驶员引用应该有效
-        for mecha in loader.mechas.values():
-            assert mecha.pilot is not None
-            assert mecha.pilot.id in loader.pilots
-
-        # 机体的武器引用应该有效
-        for mecha in loader.mechas.values():
-            for weapon in mecha.weapons:
-                assert weapon.id in loader.weapons
+        # 验证所有配置都加载成功
+        assert len(loader.pilots) == 3
+        assert len(loader.equipments) == 3
+        assert len(loader.mechas) == 3
 
 
 # ============================================================================
@@ -590,8 +475,8 @@ class TestEdgeCases:
 
     def test_empty_weapons_list(self, temp_data_dir):
         """测试空的武器列表"""
-        weapons_file = temp_data_dir / "weapons.json"
-        with open(weapons_file, 'w', encoding='utf-8') as f:
+        equipments_file = temp_data_dir / "equipments.json"
+        with open(equipments_file, 'w', encoding='utf-8') as f:
             json.dump([], f)
 
         loader = DataLoader(data_dir=str(temp_data_dir))
@@ -605,19 +490,27 @@ class TestEdgeCases:
         pilots_data = [{
             "id": "p_test",
             "name": "Test",
-            "stats": {"shooting": 100, "melee": 100, "awakening": 100, "defense": 100, "reaction": 100}
+            "portrait_id": "p_test",
+            "stat_shooting": 100,
+            "stat_melee": 100,
+            "stat_awakening": 100,
+            "stat_defense": 100,
+            "stat_reaction": 100
         }]
         (temp_data_dir / "pilots.json").write_text(json.dumps(pilots_data), encoding='utf-8')
 
-        weapons_data = [{
+        equipments_data = [{
             "id": "w_test",
             "name": "Test Weapon",
-            "type": "RIFLE",
-            "power": 1000,
-            "en_cost": 10,
-            "range": {"min": 1, "max": 100}
+            "type": "WEAPON",
+            "weapon_type": "射击",
+            "weapon_power": 1000,
+            "weapon_range_min": 1,
+            "weapon_range_max": 100,
+            "weapon_en_cost": 10,
+            "weapon_anim_id": "test_anim"
         }]
-        (temp_data_dir / "weapons.json").write_text(json.dumps(weapons_data), encoding='utf-8')
+        (temp_data_dir / "equipments.json").write_text(json.dumps(equipments_data), encoding='utf-8')
 
         mechas_file = temp_data_dir / "mechas.json"
         with open(mechas_file, 'w', encoding='utf-8') as f:

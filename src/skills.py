@@ -116,6 +116,115 @@ def cb_gn_recover(val, ctx, owner):
     print(f"   [Trait] {owner.name} GN炉回复了 10 EN")
     return val
 
+# ============================================================================
+# 补充回调函数
+# ============================================================================
+
+@SkillRegistry.register_callback("cb_miracle_hit")
+def cb_miracle_hit(val, ctx, owner):
+    """奇迹: 强制命中 (将 HOOK_OVERRIDE_RESULT 设为 HIT)"""
+    from ..models import AttackResult
+    # 只在未命中时强制命中
+    if val is None or val == AttackResult.MISS:
+        return AttackResult.HIT
+    return val
+
+@SkillRegistry.register_callback("cb_instinct_dodge")
+def cb_instinct_dodge(val, ctx, owner):
+    """本能: 30%概率将 HIT 扭转为 DODGE"""
+    from ..models import AttackResult
+    import random
+    if val == AttackResult.HIT and random.random() < 0.3:
+        print(f"   [Skill] {owner.name} 本能触发! HIT -> DODGE")
+        return AttackResult.DODGE
+    return val
+
+@SkillRegistry.register_callback("cb_auto_repair")
+def cb_auto_repair(damage, ctx, owner):
+    """自动修复: 受到伤害后回复 HP"""
+    heal = int(damage * 0.2)  # 回复受到伤害的20%
+    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    print(f"   [Trait] {owner.name} 自动修复回复了 {heal} HP")
+    return damage
+
+@SkillRegistry.register_callback("cb_ablat")
+def cb_ablat(damage, ctx, owner):
+    """烧蚀装甲: 对光束伤害减少200点"""
+    from ..models import WeaponType
+    if ctx.weapon and ctx.weapon.weapon_type in [WeaponType.BEAM, WeaponType.BEAM_SABER]:
+        damage = max(0, damage - 200)
+        print(f"   [Trait] {owner.name} 烧蚀装甲减少200点光束伤害")
+    return damage
+
+@SkillRegistry.register_callback("cb_rage_will")
+def cb_rage_will(damage, ctx, owner):
+    """气魄: 造成伤害时气力+3"""
+    owner.modify_will(3)
+    print(f"   [Skill] {owner.name} 气魄气力+3")
+    return damage
+
+@SkillRegistry.register_callback("cb_vampirism")
+def cb_vampirism(damage, ctx, owner):
+    """吸血: 回复造成伤害的10% HP"""
+    heal = int(damage * 0.1)
+    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    print(f"   [Trait] {owner.name} 吸血回复了 {heal} HP")
+    return damage
+
+@SkillRegistry.register_callback("cb_effort_exp")
+def cb_effort_exp(val, ctx, owner):
+    """努力: 击坠时获得双倍经验 (暂只打印日志)"""
+    print(f"   [Skill] {owner.name} 努力触发! 获得双倍经验")
+    return val
+
+@SkillRegistry.register_callback("cb_mercy_will")
+def cb_mercy_will(val, ctx, owner):
+    """慈悲: 击坠时回复20点气力"""
+    owner.modify_will(20)
+    print(f"   [Trait] {owner.name} 慈悲回复了20气力")
+    return val
+
+@SkillRegistry.register_callback("cb_reunion")
+def cb_reunion(val, ctx, owner):
+    """再动: 概率获得额外行动机会 (暂只打印日志)"""
+    print(f"   [Skill] {owner.name} 再动触发! 可再次行动")
+    return val
+
+@SkillRegistry.register_callback("cb_quick_reload_en")
+def cb_quick_reload_en(val, ctx, owner):
+    """快速装填: 攻击结束回复15 EN"""
+    owner.current_en = min(owner.max_en, owner.current_en + 15)
+    print(f"   [Trait] {owner.name} 快速装填回复了15 EN")
+    return val
+
+@SkillRegistry.register_callback("cb_energy_save")
+def cb_energy_save(val, ctx, owner):
+    """省能源: 每回合回复5 EN"""
+    owner.current_en = min(owner.max_en, owner.current_en + 5)
+    print(f"   [Trait] {owner.name} 省能源回复了5 EN")
+    return val
+
+@SkillRegistry.register_callback("cb_regen_hp")
+def cb_regen_hp(val, ctx, owner):
+    """再生: 每回合回复5% HP"""
+    heal = int(owner.max_hp * 0.05)
+    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    print(f"   [Trait] {owner.name} 再生回复了 {heal} HP")
+    return val
+
+@SkillRegistry.register_callback("cb_spirit_boost")
+def cb_spirit_boost(val, ctx, owner):
+    """精神增幅: 战斗结束回复50% SP (暂只打印日志)"""
+    print(f"   [Trait] {owner.name} 精神增幅回复了50% SP")
+    return val
+
+@SkillRegistry.register_callback("cb_morale_en")
+def cb_morale_en(val, ctx, owner):
+    """士气: 战斗结束回复30 EN"""
+    owner.current_en = min(owner.max_en, owner.current_en + 30)
+    print(f"   [Trait] {owner.name} 士气回复了30 EN")
+    return val
+
 
 class EffectManager:
     """效果管理器"""
@@ -249,3 +358,58 @@ class SpiritCommands:
     def activate_focus(user: Mecha):
         """集中: 一回合内命中/回避 +30%"""
         EffectManager.add_effect(user, "spirit_focus", duration=1)
+
+    @staticmethod
+    def activate_dream(user: Mecha):
+        """梦境: 强制先手"""
+        EffectManager.add_effect(user, "spirit_dream", duration=1)
+
+    @staticmethod
+    def activate_suppress(user: Mecha):
+        """威压: 强制先手"""
+        EffectManager.add_effect(user, "spirit_suppress", duration=1)
+
+    @staticmethod
+    def activate_confuse(user: Mecha):
+        """搅乱: 敌人命中率降低"""
+        EffectManager.add_effect(user, "spirit_confuse", duration=1)
+
+    @staticmethod
+    def activate_miracle(user: Mecha):
+        """奇迹: 下次攻击必定命中"""
+        EffectManager.add_effect(user, "spirit_miracle", duration=1)
+
+    @staticmethod
+    def activate_instinct(user: Mecha):
+        """本能: 30%概率闪避攻击"""
+        EffectManager.add_effect(user, "spirit_instinct", duration=1)
+
+    @staticmethod
+    def activate_fury(user: Mecha):
+        """激怒: 暴击倍率×1.5"""
+        EffectManager.add_effect(user, "spirit_fury", duration=1)
+
+    @staticmethod
+    def activate_rage(user: Mecha):
+        """气魄: 造成伤害时气力+3"""
+        EffectManager.add_effect(user, "spirit_rage", duration=1)
+
+    @staticmethod
+    def activate_effort(user: Mecha):
+        """努力: 击坠时获得双倍经验"""
+        EffectManager.add_effect(user, "spirit_effort", duration=1)
+
+    @staticmethod
+    def activate_protract(user: Mecha):
+        """拖延: 战斗回合+5"""
+        EffectManager.add_effect(user, "spirit_protract", duration=1)
+
+    @staticmethod
+    def activate_determination(user: Mecha):
+        """执念: 战斗强制继续1次"""
+        EffectManager.add_effect(user, "spirit_determination", duration=1)
+
+    @staticmethod
+    def activate_reunion(user: Mecha):
+        """再动: 概率获得额外行动"""
+        EffectManager.add_effect(user, "spirit_reunion", duration=1)

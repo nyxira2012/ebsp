@@ -409,5 +409,472 @@
             "value": 0.15,
             "duration": -1
         }
+    ],
+    "spirit_dream": [
+        {
+            "id": "spirit_dream",
+            "name": "梦境",
+            "hook": "HOOK_INITIATIVE_CHECK",
+            "operation": "set",
+            "value": true,
+            "duration": 1,
+            "charges": 1,
+            "priority": 95
+        }
+    ],
+    "spirit_suppress": [
+        {
+            "id": "spirit_suppress",
+            "name": "威压",
+            "hook": "HOOK_INITIATIVE_CHECK",
+            "operation": "set",
+            "value": true,
+            "duration": 1,
+            "priority": 90
+        }
+    ],
+    "spirit_confuse": [
+        {
+            "id": "spirit_confuse",
+            "name": "搅乱",
+            "hook": "HOOK_PRE_MISS_RATE",
+            "operation": "add",
+            "value": 30.0,
+            "duration": 1
+        }
+    ],
+    "trait_weapon_mastery": [
+        {
+            "id": "trait_weapon_mastery",
+            "name": "武器熟练",
+            "hook": "HOOK_PRE_MISS_RATE",
+            "operation": "sub",
+            "value": 15.0,
+            "duration": -1
+        }
+    ],
+    "trait_sword_master": [
+        {
+            "id": "trait_sword_master",
+            "name": "剑术达人",
+            "hook": "HOOK_PRE_PARRY_RATE",
+            "operation": "add",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_reflex": [
+        {
+            "id": "trait_reflex",
+            "name": "超反应",
+            "hook": "HOOK_PRE_PARRY_RATE",
+            "operation": "add",
+            "value": 15.0,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 120,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "trait_energy_bonus": [
+        {
+            "id": "trait_energy_bonus",
+            "name": "能量强化",
+            "hook": "HOOK_PRE_CRIT_RATE",
+            "operation": "add",
+            "value": 15.0,
+            "duration": -1
+        }
+    ],
+    "trait_critical_eye": [
+        {
+            "id": "trait_critical_eye",
+            "name": "看破",
+            "hook": "HOOK_PRE_CRIT_RATE",
+            "operation": "add",
+            "value": 25.0,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "enemy_will_threshold",
+                    "val": 100,
+                    "op": "<"
+                }
+            ]
+        }
+    ],
+    "spirit_miracle": [
+        {
+            "id": "spirit_miracle",
+            "name": "奇迹",
+            "hook": "HOOK_OVERRIDE_RESULT",
+            "operation": "callback",
+            "value": "cb_miracle_hit",
+            "duration": 1,
+            "charges": 1,
+            "priority": 100
+        }
+    ],
+    "spirit_instinct": [
+        {
+            "id": "spirit_instinct",
+            "name": "本能",
+            "hook": "HOOK_POST_ROLL_RESULT",
+            "operation": "callback",
+            "value": "cb_instinct_dodge",
+            "duration": 1,
+            "trigger_chance": 0.3,
+            "priority": 95
+        }
+    ],
+    "trait_overweapon": [
+        {
+            "id": "trait_overweapon",
+            "name": "超武装",
+            "hook": "HOOK_PRE_WEAPON_POWER",
+            "operation": "add",
+            "value": 500.0,
+            "duration": -1
+        }
+    ],
+    "trait_limit_break": [
+        {
+            "id": "trait_limit_break",
+            "name": "界限突破",
+            "hook": "HOOK_PRE_WEAPON_POWER",
+            "operation": "mul",
+            "value": 1.2,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 150,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "trait_genius": [
+        {
+            "id": "trait_genius",
+            "name": "天才",
+            "hook": "HOOK_PRE_STAT_BONUS",
+            "operation": "mul",
+            "value": 1.3,
+            "duration": -1
+        }
+    ],
+    "trait_training": [
+        {
+            "id": "trait_training",
+            "name": "修练",
+            "hook": "HOOK_PRE_STAT_BONUS",
+            "operation": "add",
+            "value": 20.0,
+            "duration": -1
+        }
+    ],
+    "trait_soul": [
+        {
+            "id": "trait_soul",
+            "name": "灵魂",
+            "hook": "HOOK_PRE_WILL_MODIFIER",
+            "operation": "mul",
+            "value": 1.2,
+            "duration": -1
+        }
+    ],
+    "trait_awakening": [
+        {
+            "id": "trait_awakening",
+            "name": "觉醒",
+            "hook": "HOOK_PRE_WILL_MODIFIER",
+            "operation": "add",
+            "value": 0.15,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 140,
+                    "op": ">="
+                }
+            ]
+        }
+    ],
+    "spirit_fury": [
+        {
+            "id": "spirit_fury",
+            "name": "激怒",
+            "hook": "HOOK_PRE_CRIT_MULTIPLIER",
+            "operation": "mul",
+            "value": 1.5,
+            "duration": 1,
+            "priority": 80
+        }
+    ],
+    "trait_heavy_crit": [
+        {
+            "id": "trait_heavy_crit",
+            "name": "重击手",
+            "hook": "HOOK_PRE_CRIT_MULTIPLIER",
+            "operation": "add",
+            "value": 0.5,
+            "duration": -1
+        }
+    ],
+    "trait_laminated": [
+        {
+            "id": "trait_laminated",
+            "name": " laminate装甲",
+            "hook": "HOOK_PRE_ARMOR_VALUE",
+            "operation": "add",
+            "value": 800.0,
+            "duration": -1
+        }
+    ],
+    "trait_nanocoating": [
+        {
+            "id": "trait_nanocoating",
+            "name": "纳米涂层",
+            "hook": "HOOK_PRE_ARMOR_VALUE",
+            "operation": "mul",
+            "value": 1.15,
+            "duration": -1
+        }
+    ],
+    "trait_energy_shield": [
+        {
+            "id": "trait_energy_shield",
+            "name": "能量盾",
+            "hook": "HOOK_PRE_BLOCK_VALUE",
+            "operation": "add",
+            "value": 300.0,
+            "duration": -1
+        }
+    ],
+    "trait_barrier": [
+        {
+            "id": "trait_barrier",
+            "name": "壁垒",
+            "hook": "HOOK_PRE_BLOCK_VALUE",
+            "operation": "mul",
+            "value": 1.5,
+            "duration": -1
+        }
+    ],
+    "trait_auto_repair": [
+        {
+            "id": "trait_auto_repair",
+            "name": "自动修复",
+            "hook": "HOOK_ON_DAMAGE_TAKEN",
+            "operation": "callback",
+            "value": "cb_auto_repair",
+            "duration": -1
+        }
+    ],
+    "trait_ablat": [
+        {
+            "id": "trait_ablat",
+            "name": "烧蚀装甲",
+            "hook": "HOOK_ON_DAMAGE_TAKEN",
+            "operation": "sub",
+            "value": 200.0,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "damage_type",
+                    "val": "BEAM"
+                }
+            ]
+        }
+    ],
+    "spirit_rage": [
+        {
+            "id": "spirit_rage",
+            "name": "气迫",
+            "hook": "HOOK_ON_DAMAGE_DEALT",
+            "operation": "callback",
+            "value": "cb_rage_will",
+            "duration": 1
+        }
+    ],
+    "trait_vampirism": [
+        {
+            "id": "trait_vampirism",
+            "name": "吸血",
+            "hook": "HOOK_ON_DAMAGE_DEALT",
+            "operation": "mul",
+            "value": 0.1,
+            "duration": -1
+        }
+    ],
+    "spirit_effort": [
+        {
+            "id": "spirit_effort",
+            "name": "努力",
+            "hook": "HOOK_ON_KILL",
+            "operation": "callback",
+            "value": "cb_effort_exp",
+            "duration": 1
+        }
+    ],
+    "trait_mercy": [
+        {
+            "id": "trait_mercy",
+            "name": "慈悲",
+            "hook": "HOOK_ON_KILL",
+            "operation": "callback",
+            "value": "cb_mercy_will",
+            "duration": -1
+        }
+    ],
+    "spirit_reunion": [
+        {
+            "id": "spirit_reunion",
+            "name": "再动",
+            "hook": "HOOK_ON_ATTACK_END",
+            "operation": "callback",
+            "value": "cb_reunion",
+            "duration": 1,
+            "charges": 1,
+            "priority": 95
+        }
+    ],
+    "trait_quick_reload": [
+        {
+            "id": "trait_quick_reload",
+            "name": "快速装填",
+            "hook": "HOOK_ON_ATTACK_END",
+            "operation": "callback",
+            "value": "cb_quick_reload_en",
+            "duration": -1
+        }
+    ],
+    "trait_energy_save": [
+        {
+            "id": "trait_energy_save",
+            "name": "省能源",
+            "hook": "HOOK_ON_TURN_END",
+            "operation": "callback",
+            "value": "cb_energy_save",
+            "duration": -1
+        }
+    ],
+    "trait_regen": [
+        {
+            "id": "trait_regen",
+            "name": "再生",
+            "hook": "HOOK_ON_TURN_END",
+            "operation": "callback",
+            "value": "cb_regen_hp",
+            "duration": -1
+        }
+    ],
+    "trait_spirit_boost": [
+        {
+            "id": "trait_spirit_boost",
+            "name": "精神增幅",
+            "hook": "HOOK_ON_BATTLE_END",
+            "operation": "callback",
+            "value": "cb_spirit_boost",
+            "duration": -1
+        }
+    ],
+    "trait_morale": [
+        {
+            "id": "trait_morale",
+            "name": "士气",
+            "hook": "HOOK_ON_BATTLE_END",
+            "operation": "callback",
+            "value": "cb_morale_en",
+            "duration": -1
+        }
+    ],
+    "spirit_protract": [
+        {
+            "id": "spirit_protract",
+            "name": "拖延",
+            "hook": "HOOK_MAX_ROUNDS",
+            "operation": "add",
+            "value": 5,
+            "duration": 1
+        }
+    ],
+    "trait_desperado": [
+        {
+            "id": "trait_desperado",
+            "name": "死斗",
+            "hook": "HOOK_MAX_ROUNDS",
+            "operation": "add",
+            "value": 10,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "hp_threshold",
+                    "val": 0.3,
+                    "op": "<"
+                }
+            ]
+        }
+    ],
+    "spirit_determination": [
+        {
+            "id": "spirit_determination",
+            "name": "执念",
+            "hook": "HOOK_CHECK_MAINTAIN_BATTLE",
+            "operation": "set",
+            "value": true,
+            "duration": 1,
+            "charges": 1,
+            "priority": 100
+        }
+    ],
+    "trait_last_stand": [
+        {
+            "id": "trait_last_stand",
+            "name": "最后手段",
+            "hook": "HOOK_CHECK_MAINTAIN_BATTLE",
+            "operation": "set",
+            "value": true,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "hp_threshold",
+                    "val": 0.2,
+                    "op": "<"
+                }
+            ]
+        }
+    ],
+    "trait_energy_efficient": [
+        {
+            "id": "trait_energy_efficient",
+            "name": "高能效",
+            "hook": "HOOK_PRE_EN_COST_MULT",
+            "operation": "mul",
+            "value": 0.8,
+            "duration": -1
+        }
+    ],
+    "trait_burst_fire": [
+        {
+            "id": "trait_burst_fire",
+            "name": "连射",
+            "hook": "HOOK_PRE_EN_COST_MULT",
+            "operation": "mul",
+            "value": 0.7,
+            "duration": -1,
+            "conditions": [
+                {
+                    "type": "will_threshold",
+                    "val": 130,
+                    "op": ">="
+                }
+            ]
+        }
     ]
 }

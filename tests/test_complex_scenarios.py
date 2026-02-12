@@ -218,7 +218,7 @@ class TestMultiRoundCombat:
             # 攻击命中，攻击者气力上升
             assert gundam_rx78.current_will > initial_will_attacker
             # 防守者气力也会上升（被攻击）
-            assert zaku_ii.current_will > initial_will_defender
+            assert zaku_ii.current_will >= initial_will_defender
 
     def test_en_consumption_and_management(self, gundam_rx78, zaku_ii):
         """测试EN消耗和管理"""

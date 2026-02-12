@@ -75,9 +75,9 @@ def basic_mecha(basic_pilot):
         "stat_defense": basic_pilot.stat_defense,
         "stat_reaction": basic_pilot.stat_reaction
     }
-    
+
     return MechaSnapshot(
-        instance_id="m_test", mecha_name="TestMecha", 
+        instance_id="m_test", mecha_name="TestMecha",
         main_portrait="m_001", model_asset="default",
         final_max_hp=5000, current_hp=5000,
         final_max_en=100, current_en=100,
@@ -205,8 +205,10 @@ def high_hit_mecha(basic_pilot):
     """高命中率机体"""
     pilot_stats = {
         "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
         "stat_defense": basic_pilot.stat_defense,
-        # ... others
+        "stat_reaction": basic_pilot.stat_reaction
     }
     return MechaSnapshot(
         instance_id="m_high_hit", mecha_name="HighHitMecha",
@@ -221,6 +223,13 @@ def high_hit_mecha(basic_pilot):
 
 @pytest.fixture
 def high_dodge_mecha(basic_pilot):
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_high_dodge", mecha_name="HighDodgeMecha",
         main_portrait="m_001", model_asset="default",
@@ -229,11 +238,18 @@ def high_dodge_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=50.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def crit_mecha(basic_pilot):
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_crit", mecha_name="CritMecha",
         main_portrait="m_001", model_asset="default",
@@ -242,7 +258,7 @@ def crit_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=20.0, final_precision=10.0, final_crit=30.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
@@ -250,7 +266,10 @@ def low_hp_mecha(basic_pilot):
     """低HP机体 (30% HP)"""
     pilot_stats = {
         "stat_shooting": basic_pilot.stat_shooting,
-        # ... simplified 
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
     }
     return MechaSnapshot(
         instance_id="m_low_hp", mecha_name="LowHPMecha",
@@ -266,7 +285,13 @@ def low_hp_mecha(basic_pilot):
 @pytest.fixture
 def high_will_mecha(basic_pilot):
     """高气力机体"""
-    pilot_stats = { "stat_shooting": basic_pilot.stat_shooting } # simplified
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     snap = MechaSnapshot(
         instance_id="m_high_will", mecha_name="HighWillMecha",
         main_portrait="m_001", model_asset="default",
@@ -488,6 +513,13 @@ def out_of_range_context(basic_mecha, rifle_weapon):
 @pytest.fixture
 def zero_hp_mecha(basic_pilot):
     """HP=0的机体"""
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_zero_hp", mecha_name="ZeroHPMecha",
         main_portrait="m_001", model_asset="default",
@@ -496,12 +528,19 @@ def zero_hp_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={"stat_defense": basic_pilot.stat_defense}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def zero_en_mecha(basic_pilot):
     """EN=0的机体"""
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_zero_en", mecha_name="ZeroENMecha",
         main_portrait="m_001", model_asset="default",
@@ -510,13 +549,20 @@ def zero_en_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def max_will_mecha(basic_pilot):
     """最大气力机体"""
     from src.config import Config
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     snap = MechaSnapshot(
         instance_id="m_max_will", mecha_name="MaxWillMecha",
         main_portrait="m_001", model_asset="default",
@@ -525,7 +571,7 @@ def max_will_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
     snap.current_will = Config.WILL_MAX
     return snap
@@ -580,6 +626,13 @@ def normal_pilot():
 @pytest.fixture
 def balanced_mecha(standard_pilot):
     """平衡机体"""
+    pilot_stats = {
+        "stat_shooting": standard_pilot.stat_shooting,
+        "stat_melee": standard_pilot.stat_melee,
+        "stat_awakening": standard_pilot.stat_awakening,
+        "stat_defense": standard_pilot.stat_defense,
+        "stat_reaction": standard_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_balanced", mecha_name="BalancedMecha",
         main_portrait="m_001", model_asset="default",
@@ -588,12 +641,19 @@ def balanced_mecha(standard_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={"stat_shooting": standard_pilot.stat_shooting}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def offensive_mecha(standard_pilot):
     """进攻型机体"""
+    pilot_stats = {
+        "stat_shooting": standard_pilot.stat_shooting,
+        "stat_melee": standard_pilot.stat_melee,
+        "stat_awakening": standard_pilot.stat_awakening,
+        "stat_defense": standard_pilot.stat_defense,
+        "stat_reaction": standard_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_offensive", mecha_name="OffensiveMecha",
         main_portrait="m_001", model_asset="default",
@@ -602,12 +662,19 @@ def offensive_mecha(standard_pilot):
         final_armor=800, final_mobility=120,
         final_hit=30.0, final_precision=20.0, final_crit=20.0,
         final_dodge=5.0, final_parry=5.0, final_block=5.0, block_reduction=400,
-        pilot_stats_backup={"stat_shooting": standard_pilot.stat_shooting}
+        pilot_stats_backup=pilot_stats
     )
 
 @pytest.fixture
 def defensive_mecha(standard_pilot):
     """防御型机体"""
+    pilot_stats = {
+        "stat_shooting": standard_pilot.stat_shooting,
+        "stat_melee": standard_pilot.stat_melee,
+        "stat_awakening": standard_pilot.stat_awakening,
+        "stat_defense": standard_pilot.stat_defense,
+        "stat_reaction": standard_pilot.stat_reaction
+    }
     return MechaSnapshot(
         instance_id="m_defensive", mecha_name="DefensiveMecha",
         main_portrait="m_001", model_asset="default",
@@ -616,7 +683,7 @@ def defensive_mecha(standard_pilot):
         final_armor=1500, final_mobility=80,
         final_hit=5.0, final_precision=5.0, final_crit=0.0,
         final_dodge=30.0, final_parry=25.0, final_block=20.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
 
 
@@ -627,6 +694,13 @@ def defensive_mecha(standard_pilot):
 @pytest.fixture
 def full_mecha(basic_pilot):
     """满资源机体"""
+    pilot_stats = {
+        "stat_shooting": basic_pilot.stat_shooting,
+        "stat_melee": basic_pilot.stat_melee,
+        "stat_awakening": basic_pilot.stat_awakening,
+        "stat_defense": basic_pilot.stat_defense,
+        "stat_reaction": basic_pilot.stat_reaction
+    }
     snap = MechaSnapshot(
         instance_id="m_full", mecha_name="FullMecha",
         main_portrait="m_001", model_asset="default",
@@ -635,7 +709,7 @@ def full_mecha(basic_pilot):
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
         final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
-        pilot_stats_backup={}
+        pilot_stats_backup=pilot_stats
     )
     snap.current_will = 120
     return snap

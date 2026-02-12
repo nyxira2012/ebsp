@@ -115,37 +115,21 @@ class PilotConfig(BaseModel):
     id: str
     name: str
     portrait_id: str
-    
+
     # 核心五维
     stat_shooting: int      # 射击 (修正射击威力)
     stat_melee: int         # 格斗 (修正格斗威力)
     stat_awakening: int     # 觉醒 (修正觉醒威力 & 直觉)
     stat_defense: int       # 守备 (修正防御)
     stat_reaction: int      # 反应 (修正回避/先手)
-    
+
     stat_tech: int = 0      # 技量 (预留，不参与计算)
-    
+
+    # 熟练度
+    weapon_proficiency: int = 500     # 武器熟练度 (影响命中惩罚)
+    mecha_proficiency: int = 2000     # 机体熟练度 (影响防御率)
+
     innate_skills: List[str] = []
-    
-    # 运行时字段 (兼容旧代码/测试)
-    stat_modifiers: Dict[str, float] = Field(default_factory=dict, exclude=True)
-    hooks: Dict[str, float] = Field(default_factory=dict, exclude=True)
-
-    def model_post_init(self, __context: Any) -> None:
-        """初始化钩子"""
-        if not self.hooks:
-            self.hooks = {
-                'HOOK_HIT_ADD': 0.0,
-                'HOOK_EVA_ADD': 0.0,
-                'HOOK_CRI_ADD': 0.0,
-                'HOOK_DMG_ADD': 0.0,
-            }
-
-    def get_effective_stat(self, stat_name: str) -> int:
-        """获取修正后的属性值"""
-        base_val = getattr(self, stat_name, 0)
-        mod_val = self.stat_modifiers.get(stat_name, 0.0)
-        return int(base_val + mod_val)
 
 # ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic
@@ -225,13 +209,12 @@ class MechaSnapshot(BaseModel):
     # 容器
     weapons: List[WeaponSnapshot] = []
     skills: List[str] = []
-    
+
     # 驾驶员属性备份 (用于伤害计算和防御公式)
-    # keys: shooting, melee, awakening, defense, reaction
-    pilot_stats_backup: Dict[str, int] = {} 
-    
+    # keys: shooting, melee, awakening, defense, reaction, weapon_proficiency, mecha_proficiency
+    pilot_stats_backup: Dict[str, int] = {}
+
     # 战斗中的动态状态 (不序列化到纯JSON配置，但运行时需要)
-    current_will: int = 100
     effects: List[Any] = Field(default_factory=list, exclude=True) # 运行时 Effect 对象列表
     
     # ========================================================================
@@ -416,15 +399,17 @@ class SideEffect:
 class Effect:
     id: str
     name: str
-    hook: str
-    operation: str
-    value: float | str
+    source_id: str = ""  # 效果来源标识（技能ID/装备ID/机体ID），用于调试追踪
+    hook: str = ""
+    operation: str = "add"
+    value: float | str = 0
     priority: int = 50
     sub_priority: int = 500
     trigger_chance: float = 1.0
     target: str = "self"
     duration: int = 1
     charges: int = -1
+    consume_charges: bool = False  # 是否在触发时自动消耗次数
     conditions: List[Condition] = field(default_factory=list)
     side_effects: List[SideEffect] = field(default_factory=list)
     payload: Dict[str, Any] = field(default_factory=dict)

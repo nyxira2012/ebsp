@@ -26,26 +26,9 @@ class TestPilot:
         assert basic_pilot.stat_reaction == 100
         assert basic_pilot.stat_awakening == 100
         assert basic_pilot.stat_defense == 100
-
-    def test_get_effective_stat_no_modifier(self, basic_pilot):
-        """测试无修正时的属性获取"""
-        assert basic_pilot.get_effective_stat('stat_shooting') == 100
-        assert basic_pilot.get_effective_stat('stat_melee') == 100
-
-    def test_get_effective_stat_with_modifier(self, basic_pilot):
-        """测试有修正时的属性获取"""
-        basic_pilot.stat_modifiers['stat_shooting'] = 20.0
-        assert basic_pilot.get_effective_stat('stat_shooting') == 120
-
-    def test_get_effective_stat_nonexistent(self, basic_pilot):
-        """测试获取不存在的属性"""
-        assert basic_pilot.get_effective_stat('nonexistent') == 0
-
-    def test_hooks_initialization(self, basic_pilot):
-        """测试钩子字典初始化"""
-        assert 'HOOK_HIT_ADD' in basic_pilot.hooks
-        assert 'HOOK_EVA_ADD' in basic_pilot.hooks
-        assert basic_pilot.hooks['HOOK_HIT_ADD'] == 0.0
+        # 验证熟练度默认值
+        assert basic_pilot.weapon_proficiency == 500
+        assert basic_pilot.mecha_proficiency == 2000
 
 
 # ============================================================================
@@ -362,9 +345,3 @@ class TestEdgeCases:
         )
         assert mecha.can_attack(weapon) is False
 
-    @pytest.mark.skip(reason="PilotConfig (Pydantic) does not support dynamic stat_modifiers attribute")
-    def test_negative_stat_modifier(self):
-        """测试负数属性修正 - 跳过，因为 Pydantic 模型不支持动态属性修改机制"""
-        pass
-        # pilot = Pilot(...)
-        # pilot.stat_modifiers['stat_shooting'] = -30.0

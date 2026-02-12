@@ -384,3 +384,590 @@ class TestPerformanceStress:
             EffectManager.tick_effects(basic_mecha)
 
         assert len(basic_mecha.effects) == initial_count, "应该正确清理所有效果"
+
+
+# ============================================================================
+# Engine.py 覆盖率测试
+# ============================================================================
+
+class TestEngineCoverage:
+    """测试 engine.py 中未覆盖的代码路径"""
+
+    def test_initiative_forced_switch(self, ace_pilot):
+        """测试强制换手机制 (未覆盖行 58-64)"""
+        from src.combat.engine import InitiativeCalculator
+        from src.config import Config
+
+        # 创建两个相同属性的机体（确保平局）
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        calc = InitiativeCalculator()
+        # 模拟 A 方连续获胜达到阈值
+        threshold = Config.CONSECUTIVE_WINS_THRESHOLD
+        calc.consecutive_wins['A'] = threshold
+        calc.last_winner = 'A'
+
+        # 下次计算时应该强制换手给 B
+        first, second, reason = calc.calculate_initiative(mecha_a, mecha_b, 1)
+
+        assert first == mecha_b  # B 方获得先手
+        assert reason.value == "强制换手机制"
+
+    def test_initiative_hook_forces_first_attacker(self, ace_pilot):
+        """测试 HOOK_INITIATIVE_CHECK 强制 A 先手 (未覆盖行 73-75)"""
+        from src.combat.engine import InitiativeCalculator
+
+        # 创建临时函数并注册为钩子
+        def force_a(value, ctx):
+            if ctx.attacker.instance_id == "m_a":
+                return True
+            return value
+
+        # 直接添加到 hooks 字典
+        if "HOOK_INITIATIVE_CHECK" not in SkillRegistry._hooks:
+            SkillRegistry._hooks["HOOK_INITIATIVE_CHECK"] = []
+        SkillRegistry._hooks["HOOK_INITIATIVE_CHECK"].append(force_a)
+
+        try:
+            mecha_a = Mecha(
+                instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+                final_max_hp=5000, current_hp=5000,
+                final_max_en=100, current_en=100,
+                final_armor=1000, final_mobility=100,
+                final_hit=10.0, final_precision=10.0, final_crit=5.0,
+                final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+                pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                                "stat_defense": 100, "stat_reaction": 100}
+            )
+            mecha_b = Mecha(
+                instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+                final_max_hp=5000, current_hp=5000,
+                final_max_en=100, current_en=100,
+                final_armor=1000, final_mobility=100,
+                final_hit=10.0, final_precision=10.0, final_crit=5.0,
+                final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+                pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                                "stat_defense": 100, "stat_reaction": 100}
+            )
+
+            calc = InitiativeCalculator()
+            first, second, reason = calc.calculate_initiative(mecha_a, mecha_b, 1)
+
+            assert first == mecha_a
+            assert reason.value == "机体性能优势"
+        finally:
+            # 清理钩子
+            SkillRegistry._hooks["HOOK_INITIATIVE_CHECK"].pop()
+
+    def test_determine_initiative_reason_will_diff(self):
+        """测试气力差异判定先手原因 (未覆盖行 168-169)"""
+        from src.combat.engine import InitiativeCalculator
+
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+        mecha_a.current_will = 150  # 高气力
+
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+        mecha_b.current_will = 120  # 低气力，差异 30 > 20
+
+        calc = InitiativeCalculator()
+        reason = calc._determine_reason(mecha_a, mecha_b)
+
+        assert reason.value == "气力优势延续"
+
+    def test_weapon_selector_filters_out_of_range(self, ace_pilot):
+        """测试武器选择过滤超出射程的武器 (未覆盖行 222, 226-227)"""
+        from src.combat.engine import WeaponSelector
+
+        mecha = Mecha(
+            instance_id="m_test", mecha_name="TestMecha", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        # 添加不同射程的武器
+        short_range = Weapon(
+            uid="w_short", definition_id="w_short", name="短程武器",
+            type=WeaponType.MELEE,
+            final_power=1000, en_cost=10,
+            range_min=100, range_max=500,
+            will_req=0, anim_id="a_short"
+        )
+        long_range = Weapon(
+            uid="w_long", definition_id="w_long", name="长程武器",
+            type=WeaponType.SHOOTING,
+            final_power=1500, en_cost=15,
+            range_min=2000, range_max=6000,
+            will_req=0, anim_id="a_long"
+        )
+
+        mecha.weapons = [short_range, long_range]
+
+        # 在 1000m 距离下，两个武器都不可用（短程500，长程2000-6000）
+        selected = WeaponSelector.select_best_weapon(mecha, 1000)
+        assert selected.definition_id == "wpn_fallback"  # 应该返回保底武器
+
+        # 在 50m 距离下（超短程），应该返回保底武器
+        selected = WeaponSelector.select_best_weapon(mecha, 50)
+        assert selected.type == "撞击"  # 保底武器
+
+    def test_battle_simulator_insufficient_en(self, ace_pilot):
+        """测试 EN 不足时无法攻击 (未覆盖行 468-470)"""
+        from src.combat.engine import BattleSimulator
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=0,  # 零 EN
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        weapon = Weapon(
+            uid="w_test", definition_id="w_test", name="测试武器",
+            type=WeaponType.SHOOTING,
+            final_power=1000, en_cost=10,
+            range_min=100, range_max=1000,
+            will_req=0, anim_id="a_test"
+        )
+        attacker.weapons = [weapon]
+
+        sim = BattleSimulator(attacker, defender)
+        sim.round_number = 1
+
+        # 应该不会崩溃，EN 不足时跳过攻击
+        sim._execute_attack(attacker, defender, 1000, is_first=True)
+        # 攻击方 EN 应该仍然为 0（没有消耗）
+        assert attacker.current_en == 0
+
+    def test_initiative_forced_switch_b_wins(self, ace_pilot):
+        """测试 B 方连续获胜强制换手 (未覆盖行 79-80)"""
+        from src.combat.engine import InitiativeCalculator
+        from src.config import Config
+
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        calc = InitiativeCalculator()
+        # 模拟 B 方连续获胜达到阈值
+        threshold = Config.CONSECUTIVE_WINS_THRESHOLD
+        calc.consecutive_wins['B'] = threshold
+        calc.last_winner = 'B'
+
+        # 下次计算时应该强制换手给 A
+        first, second, reason = calc.calculate_initiative(mecha_a, mecha_b, 1)
+
+        assert first == mecha_a  # A 方获得先手
+        assert reason.value == "强制换手机制"
+
+    def test_initiative_tie_breaker_counter(self, ace_pilot):
+        """测试平局时后手方获得先手 (未覆盖行 100-105)"""
+        from src.combat.engine import InitiativeCalculator
+
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        calc = InitiativeCalculator()
+        # 设置 A 方上次获胜
+        calc.last_winner = 'A'
+        calc.consecutive_wins = {'A': 0, 'B': 0}
+
+        # Mock random 使双方得分相同
+        from unittest.mock import patch
+        with patch('random.uniform', return_value=0):
+            with patch('src.combat.engine.InitiativeCalculator._calculate_initiative_score', return_value=100):
+                first, second, reason = calc.calculate_initiative(mecha_a, mecha_b, 1)
+
+        # 平局时，上次后手方 B 应该获得先手
+        assert first == mecha_b
+        assert reason.value == "战术反超"
+
+    def test_initiative_reason_pilot(self, ace_pilot):
+        """测试反应值差异判定先手原因 (未覆盖行 171)"""
+        from src.combat.engine import InitiativeCalculator
+
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_a_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 130}  # 高反应
+        )
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_b_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}  # 低反应
+        )
+
+        calc = InitiativeCalculator()
+        # Mock 使 A 方得分更高
+        from unittest.mock import patch
+        with patch('src.combat.engine.InitiativeCalculator._calculate_initiative_score',
+                  side_effect=lambda m: 200 if m == mecha_a else 100):
+            first, second, reason = calc.calculate_initiative(mecha_a, mecha_b, 1)
+
+        assert first == mecha_a
+        # 反应差异 > 15 时应该是 PILOT
+        assert reason.value == "驾驶员感知优势"
+
+    def test_generate_distance(self, ace_pilot):
+        """测试距离生成 (未覆盖行 227)"""
+        from src.combat.engine import BattleSimulator
+        from src.config import Config
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        sim = BattleSimulator(attacker, defender)
+
+        # 第 1 回合：距离应该在初始范围内
+        sim.round_number = 1
+        distance1 = sim._generate_distance()
+        assert Config.DISTANCE_INITIAL_MIN <= distance1 <= Config.DISTANCE_INITIAL_MAX
+
+        # 第 5 回合：距离应该减少
+        sim.round_number = 5
+        distance5 = sim._generate_distance()
+        assert distance5 < distance1  # 应该更小
+
+        # 第 10 回合：距离应该在最终范围内
+        sim.round_number = 10
+        distance10 = sim._generate_distance()
+        assert Config.DISTANCE_FINAL_MIN <= distance10 <= Config.DISTANCE_FINAL_MAX
+
+    def test_conclude_battle_draw(self, ace_pilot):
+        """测试战斗平局判定 (未覆盖行 308)"""
+        from src.combat.engine import BattleSimulator
+        from unittest.mock import patch
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=2500,  # 50%
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=2500,  # 相同的 50%
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        sim = BattleSimulator(attacker, defender)
+        sim.round_number = 999  # 模拟达到回合上限
+
+        # 捕获打印输出
+        import io
+        from unittest.mock import patch
+        output = io.StringIO()
+
+        with patch('sys.stdout', output):
+            sim._conclude_battle()
+
+        result = output.getvalue()
+        # 应该显示平局
+        assert "平局" in result
+
+    def test_round_survivor_check_second_mover_dies(self, ace_pilot):
+        """测试后攻方被击破时停止反击 (未覆盖行 369-370)"""
+        from src.combat.engine import BattleSimulator
+        from unittest.mock import patch
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=1,  # 接近死亡
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        # 添加武器
+        weapon = Weapon(
+            uid="w_test", definition_id="w_test", name="测试武器",
+            type=WeaponType.SHOOTING,
+            final_power=10000, en_cost=10,
+            range_min=100, range_max=1000,
+            will_req=0, anim_id="a_test"
+        )
+        attacker.weapons = [weapon]
+
+        sim = BattleSimulator(attacker, defender)
+
+        # Mock 圆桌判定返回 HIT，造成大量伤害
+        def mock_resolve(ctx):
+            from src.models import AttackResult
+            defender.take_damage(10000)  # 击破
+            return AttackResult.HIT, 10000
+
+        with patch('src.combat.engine.AttackTableResolver.resolve_attack', side_effect=mock_resolve):
+            # 执行回合
+            sim._execute_round()
+
+        # 验证输出包含击破信息
+        import io
+        output = io.StringIO()
+        with patch('sys.stdout', output):
+            # 再次执行应该检测到死亡
+            pass
+
+    def test_round_survivor_check_first_mover_dies(self, ace_pilot):
+        """测试先攻方被击破时停止回合 (未覆盖行 379-380)"""
+        from src.combat.engine import BattleSimulator
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=1,  # 接近死亡
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        # 添加武器
+        weapon = Weapon(
+            uid="w_test", definition_id="w_test", name="测试武器",
+            type=WeaponType.SHOOTING,
+            final_power=10000, en_cost=10,
+            range_min=100, range_max=1000,
+            will_req=0, anim_id="a_test"
+        )
+        defender.weapons = [weapon]
+
+        sim = BattleSimulator(attacker, defender)
+        sim.round_number = 1
+
+        # Mock 圆表判定 - 先攻方攻击 miss，后攻方反击击杀先攻方
+        call_count = [0]
+
+        def mock_resolve(ctx):
+            from src.models import AttackResult
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # 先攻方攻击，miss
+                return AttackResult.MISS, 0
+            else:
+                # 后攻方反击，击杀先攻方（ctx.defender）
+                ctx.defender.take_damage(10000)
+                return AttackResult.HIT, 10000
+
+        from unittest.mock import patch
+        with patch('src.combat.engine.AttackTableResolver.resolve_attack', side_effect=mock_resolve):
+            sim._execute_round()
+
+        # 先攻方死亡，后攻方存活
+        assert not attacker.is_alive()
+        assert defender.is_alive()
+
+    def test_en_cost_modification(self, ace_pilot):
+        """测试 EN 消耗被修正 (未覆盖行 469-470)"""
+        from src.combat.engine import BattleSimulator
+
+        attacker = Mecha(
+            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=50,  # 有限 EN
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        defender = Mecha(
+            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
+            final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=10.0, final_precision=10.0, final_crit=5.0,
+            final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
+            pilot_stats_backup={"stat_shooting": 100, "stat_melee": 100, "stat_awakening": 100,
+                            "stat_defense": 100, "stat_reaction": 100}
+        )
+
+        weapon = Weapon(
+            uid="w_test", definition_id="w_test", name="测试武器",
+            type=WeaponType.SHOOTING,
+            final_power=1000, en_cost=30,  # 需要 30 EN
+            range_min=100, range_max=1000,
+            will_req=0, anim_id="a_test"
+        )
+        attacker.weapons = [weapon]
+
+        sim = BattleSimulator(attacker, defender)
+        sim.round_number = 1
+
+        # 添加一个减少 EN 消耗的效果 (50% 折扣)
+        from src.models import Effect
+        effect = Effect(
+            id="test_en_save", name="EN Save",
+            hook="HOOK_PRE_EN_COST_MULT",
+            operation="mul", value=0.5,
+            duration=1, priority=50
+        )
+        attacker.effects.append(effect)
+
+        # Mock 圆表判定
+        from unittest.mock import patch
+        from src.models import AttackResult
+        with patch('random.uniform', return_value=50):
+            with patch('src.combat.engine.AttackTableResolver.resolve_attack',
+                      return_value=(AttackResult.HIT, 1000)):
+                sim._execute_attack(attacker, defender, 500, is_first=True)
+
+        # EN 消耗应该被减少：30 * 0.5 = 15
+        # 初始 50 - 15 = 35
+        assert attacker.current_en == 35

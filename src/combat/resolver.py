@@ -249,6 +249,12 @@ class AttackTableResolver:
         ctx.attack_result = result
         ctx.damage = damage
 
+        # 应用气力变化
+        if ctx.attacker_will_delta != 0:
+            attacker.modify_will(ctx.attacker_will_delta)
+        if ctx.defender_will_delta != 0:
+            defender.modify_will(ctx.defender_will_delta)
+
         return result, damage
     
     

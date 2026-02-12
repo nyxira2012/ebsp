@@ -534,3 +534,324 @@ class TestTargetSelection:
         # 这个效果应该作用于防御方(enemy)
         # 但HOOK_PRE_HIT_RATE通常是攻击方的属性
         # 所以这里的测试可能需要根据实际逻辑调整
+
+
+# ============================================================================
+# 布尔操作测试 (未覆盖行 188-195)
+# ============================================================================
+
+class TestBooleanOperations:
+    """测试布尔类型的效果操作"""
+
+    def test_operation_and_true_true(self, basic_mecha, basic_context):
+        """测试 and 操作：True and True = True"""
+        basic_mecha.effects.append(Effect(
+            id="test_and", name="Test And",
+            hook="HOOK_TEST_BOOL",
+            operation="and", value=True,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", True, basic_context)
+        assert result is True
+
+    def test_operation_and_true_false(self, basic_mecha, basic_context):
+        """测试 and 操作：True and False = False"""
+        basic_mecha.effects.append(Effect(
+            id="test_and", name="Test And",
+            hook="HOOK_TEST_BOOL",
+            operation="and", value=False,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", True, basic_context)
+        assert result is False
+
+    def test_operation_or_false_false(self, basic_mecha, basic_context):
+        """测试 or 操作：False or False = False"""
+        basic_mecha.effects.append(Effect(
+            id="test_or", name="Test Or",
+            hook="HOOK_TEST_BOOL",
+            operation="or", value=False,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", False, basic_context)
+        assert result is False
+
+    def test_operation_or_true_false(self, basic_mecha, basic_context):
+        """测试 or 操作：True or False = True"""
+        basic_mecha.effects.append(Effect(
+            id="test_or", name="Test Or",
+            hook="HOOK_TEST_BOOL",
+            operation="or", value=False,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", True, basic_context)
+        assert result is True
+
+    def test_operation_not_true(self, basic_mecha, basic_context):
+        """测试 not 操作：not True = False"""
+        basic_mecha.effects.append(Effect(
+            id="test_not", name="Test Not",
+            hook="HOOK_TEST_BOOL",
+            operation="not", value=True,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", True, basic_context)
+        assert result is False
+
+    def test_operation_not_false(self, basic_mecha, basic_context):
+        """测试 not 操作：not False = True"""
+        basic_mecha.effects.append(Effect(
+            id="test_not", name="Test Not",
+            hook="HOOK_TEST_BOOL",
+            operation="not", value=False,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", False, basic_context)
+        assert result is True
+
+    def test_operation_set_bool(self, basic_mecha, basic_context):
+        """测试 set 操作：set False"""
+        basic_mecha.effects.append(Effect(
+            id="test_set_bool", name="Test Set Bool",
+            hook="HOOK_TEST_BOOL",
+            operation="set", value=False,
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST_BOOL", True, basic_context)
+        assert result is False
+
+
+# ============================================================================
+# Callback 操作测试 (未覆盖行 198-204)
+# ============================================================================
+
+class TestCallbackOperation:
+    """测试 callback 类型操作"""
+
+    def test_callback_operation(self, basic_mecha, basic_context):
+        """测试 callback 操作调用注册的函数"""
+        # 注册一个简单的回调函数
+        @SkillRegistry.register_callback("test_callback_func")
+        def test_callback(value, ctx, owner):
+            return value + 999
+
+        basic_mecha.effects.append(Effect(
+            id="test_cb", name="Test Callback",
+            hook="HOOK_TEST",
+            operation="callback", value="test_callback_func",
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST", 100, basic_context)
+        assert result == 1099  # 100 + 999
+
+    def test_callback_not_found(self, basic_mecha, basic_context):
+        """测试 callback 函数不存在时返回原值 (未覆盖行 207)"""
+        # 使用不存在的回调 ID
+        basic_mecha.effects.append(Effect(
+            id="test_cb_missing", name="Test Callback Missing",
+            hook="HOOK_TEST",
+            operation="callback", value="nonexistent_callback",
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST", 100, basic_context)
+        # 应该返回原值
+        assert result == 100
+
+
+# ============================================================================
+# 效果循环中过期检查测试 (未覆盖行 64)
+# ============================================================================
+
+class TestEffectExpirationInLoop:
+    """测试效果在执行循环中过期的情况"""
+
+    def test_effect_expires_during_execution(self, basic_mecha, basic_context):
+        """测试效果在执行过程中过期 (duration=0)"""
+        # 创建一个会被消耗完的效果
+        effect = Effect(
+            id="test_expire", name="Test Expire",
+            hook="HOOK_TEST",
+            operation="add", value=10.0,
+            charges=2,  # 2次机会
+            duration=2,
+            priority=50
+        )
+        basic_mecha.effects.append(effect)
+
+        # 执行一次，charges 应该减 1
+        EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        assert effect.charges == 1
+
+        # 手动设置 duration=0 模拟过期
+        effect.duration = 0
+
+        # 再次执行时应该跳过这个效果 (未覆盖行 64)
+        result = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        # 由于效果过期，不应该应用
+        assert result == 0
+
+
+# ============================================================================
+# 概率未触发测试 (未覆盖行 82)
+# ============================================================================
+
+class TestProbabilityNotTriggered:
+    """测试效果未通过概率判定"""
+
+    @patch('random.random')
+    def test_trigger_chance_fails(self, mock_random, basic_mecha, basic_context):
+        """测试概率判定未通过时跳过 (未覆盖行 82)"""
+        # Mock random 返回高值，导致概率失败
+        mock_random.return_value = 0.9  # 90%，假设触发概率是 50%
+
+        basic_mecha.effects.append(Effect(
+            id="test_prob_fail", name="Test Prob Fail",
+            hook="HOOK_TEST",
+            operation="add", value=10.0,
+            trigger_chance=0.5,  # 50% 概率
+            duration=1
+        ))
+
+        result = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        # 应该返回原值，因为未通过概率判定
+        assert result == 0
+
+
+# ============================================================================
+# 副作用执行测试 (未覆盖行 92)
+# ============================================================================
+
+class TestSideEffectExecution:
+    """测试副作用的执行"""
+
+    def test_side_effect_executed_when_triggered(self, basic_mecha, basic_context):
+        """测试效果触发时执行副作用 (未覆盖行 92)"""
+        from src.skill_system.side_effects import SideEffectExecutor
+
+        # Mock SideEffectExecutor.execute 来验证是否被调用
+        original_execute = SideEffectExecutor.execute
+        call_count = [0]
+
+        def mock_execute(side_effects, context, owner):
+            call_count[0] += 1
+            # 不实际执行副作用，只记录调用
+            return original_execute(side_effects, context, owner)
+
+        SideEffectExecutor.execute = mock_execute
+
+        # 添加一个带副作用的效果
+        basic_mecha.effects.append(Effect(
+            id="test_se", name="Test Side Effect",
+            hook="HOOK_TEST",
+            operation="add", value=10.0,
+            side_effects=[{"type": "consume_en", "val": 5}],
+            duration=1
+        ))
+
+        EffectProcessor.process("HOOK_TEST", 0, basic_context)
+
+        # 验证副作用被执行
+        assert call_count[0] == 1
+
+        # 恢复原始函数
+        SideEffectExecutor.execute = original_execute
+
+
+# ============================================================================
+# 效果再次过期检查测试 (未覆盖行 64)
+# ============================================================================
+
+class TestEffectRecheckInLoop:
+    """测试效果在循环中再次检查过期"""
+
+    def test_effect_check_skip_when_duration_zero_in_loop(self, basic_mecha, basic_context):
+        """测试效果在循环中再次检查duration=0时跳过 (未覆盖行 64)"""
+        # 创建一个效果
+        effect = Effect(
+            id="test_recheck", name="Test Recheck",
+            hook="HOOK_TEST",
+            operation="add", value=10.0,
+            duration=1,  # 初始有效
+            priority=50
+        )
+        basic_mecha.effects.append(effect)
+
+        # 第一次执行应该应用效果
+        result1 = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        assert result1 == 10.0
+
+        # 设置 duration=0 模拟在中间某处过期
+        effect.duration = 0
+
+        # 再次执行应该跳过这个效果 (循环内的第二次检查)
+        result2 = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        # 由于效果被跳过，应该返回原始值
+        assert result2 == 0
+
+    def test_effect_check_skip_when_charges_zero_in_loop(self, basic_mecha, basic_context):
+        """测试效果在循环中再次检查charges=0时跳过 (未覆盖行 64)"""
+        effect = Effect(
+            id="test_recheck_charges", name="Test Recheck Charges",
+            hook="HOOK_TEST",
+            operation="add", value=10.0,
+            charges=1,  # 1次机会
+            duration=1,
+            priority=50
+        )
+        basic_mecha.effects.append(effect)
+
+        # 第一次执行
+        result1 = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        assert result1 == 10.0
+        assert effect.charges == 0
+
+        # 模拟在下次循环开始前charges已经为0
+        # 再次执行应该跳过
+        result2 = EffectProcessor.process("HOOK_TEST", 0, basic_context)
+        assert result2 == 0
+
+
+# ============================================================================
+# 数值类型 set 操作测试 (相关分支覆盖)
+# ============================================================================
+
+class TestNumericSetOperation:
+    """测试数值类型 set 操作的行为"""
+
+    def test_set_operation_with_numeric_input(self, basic_mecha, basic_context):
+        """测试 set 操作对数值输入直接返回该值 (分支 179-180)"""
+        # 由于 Python 中 bool 是 int 的子类，isinstance(False, (int, float)) 为 True
+        # 所以数值分支会先执行，不会进入布尔分支的 bool(val) 逻辑
+
+        test_cases = [
+            (100, 100),      # 非零数值
+            (0, 0),          # 零
+            (-1, -1),        # 负数
+            (1.5, 1.5),      # 浮点数
+        ]
+
+        for value_val, expected in test_cases:
+            basic_mecha.effects.clear()
+
+            basic_mecha.effects.append(Effect(
+                id=f"test_set_{value_val}", name=f"Test Set {value_val}",
+                hook="HOOK_TEST_NUMERIC",
+                operation="set", value=value_val,
+                duration=1
+            ))
+
+            # 传入数值作为 current_value
+            result = EffectProcessor.process("HOOK_TEST_NUMERIC", 0, basic_context)
+
+            # 数值 set 操作直接返回原值
+            assert result == expected, f"Numeric set should return {expected}, got {result}"
+

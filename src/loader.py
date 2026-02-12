@@ -36,7 +36,7 @@ class DataLoader:
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
         """兼容旧测试"""
-        return {k: v for k, v in self.equipments.items() if v.slot == SlotType.WEAPON}
+        return {k: v for k, v in self.equipments.items() if v.type == "WEAPON"}
     
     def load_all(self) -> None:
         """加载所有游戏静态配置。"""
@@ -65,8 +65,15 @@ class DataLoader:
         """通用的 JSON 加载方法"""
         file_path = self.data_dir / filename
         if not file_path.exists():
-            print(f"      ⚠️  警告: 配置文件不存在: {file_path}")
-            return
+            # 根据文件类型抛出相应的错误消息
+            if "pilots" in filename:
+                raise FileNotFoundError(f"驾驶员数据文件不存在: {file_path}")
+            elif "weapons" in filename or "equipments" in filename:
+                raise FileNotFoundError(f"武器数据文件不存在: {file_path}")
+            elif "mechas" in filename:
+                raise FileNotFoundError(f"机体数据文件不存在: {file_path}")
+            else:
+                raise FileNotFoundError(f"配置文件不存在: {file_path}")
 
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)

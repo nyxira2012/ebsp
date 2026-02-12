@@ -88,38 +88,38 @@ def create_test_mechas(
     注意：stats中的值是加成值（bonus），会在基础值上增加
     """
 
-    # 攻击方
-    p_a = Pilot(
-        id="a", name="Attacker",
-        stat_shooting=100, stat_melee=100, stat_awakening=100,
-        stat_defense=100, stat_reaction=100
-    )
-    p_a.weapon_proficiency = 1000  # 满熟练度
+    # 攻击方驾驶员属性
+    attacker_weapon_prof = 1000  # 满熟练度
 
     # 命中加成（在基础命中上加成）
     hit_bonus = attacker_stats.get("hit_bonus", 0.0)
     crit_bonus = attacker_stats.get("crit_bonus", 0.0)
 
     m_a = Mecha(
-        id="m_a", name="Attacker", pilot=p_a,
+        id="m_a", name="Attacker",
         max_hp=1000, current_hp=1000,
         max_en=100, current_en=100,
         mobility=100, defense_level=1000,
-        hit_rate=hit_bonus,  # 这是加成值
-        precision=0.0,
-        crit_rate=crit_bonus,  # 这是加成值
-        dodge_rate=0.0, parry_rate=0.0, block_rate=0.0
+        final_hit=hit_bonus,  # 使用实际字段名
+        final_precision=0.0,
+        final_crit=crit_bonus,  # 使用实际字段名
+        final_dodge=0.0, final_parry=0.0, final_block=0.0,
+        # 备份驾驶员属性，供 MockPilot 使用
+        pilot_stats_backup={
+            'stat_shooting': 100,
+            'stat_melee': 100,
+            'stat_awakening': 100,
+            'stat_defense': 100,
+            'stat_reaction': 100,
+            'weapon_proficiency': attacker_weapon_prof,
+            'mecha_proficiency': 2000
+        }
     )
     m_a.block_value = 0
     m_a.weapons = []
 
-    # 防御方
-    p_b = Pilot(
-        id="b", name="Defender",
-        stat_shooting=100, stat_melee=100, stat_awakening=100,
-        stat_defense=100, stat_reaction=100
-    )
-    p_b.mecha_proficiency = 4000  # 满熟练度
+    # 防御方驾驶员属性
+    defender_mecha_prof = 4000  # 满熟练度
 
     # 防御加成（在基础防御上加成）
     dodge_bonus = defender_stats.get("dodge_bonus", 0.0)
@@ -127,14 +127,24 @@ def create_test_mechas(
     block_bonus = defender_stats.get("block_bonus", 0.0)
 
     m_b = Mecha(
-        id="m_b", name="Defender", pilot=p_b,
+        id="m_b", name="Defender",
         max_hp=1000, current_hp=1000,
         max_en=100, current_en=100,
         mobility=100, defense_level=1000,
-        hit_rate=0.0, precision=0.0, crit_rate=0.0,
-        dodge_rate=dodge_bonus,  # 这是加成值
-        parry_rate=parry_bonus,  # 这是加成值
-        block_rate=block_bonus  # 这是加成值
+        final_hit=0.0, final_precision=0.0, final_crit=0.0,
+        final_dodge=dodge_bonus,  # 使用实际字段名
+        final_parry=parry_bonus,  # 使用实际字段名
+        final_block=block_bonus,  # 使用实际字段名
+        # 备份驾驶员属性，供 MockPilot 使用
+        pilot_stats_backup={
+            'stat_shooting': 100,
+            'stat_melee': 100,
+            'stat_awakening': 100,
+            'stat_defense': 100,
+            'stat_reaction': 100,
+            'weapon_proficiency': 500,
+            'mecha_proficiency': defender_mecha_prof
+        }
     )
     m_b.block_value = 100
     m_b.weapons = []
@@ -169,10 +179,11 @@ def run_simulation(
 
     # 创建武器
     weapon = Weapon(
-        id="w", name="Test Weapon",
-        weapon_type=WeaponType.MELEE,
-        power=1000, en_cost=0,
-        range_min=0, range_max=1000
+        uid="w_uid", definition_id="w", name="Test Weapon",
+        type=WeaponType.MELEE,
+        final_power=1000, en_cost=0,
+        range_min=0, range_max=1000,
+        will_req=0, anim_id="default_anim"
     )
 
     # 运行模拟

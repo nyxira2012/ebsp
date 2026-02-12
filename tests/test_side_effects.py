@@ -121,7 +121,7 @@ class TestModifyWillSideEffect:
 
         SideEffectExecutor.execute(side_effects, full_context, full_mecha)
 
-        assert full_mecha.current_will == 100  # WILL_MIN
+        assert full_mecha.current_will == 50  # Config.WILL_MIN
 
     def test_modify_will_default_val(self, full_context, full_mecha):
         """测试默认值为0"""
