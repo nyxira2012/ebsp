@@ -239,7 +239,7 @@ class TestMultiRoundCombat:
     def test_low_hp_effects_triggering(self, gundam_rx78, zaku_ii):
         """测试低HP效果触发"""
         # 降低HP到30%以下
-        gundam_rx78.current_hp = int(gundam_rx78.max_hp * 0.25)
+        gundam_rx78.current_hp = int(gundam_rx78.final_max_hp * 0.25)
 
         # 添加低HP触发效果
         low_hp_effect = Effect(
@@ -475,12 +475,12 @@ class TestFullBattleSimulation:
             zaku_ii.take_damage(damage_r3)
 
         # 第1回合使用了必中，至少应该命中一次
-        assert zaku_ii.current_hp < zaku_ii.max_hp
+        assert zaku_ii.current_hp < zaku_ii.final_max_hp
 
     def test_clutch_final_attack(self, gundam_rx78, zaku_ii):
         """测试绝境反击"""
         # 高达濒死
-        gundam_rx78.current_hp = int(gundam_rx78.max_hp * 0.1)
+        gundam_rx78.current_hp = int(gundam_rx78.final_max_hp * 0.1)
         gundam_rx78.current_will = 150  # 高气力
 
         # 添加低HP加成效果

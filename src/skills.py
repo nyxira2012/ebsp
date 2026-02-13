@@ -71,7 +71,7 @@ class SkillRegistry:
             Any: 经过流水线处理后的最终数值。
         """
         
-        # 1. 遍历全局/被动钩子 (Legacy support)
+        # 1. 遍历全局/被动钩子 (Global/Passive hooks)
         value = initial_value
         if hook_point in cls._hooks:
             for callback in cls._hooks[hook_point]:
@@ -99,7 +99,7 @@ def cb_potential(val: Any, ctx: BattleContext, owner: Mecha) -> Any:
     Returns:
         Any: 修正后的数值。
     """
-    ratio = 1.0 - (owner.current_hp / owner.max_hp)
+    ratio = 1.0 - (owner.current_hp / owner.final_max_hp)
     bonus = 0.5 * (ratio ** 2)
     return val + bonus
 
@@ -112,7 +112,7 @@ def cb_learning(val, ctx, owner):
 @SkillRegistry.register_callback("cb_gn_recover")
 def cb_gn_recover(val, ctx, owner):
     """GN炉: 每回合回复 EN"""
-    owner.current_en = min(owner.max_en, owner.current_en + 10)
+    owner.current_en = min(owner.final_max_en, owner.current_en + 10)
     print(f"   [Trait] {owner.name} GN炉回复了 10 EN")
     return val
 
@@ -141,7 +141,7 @@ def cb_instinct_dodge(val, ctx, owner):
 def cb_auto_repair(damage, ctx, owner):
     """自动修复: 受到伤害后回复 HP"""
     heal = int(damage * 0.2)  # 回复受到伤害的20%
-    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     print(f"   [Trait] {owner.name} 自动修复回复了 {heal} HP")
     return damage
 
@@ -165,7 +165,7 @@ def cb_rage_will(damage, ctx, owner):
 def cb_vampirism(damage, ctx, owner):
     """吸血: 回复造成伤害的10% HP"""
     heal = int(damage * 0.1)
-    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     print(f"   [Trait] {owner.name} 吸血回复了 {heal} HP")
     return damage
 
@@ -206,7 +206,7 @@ def cb_energy_save(val, ctx, owner):
 def cb_regen_hp(val, ctx, owner):
     """再生: 每回合回复5% HP"""
     heal = int(owner.max_hp * 0.05)
-    owner.current_hp = min(owner.max_hp, owner.current_hp + heal)
+    owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     print(f"   [Trait] {owner.name} 再生回复了 {heal} HP")
     return val
 

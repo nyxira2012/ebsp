@@ -88,7 +88,7 @@ class ConditionChecker:
         target = ConditionChecker._get_target(condition, context, owner)
         if not target: return False
         
-        current_ratio = target.current_hp / target.max_hp
+        current_ratio = target.current_hp / target.final_max_hp
         threshold = condition.get("val", 0.0)
         op = condition.get("op", "<")
         
@@ -154,8 +154,8 @@ class ConditionChecker:
 
         stat_name = condition.get("stat")
 
-        if stat_name and hasattr(opponent.pilot, stat_name):
-            val = getattr(opponent.pilot, stat_name)
+        if stat_name and stat_name in opponent.pilot_stats_backup:
+            val = opponent.pilot_stats_backup.get(stat_name, 0)
         elif stat_name and hasattr(opponent, stat_name):
             val = getattr(opponent, stat_name)
         else:

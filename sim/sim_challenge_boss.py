@@ -68,7 +68,7 @@ BOSS_CONFIG = {
     "en": 400,             # Boss 能量上限
 
     # === 防御属性 ===
-    "defense": 2000,         # 护甲值（影响伤害减伤）
+    "defense": 1000,         # 护甲值（影响伤害减伤）
     "mobility": 120,         # 机动性（影响先手判定， dodge_rate = mobility * 0.1）
 
     # === 战斗属性（百分比）===
@@ -80,8 +80,8 @@ BOSS_CONFIG = {
     "block_rate": 15.0,        # 格挡率加成
 
     # === 武器配置 ===
-    "weapon_power_percent": 0.01,  # 武器威力占 Boss HP 的百分比（1% = 5000 伤害）
-    "weapon_en_cost": 0,           # 武器 EN 消耗
+    "weapon_power_percent": 0.0008,  # 武器威力占 Boss HP 的百分比
+    "weapon_en_cost": 1,           # 武器 EN 消耗
 
     # === 驾驶员属性 ===
     "pilot_shooting": 150,     # 射击技能
@@ -89,6 +89,10 @@ BOSS_CONFIG = {
     "pilot_reaction": 150,     # 反应速度
     "pilot_awakening": 150,     # 感应能力
     "pilot_defense": 150,      # 守备技能
+
+    # === 熟练度 ===
+    "weapon_proficiency": 1000,  # 武器熟练度（满值）
+    "mecha_proficiency": 4000,   # 机体熟练度（满值）
 }
 
 # ==================== 挑战者配置 ====================
@@ -97,14 +101,14 @@ CHALLENGER_CONFIG = {
     "name": "Challenger Mecha",
 
     # === 资源属性 ===
-    "hp": 10000,            # 挑战者血量
+    "hp": 20000,            # 挑战者血量
     "en": 500,              # 挑战者能量上限
     "will": 100,            # 初始气力
 
     # === 战斗属性（百分比）===
     "hit_rate": 50.0,        # 命中率加成
-    "precision": 20.0,       # 精准值
-    "crit_rate": 20.0,       # 暴击率加成
+    "precision": 40.0,       # 精准值
+    "crit_rate": 40.0,       # 暴击率加成
     "dodge_rate": 20.0,      # 躲闪率加成
     "parry_rate": 15.0,      # 招架率加成
     "block_rate": 15.0,      # 格挡率加成
@@ -116,8 +120,8 @@ CHALLENGER_CONFIG = {
 
     # === 武器配置 ===
     "weapon_name": "上帝之雷",
-    "weapon_power": 50000,    # 武器威力
-    "weapon_en_cost": 0,      # 武器 EN 消耗
+    "weapon_power": 5000,    # 武器威力
+    "weapon_en_cost": 5,      # 武器 EN 消耗
 
     # === 驾驶员属性 ===
     "pilot_shooting": 200,     # 射击技能
@@ -182,15 +186,20 @@ class BattleStatistics:
     total_damage_taken: int = 0
     max_single_damage: int = 0
     min_single_damage: float = float('inf')
+    damage_distribution: List[int] = field(default_factory=list)  # 挑战者所有伤害值
 
-    # 判定结果统计
-    attack_results: Counter = field(default_factory=Counter)
+    # 判定结果统计（分开统计）
+    attack_results: Counter = field(default_factory=Counter)  # 总计
+    challenger_attack_results: Counter = field(default_factory=Counter)  # 挑战者
+    boss_attack_results: Counter = field(default_factory=Counter)  # Boss
 
     # 回合统计
     round_stats: List[RoundStatistics] = field(default_factory=list)
 
     # 技能触发统计
     skills_triggered: Counter = field(default_factory=Counter)
+    skills_trigger_count: Dict[str, int] = field(default_factory=dict)  # 每个技能在多少场中触发
+    total_battles_count: int = 0  # 总场数，用于计算应用率
 
     # 资源消耗
     total_en_consumed: int = 0
@@ -229,7 +238,7 @@ class DummyBossSimulator(BattleSimulator):
 
         max_rounds = SkillRegistry.process_hook(
             "HOOK_MAX_ROUNDS", 4,
-            BattleContext(round_number=0, distance=0, attacker=self.mecha_a, defender=self.mecha_b)
+            BattleContext(round_number=0, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b)
         )
 
         while True:
@@ -241,7 +250,7 @@ class DummyBossSimulator(BattleSimulator):
             if self.round_number >= max_rounds:
                 ctx = BattleContext(
                     round_number=self.round_number, distance=0,
-                    attacker=self.mecha_a, defender=self.mecha_b
+                    mecha_a=self.mecha_a, mecha_b=self.mecha_b
                 )
                 should_maintain = SkillRegistry.process_hook("HOOK_CHECK_MAINTAIN_BATTLE", False, ctx)
                 if not should_maintain:
@@ -257,7 +266,7 @@ class DummyBossSimulator(BattleSimulator):
         # 战斗结束钩子
         final_ctx = BattleContext(
             round_number=self.round_number, distance=0,
-            attacker=self.mecha_a, defender=self.mecha_b
+            mecha_a=self.mecha_a, mecha_b=self.mecha_b
         )
         SkillRegistry.process_hook("HOOK_ON_BATTLE_END", None, final_ctx)
 
@@ -321,7 +330,7 @@ class DummyBossSimulator(BattleSimulator):
 
         ctx = BattleContext(
             round_number=self.round_number, distance=distance,
-            attacker=self.mecha_a, defender=self.mecha_b
+            mecha_a=self.mecha_a, mecha_b=self.mecha_b
         )
         SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
 
@@ -338,11 +347,11 @@ class DummyBossSimulator(BattleSimulator):
 
         if self.verbose:
             print()
-            print(f"📊 {self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.max_hp} | "
-                  f"EN={self.mecha_a.current_en}/{self.mecha_a.max_en} | "
+            print(f"📊 {self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
+                  f"EN={self.mecha_a.current_en}/{self.mecha_a.final_max_en} | "
                   f"气力={self.mecha_a.current_will}")
-            print(f"📊 {self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.max_hp} | "
-                  f"EN={self.mecha_b.current_en}/{self.mecha_b.max_en} | "
+            print(f"📊 {self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
+                  f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
                   f"气力={self.mecha_b.current_will}")
 
         return round_stat
@@ -368,8 +377,8 @@ class DummyBossSimulator(BattleSimulator):
         ctx = BattleContext(
             round_number=self.round_number,
             distance=distance,
-            attacker=attacker,
-            defender=defender,
+            mecha_a=attacker,
+            mecha_b=defender,
             weapon=weapon
         )
 
@@ -394,8 +403,8 @@ class DummyBossSimulator(BattleSimulator):
             defender.take_damage(damage)
 
         # 应用气力变化
-        attacker_will_delta = ctx.attacker_will_delta
-        defender_will_delta = ctx.defender_will_delta
+        attacker_will_delta = ctx.current_attacker_will_delta
+        defender_will_delta = ctx.current_defender_will_delta
         if attacker_will_delta != 0:
             attacker.modify_will(attacker_will_delta)
         if defender_will_delta != 0:
@@ -420,6 +429,14 @@ class DummyBossSimulator(BattleSimulator):
         # 更新统计
         self.stats.attack_results[result.name] += 1
         self.stats.total_en_consumed += int(weapon_cost)
+
+        # 根据攻击者角色分别统计判定结果
+        if attacker.name == CHALLENGER_CONFIG['name']:
+            self.stats.challenger_attack_results[result.name] += 1
+            # 记录挑战者的伤害值（用于伤害分布统计）
+            self.stats.damage_distribution.append(damage)
+        elif attacker.name == BOSS_CONFIG['name']:
+            self.stats.boss_attack_results[result.name] += 1
 
         if attacker == self.attacker:
             self.stats.total_damage_dealt += damage
@@ -487,12 +504,40 @@ class BossChallenger:
 
         self.verbose = verbose
 
-        # 加载所有技能 ID
+        # 加载所有技能数据
         with open("data/skills.json", "r", encoding="utf-8") as f:
-            self.all_skill_ids = list(json.load(f).keys())
+            self.all_skills_data = json.load(f)
 
+        self.all_skill_ids = list(self.all_skills_data.keys())
         self.spirits = [s for s in self.all_skill_ids if s.startswith("spirit_")]
         self.traits = [t for t in self.all_skill_ids if t.startswith("trait_")]
+
+    def get_skill_name(self, skill_id: str) -> str:
+        """获取技能的中文名称"""
+        if skill_id in self.all_skills_data:
+            return self.all_skills_data[skill_id].get("name", skill_id)
+        return skill_id
+
+    def get_skill_info(self, skill_id: str) -> dict:
+        """获取技能的详细信息（包括描述、概率等）"""
+        if skill_id in self.all_skills_data:
+            effects_list = self.all_skills_data[skill_id]
+            if isinstance(effects_list, list) and len(effects_list) > 0:
+                effect = effects_list[0]
+                return {
+                    'name': effect.get("name", skill_id),
+                    'description': effect.get("description", ""),
+                    'operation': effect.get("operation", ""),
+                    'value': effect.get("value", ""),
+                    'hook': effect.get("hook", "")
+                }
+        return {
+            'name': skill_id,
+            'description': "",
+            'operation': "",
+            'value': "",
+            'hook': ""
+        }
 
     def create_boss(self) -> Mecha:
         """创建 Boss 木桩（使用 BOSS_CONFIG 配置）"""
@@ -532,8 +577,8 @@ class BossChallenger:
                 'stat_awakening': BOSS_CONFIG['pilot_awakening'],
                 'stat_defense': BOSS_CONFIG['pilot_defense'],
                 'stat_reaction': BOSS_CONFIG['pilot_reaction'],
-                'weapon_proficiency': 500,
-                'mecha_proficiency': 2000,
+                'weapon_proficiency': BOSS_CONFIG['weapon_proficiency'],
+                'mecha_proficiency': BOSS_CONFIG['mecha_proficiency'],
             }
         )
 
@@ -628,7 +673,7 @@ class BossChallenger:
         # 应用精神和特性
         for s_id in selected_spirits:
             EffectManager.add_effect(mecha, s_id, duration=100)
-        mecha.traits = selected_traits
+        mecha.skills = selected_traits
         TraitManager.apply_traits(mecha)
 
         return selected_spirits + selected_traits
@@ -658,11 +703,11 @@ class BossChallenger:
             print(f"\n--- 战斗开始: {attacker.name} vs {boss.name} ---")
             print(f"挑战者 HP: {attacker.current_hp:,} | Boss HP: {boss.current_hp:,}")
 
-        # 执行战斗并收集统计
+        # 执行战斗并收集统计（不抑制输出，让技能触发日志显示）
         sim = DummyBossSimulator(attacker, boss, battle_id=round_idx, verbose=self.verbose)
         stats = sim.run_battle_with_stats()
 
-        # 记录应用的技能
+        # 记录应用的技能（这些是战斗开始时应用的被动技能）
         for skill_id in skills_applied:
             stats.skills_triggered[skill_id] += 1
 
@@ -674,6 +719,9 @@ class BossChallenger:
             print(f"获胜方: {stats.winner} ({stats.end_reason})")
             print(f"挑战者剩余 HP: {attacker.current_hp:,} ({attacker.get_hp_percentage():.1f}%)")
             print(f"Boss 剩余 HP: {boss.current_hp:,} ({boss.get_hp_percentage():.1f}%)")
+        else:
+            # 非verbose模式下显示简短进度
+            print(f"  第 {round_idx} 轮完成: {stats.rounds} 回合, 获胜者: {stats.winner}")
 
         return stats
 
@@ -704,6 +752,58 @@ def print_statistics(all_stats: List[BattleStatistics]):
     print(f"失败次数: {losses} ({losses/total_battles*100:.1f}%)")
     print(f"平均回合数: {avg_rounds:.1f} (最短: {min_rounds}, 最长: {max_rounds})")
 
+    # 回合数分布统计
+    from collections import defaultdict as dd
+    round_ranges = dd(int)
+    for s in all_stats:
+        if s.rounds <= 20:
+            round_ranges["1-20回"] += 1
+        elif s.rounds <= 40:
+            round_ranges["21-40回"] += 1
+        elif s.rounds <= 60:
+            round_ranges["41-60回"] += 1
+        elif s.rounds <= 80:
+            round_ranges["61-80回"] += 1
+        else:
+            round_ranges["81+回"] += 1
+
+    print(f"\n回合数分布:")
+    for range_name, count in sorted(round_ranges.items()):
+        percentage = count / total_battles * 100
+        print(f"  {range_name}: {count} 场 ({percentage:.1f}%)")
+
+    # 生存统计（仅统计胜利的战斗）
+    if wins > 0:
+        win_stats = [s for s in all_stats if s.winner == CHALLENGER_CONFIG['name']]
+        # 从最后一回合的统计中获取HP
+        final_hp_list = []
+        for s in win_stats:
+            if s.round_stats:
+                final_hp_list.append(s.round_stats[-1].attacker_hp)
+
+        if final_hp_list:
+            avg_hp_remaining = sum(final_hp_list) / len(final_hp_list)
+            avg_hp_percentage = (avg_hp_remaining / CHALLENGER_CONFIG['hp']) * 100
+            print(f"\n胜利时生存情况:")
+            print(f"  平均剩余HP: {avg_hp_remaining:,.0f} ({avg_hp_percentage:.1f}%)")
+            print(f"  最惨胜HP: {min(final_hp_list):,.0f}")
+            print(f"  最好胜HP: {max(final_hp_list):,.0f}")
+
+    # 判定结果分布（分别统计）- 提前计算用于伤害效率分析
+    total_attacks = sum(sum(s.attack_results.values()) for s in all_stats)
+
+    # 挑战者判定结果
+    challenger_attacks = sum(sum(s.challenger_attack_results.values()) for s in all_stats)
+    challenger_results = Counter()
+    for s in all_stats:
+        challenger_results.update(s.challenger_attack_results)
+
+    # Boss判定结果
+    boss_attacks = sum(sum(s.boss_attack_results.values()) for s in all_stats)
+    boss_results = Counter()
+    for s in all_stats:
+        boss_results.update(s.boss_attack_results)
+
     # 伤害统计
     avg_damage_dealt = sum(s.total_damage_dealt for s in all_stats) / total_battles
     max_damage_dealt = max(s.total_damage_dealt for s in all_stats)
@@ -717,15 +817,89 @@ def print_statistics(all_stats: List[BattleStatistics]):
     print(f"场均最大单次伤害: {avg_max_single:,.0f}")
     print(f"场均最小单次伤害: {avg_min_single:,.0f}")
 
-    # 判定结果分布
-    total_attacks = sum(sum(s.attack_results.values()) for s in all_stats)
-    all_results = Counter()
+    # 挑战者伤害分布统计
+    all_damages = []
     for s in all_stats:
-        all_results.update(s.attack_results)
+        all_damages.extend(s.damage_distribution)
+
+    if all_damages:
+        all_damages.sort()
+        total_hits_count = len(all_damages)
+
+        print(f"\n【挑战者伤害分布】(总计 {total_hits_count} 次命中)")
+
+        # 分区间统计
+        max_damage = max(all_damages) if all_damages else 0
+        min_damage = min(all_damages) if all_damages else 0
+        avg_damage = sum(all_damages) / total_hits_count if total_hits_count > 0 else 0
+
+        print(f"  伤害范围: {min_damage:,.0f} - {max_damage:,.0f}")
+        print(f"  平均伤害: {avg_damage:,.1f}")
+
+        # 计算分位数
+        if total_hits_count >= 4:
+            p25 = all_damages[int(total_hits_count * 0.25)]
+            p50 = all_damages[int(total_hits_count * 0.50)]  # 中位数
+            p75 = all_damages[int(total_hits_count * 0.75)]
+            print(f"  分位数: P25={p25:,.0f}, P50={p50:,.0f}, P75={p75:,.0f}")
+
+        # 分区间统计
+        damage_ranges = {
+            "0-1000": 0,
+            "1000-2000": 0,
+            "2000-3000": 0,
+            "3000-4000": 0,
+            "4000-5000": 0,
+            "5000-6000": 0,
+            "6000-7000": 0,
+            "7000-8000": 0,
+            "8000+": 0
+        }
+
+        for dmg in all_damages:
+            if dmg < 1000:
+                damage_ranges["0-1000"] += 1
+            elif dmg < 2000:
+                damage_ranges["1000-2000"] += 1
+            elif dmg < 3000:
+                damage_ranges["2000-3000"] += 1
+            elif dmg < 4000:
+                damage_ranges["3000-4000"] += 1
+            elif dmg < 5000:
+                damage_ranges["4000-5000"] += 1
+            elif dmg < 6000:
+                damage_ranges["5000-6000"] += 1
+            elif dmg < 7000:
+                damage_ranges["6000-7000"] += 1
+            elif dmg < 8000:
+                damage_ranges["7000-8000"] += 1
+            else:
+                damage_ranges["8000+"] += 1
+
+        print(f"\n  伤害区间分布:")
+        for range_name, count in damage_ranges.items():
+            if count > 0:
+                percentage = count / total_hits_count * 100
+                bar_length = int(percentage / 2)  # 每2%一个字符
+                bar = "█" * bar_length
+                print(f"    {range_name:<10} {count:>4} 次 ({percentage:>5.1f}%) {bar}")
+
+    # 伤害效率分析
+    if challenger_attacks > 0:
+        avg_damage_per_attack = avg_damage_dealt / challenger_attacks
+        crit_count = challenger_results.get("CRIT", 0)
+        hit_count = challenger_results.get("HIT", 0)
+        total_hits = crit_count + hit_count
+
+        if total_hits > 0:
+            avg_damage_on_hit = avg_damage_dealt / total_hits
+            print(f"\n伤害效率分析:")
+            print(f"  平均每次攻击伤害: {avg_damage_per_attack:,.1f}")
+            print(f"  平均每次命中伤害: {avg_damage_on_hit:,.1f}")
+            print(f"  命中率: {total_hits/challenger_attacks*100:.2f}%")
+            print(f"  暴击率: {crit_count/challenger_attacks*100:.2f}%")
 
     print(f"\n【判定结果分布】(总计 {total_attacks} 次攻击)")
-    print(f"{'判定类型':<12} | {'次数':<8} | {'百分比':<8} | {'说明'}")
-    print(f"{'-'*70}")
 
     result_descriptions = {
         "MISS": "未命中",
@@ -736,11 +910,42 @@ def print_statistics(all_stats: List[BattleStatistics]):
         "HIT": "普通命中"
     }
 
+    # 挑战者判定结果
+    print(f"\n  【{CHALLENGER_CONFIG['name']}】判定结果 (总计 {challenger_attacks} 次攻击)")
+    print(f"  {'判定类型':<10} | {'次数':<8} | {'百分比':<8} | {'说明'}")
+    print(f"  {'-'*60}")
+
     for result_name in ["MISS", "DODGE", "PARRY", "BLOCK", "CRIT", "HIT"]:
-        count = all_results.get(result_name, 0)
-        percentage = count / total_attacks * 100 if total_attacks > 0 else 0
+        count = challenger_results.get(result_name, 0)
+        percentage = count / challenger_attacks * 100 if challenger_attacks > 0 else 0
         description = result_descriptions.get(result_name, "")
-        print(f"{result_name:<12} | {count:<8} | {percentage:>6.2f}% | {description}")
+        print(f"  {result_name:<10} | {count:<8} | {percentage:>6.2f}% | {description}")
+
+    # Boss判定结果
+    print(f"\n  【{BOSS_CONFIG['name']}】判定结果 (总计 {boss_attacks} 次攻击)")
+    print(f"  {'判定类型':<10} | {'次数':<8} | {'百分比':<8} | {'说明'}")
+    print(f"  {'-'*60}")
+
+    for result_name in ["MISS", "DODGE", "PARRY", "BLOCK", "CRIT", "HIT"]:
+        count = boss_results.get(result_name, 0)
+        percentage = count / boss_attacks * 100 if boss_attacks > 0 else 0
+        description = result_descriptions.get(result_name, "")
+        print(f"  {result_name:<10} | {count:<8} | {percentage:>6.2f}% | {description}")
+
+    # Boss防御效率分析
+    boss_dodges = boss_results.get("DODGE", 0)
+    boss_parries = boss_results.get("PARRY", 0)
+    boss_blocks = boss_results.get("BLOCK", 0)
+    boss_miss = boss_results.get("MISS", 0)
+
+    total_defenses = boss_dodges + boss_parries + boss_blocks + boss_miss
+    if boss_attacks > 0:
+        boss_defense_rate = total_defenses / boss_attacks * 100
+        print(f"\nBoss防御效率:")
+        print(f"  综合防御率: {boss_defense_rate:.2f}%")
+        print(f"  闪避贡献: {boss_dodges/boss_attacks*100:.2f}%")
+        print(f"  招架贡献: {boss_parries/boss_attacks*100:.2f}%")
+        print(f"  格挡贡献: {boss_blocks/boss_attacks*100:.2f}%")
 
     # EN消耗统计
     avg_en_consumed = sum(s.total_en_consumed for s in all_stats) / total_battles
@@ -750,16 +955,106 @@ def print_statistics(all_stats: List[BattleStatistics]):
     print(f"场均EN消耗: {avg_en_consumed:,.1f}")
     print(f"平均每回合EN消耗: {avg_en_per_round:.1f}")
 
+    # 输出节奏分析
+    if avg_rounds > 0:
+        avg_dpr = avg_damage_dealt / avg_rounds
+        print(f"\n输出节奏分析:")
+        print(f"  平均每回合输出(DPR): {avg_dpr:,.1f}")
+        print(f"  理论每回合输出上限: {CHALLENGER_CONFIG['weapon_power']:,.0f}")
+        if CHALLENGER_CONFIG['weapon_power'] > 0:
+            efficiency = (avg_dpr / CHALLENGER_CONFIG['weapon_power']) * 100
+            print(f"  输出效率: {efficiency:.1f}%")
+
+        # 估算TTK（Time To Kill，回合数）
+        if avg_dpr > 0:
+            ttk_boss = BOSS_CONFIG['hp'] / avg_dpr
+            ttk_challenger = CHALLENGER_CONFIG['hp'] / (avg_dpr * 0.5)  # 假设Boss输出减半
+            print(f"\n击杀回合数估算:")
+            print(f"  挑战者击杀Boss需: {ttk_boss:.1f} 回合")
+            print(f"  Boss击杀挑战者需: {ttk_challenger:.1f} 回合")
+
     # 技能触发统计（如果有）
     all_skills = Counter()
+    skill_battle_count = {}  # 记录每个技能在多少场中出现
+
     for s in all_stats:
-        all_skills.update(s.skills_triggered)
+        for skill_id in s.skills_triggered:
+            all_skills[skill_id] += s.skills_triggered[skill_id]
+            # 统计该技能出现的场次
+            if skill_id not in skill_battle_count:
+                skill_battle_count[skill_id] = 0
+            skill_battle_count[skill_id] += 1
 
     if all_skills:
-        print(f"\n【技能应用情况】(共 {len(all_skills)} 个不同技能)")
-        top_skills = all_skills.most_common(10)
-        for skill_id, count in top_skills:
-            print(f"  {skill_id}: {count} 次")
+        # 加载技能名称映射
+        try:
+            with open("data/skills.json", "r", encoding="utf-8") as f:
+                skills_data = json.load(f)
+
+            def get_skill_name(skill_id: str) -> str:
+                """获取技能的中文名称"""
+                if skill_id in skills_data:
+                    effects_list = skills_data[skill_id]
+                    if isinstance(effects_list, list) and len(effects_list) > 0:
+                        return effects_list[0].get("name", skill_id)
+                return skill_id
+
+            # 按技能类型分类统计
+            spirit_skills = []
+            trait_skills = []
+
+            for skill_id, total_count in all_skills.items():
+                battle_count = skill_battle_count.get(skill_id, 0)
+                trigger_rate = (battle_count / total_battles) * 100
+                avg_per_battle = total_count / battle_count if battle_count > 0 else 0
+
+                skill_name = get_skill_name(skill_id)
+                skill_info = {
+                    'id': skill_id,
+                    'name': skill_name,
+                    'total_count': total_count,
+                    'battle_count': battle_count,
+                    'trigger_rate': trigger_rate,
+                    'avg_per_battle': avg_per_battle
+                }
+
+                if skill_id.startswith("spirit_"):
+                    spirit_skills.append(skill_info)
+                elif skill_id.startswith("trait_"):
+                    trait_skills.append(skill_info)
+
+            # 按应用率和总次数排序
+            spirit_skills.sort(key=lambda x: (-x['trigger_rate'], -x['total_count']))
+            trait_skills.sort(key=lambda x: (-x['trigger_rate'], -x['total_count']))
+
+            print(f"\n【技能应用统计】(共 {len(all_skills)} 个不同技能，总场数: {total_battles})")
+
+            # 精神指令统计
+            if spirit_skills:
+                print(f"\n  【精神指令】(共 {len(spirit_skills)} 个)")
+                print(f"  {'技能名称':<12} | {'应用场次':<8} | {'应用率':<8} | {'总次数':<8} | {'场均次数'}")
+                print(f"  {'-'*70}")
+
+                for skill in spirit_skills[:10]:  # 显示前10个
+                    print(f"  {skill['name']:<12} | {skill['battle_count']:<8} | {skill['trigger_rate']:>6.1f}% | {skill['total_count']:<8} | {skill['avg_per_battle']:>.1f}")
+
+            # 机体特性统计
+            if trait_skills:
+                print(f"\n  【机体特性】(共 {len(trait_skills)} 个)")
+                print(f"  {'技能名称':<12} | {'应用场次':<8} | {'应用率':<8} | {'总次数':<8} | {'场均次数'}")
+                print(f"  {'-'*70}")
+
+                for skill in trait_skills[:10]:  # 显示前10个
+                    print(f"  {skill['name']:<12} | {skill['battle_count']:<8} | {skill['trigger_rate']:>6.1f}% | {skill['total_count']:<8} | {skill['avg_per_battle']:>.1f}")
+
+        except FileNotFoundError:
+            # 如果文件不存在，使用原始ID
+            print(f"\n【技能应用情况】(共 {len(all_skills)} 个不同技能)")
+            top_skills = all_skills.most_common(10)
+            for skill_id, count in top_skills:
+                battle_count = skill_battle_count.get(skill_id, 0)
+                trigger_rate = (battle_count / total_battles) * 100
+                print(f"  {skill_id}: {count} 次 (在 {battle_count} 场中出现，应用率 {trigger_rate:.1f}%)")
 
     print("\n" + "="*80)
 

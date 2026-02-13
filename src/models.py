@@ -218,115 +218,48 @@ class MechaSnapshot(BaseModel):
     effects: List[Any] = Field(default_factory=list, exclude=True) # 运行时 Effect 对象列表
     
     # ========================================================================
-    # 兼容性层 (Compatibility Layer for Legacy Tests/Code)
+    # 辅助属性 (Helper Properties)
     # ========================================================================
-    
+
     @property
     def id(self) -> str: return self.instance_id
-    
+
     @property
     def name(self) -> str: return self.mecha_name
+
+    @property
+    def max_hp(self) -> int: return self.final_max_hp
+
+    @property
+    def max_en(self) -> int: return self.final_max_en
+
+    # ========================================================================
+    # 辅助方法 (Helper Methods)
+    # ========================================================================
 
     def is_alive(self) -> bool:
         """检查机体是否存活"""
         return self.current_hp > 0
 
-    @property
-    def max_hp(self) -> int: return self.final_max_hp
-    @max_hp.setter
-    def max_hp(self, value: int): self.final_max_hp = value
-    
-    @property
-    def max_en(self) -> int: return self.final_max_en
-    @max_en.setter
-    def max_en(self, value: int): self.final_max_en = value
-    
-    @property
-    def hit_rate(self) -> float: return self.final_hit
-    @hit_rate.setter
-    def hit_rate(self, value: float): self.final_hit = value
-    
-    @property
-    def precision(self) -> float: return self.final_precision
-    @precision.setter
-    def precision(self, value: float): self.final_precision = value
-
-    @property
-    def crit_rate(self) -> float: return self.final_crit
-    @crit_rate.setter
-    def crit_rate(self, value: float): self.final_crit = value
-
-    @property
-    def dodge_rate(self) -> float: return self.final_dodge
-    @dodge_rate.setter
-    def dodge_rate(self, value: float): self.final_dodge = value
-
-    @property
-    def parry_rate(self) -> float: return self.final_parry
-    @parry_rate.setter
-    def parry_rate(self, value: float): self.final_parry = value
-
-    @property
-    def block_rate(self) -> float: return self.final_block
-    @block_rate.setter
-    def block_rate(self, value: float): self.final_block = value
-    
-    @property
-    def block_value(self) -> int: return self.block_reduction
-    @block_value.setter
-    def block_value(self, value: int): self.block_reduction = value
-
-    @property
-    def traits(self) -> List[str]: return self.skills
-    @traits.setter
-    def traits(self, value: List[str]): self.skills = value
-    
-    @property
-    def defense_level(self) -> int: return self.final_armor
-    @defense_level.setter
-    def defense_level(self, value: int): self.final_armor = value
-
-    @property
-    def mobility(self) -> int: return self.final_mobility
-
-    @property
-    def pilot(self):
-        """Mock pilot object for legacy access like mecha.pilot.stat_shooting"""
-        stats_backup = self.pilot_stats_backup
-        class MockPilot:
-            def __init__(self, stats):
-                self.stat_shooting = stats.get('stat_shooting', 0)
-                self.stat_melee = stats.get('stat_melee', 0)
-                self.stat_awakening = stats.get('stat_awakening', 0)
-                self.stat_defense = stats.get('stat_defense', 0)
-                self.stat_reaction = stats.get('stat_reaction', 0)
-                self.weapon_proficiency = stats.get('weapon_proficiency', 500)
-                self.mecha_proficiency = stats.get('mecha_proficiency', 2000)
-                self._stats = stats
-
-            def get_effective_stat(self, stat_name: str) -> int:
-                return self._stats.get(stat_name, 0)
-        return MockPilot(stats_backup)
-    
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.final_max_hp) * 100 if self.final_max_hp > 0 else 0
-    
+
     def can_attack(self, weapon: WeaponSnapshot) -> bool:
         return self.current_en >= weapon.en_cost
-    
+
     def consume_en(self, amount: int) -> None:
         self.current_en = max(0, self.current_en - amount)
-    
+
     def take_damage(self, damage: int) -> None:
         self.current_hp = max(0, self.current_hp - damage)
-    
+
     def modify_will(self, delta: int) -> None:
         from .config import Config
         self.current_will = max(Config.WILL_MIN, min(Config.WILL_MAX, self.current_will + delta))
-        
+
     def get_pilot_stat(self, stat_name: str) -> int:
         return self.pilot_stats_backup.get(stat_name, 0)
-    
+
     def get_effective_armor(self, will: int) -> int:
         """核心公式: (装甲 + 守备*1.5) * 气力%"""
         defense_val = self.pilot_stats_backup.get("stat_defense", 0)

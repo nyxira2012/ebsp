@@ -1,5 +1,7 @@
-"""
-工厂模块 - 从配置创建运行时快照
+"""Factory module for creating runtime snapshots from configurations.
+
+This module provides a unified factory interface for creating game objects
+from their configuration definitions.
 """
 
 from typing import List, Dict, Any
@@ -10,96 +12,73 @@ from .models import (
 
 
 class MechaFactory:
-    """机体工厂 - 从配置创建运行时快照"""
+    """Unified factory for creating mecha and weapon snapshots from configs.
+
+    This factory combines the functionality of MechaFactory and SnapshotFactory,
+    supporting both basic config loading and advanced features like upgrades
+    and equipment modifications.
+    """
 
     @staticmethod
-    def create_from_config(config: MechaConfig, pilot_config: PilotConfig | None = None) -> MechaSnapshot:
-        """从 MechaConfig 创建 MechaSnapshot
+    def _backup_pilot_stats(pilot_config: PilotConfig | None) -> Dict[str, int]:
+        """Backup pilot stats for runtime use.
 
         Args:
-            config: 机体配置
-            pilot_config: 驾驶员配置（可选）
+            pilot_config: Pilot configuration object, can be None.
 
         Returns:
-            MechaSnapshot: 机体运行时快照
+            Dictionary containing all pilot stat values. Returns empty dict
+            if pilot_config is None.
         """
-        # 备份驾驶员属性
-        pilot_stats_backup = {}
-        if pilot_config:
-            pilot_stats_backup = {
-                'stat_shooting': pilot_config.stat_shooting,
-                'stat_melee': pilot_config.stat_melee,
-                'stat_awakening': pilot_config.stat_awakening,
-                'stat_defense': pilot_config.stat_defense,
-                'stat_reaction': pilot_config.stat_reaction,
-                'weapon_proficiency': pilot_config.weapon_proficiency,
-                'mecha_proficiency': pilot_config.mecha_proficiency,
-            }
+        if not pilot_config:
+            return {}
 
-        # 创建 MechaSnapshot
-        snapshot = MechaSnapshot(
-            instance_id=config.id,
-            mecha_name=config.name,
-            main_portrait=config.portrait_id,
-            model_asset=config.model_asset,
-
-            # 资源属性
-            final_max_hp=config.init_hp,
-            current_hp=config.init_hp,
-            final_max_en=config.init_en,
-            current_en=config.init_en,
-
-            # 战斗属性
-            final_armor=config.init_armor,
-            final_mobility=config.init_mobility,
-
-            # 判定属性
-            final_hit=config.init_hit,
-            final_precision=config.init_precision,
-            final_crit=config.init_crit,
-
-            final_dodge=config.init_dodge,
-            final_parry=config.init_parry,
-            final_block=config.init_block,
-            block_reduction=config.init_block_red,
-
-            # 驾驶员属性备份
-            pilot_stats_backup=pilot_stats_backup,
-
-            # 初始武器列表（需要额外加载装备配置）
-            weapons=[],
-            skills=[],
-        )
-
-        return snapshot
+        return {
+            'stat_shooting': pilot_config.stat_shooting,
+            'stat_melee': pilot_config.stat_melee,
+            'stat_awakening': pilot_config.stat_awakening,
+            'stat_defense': pilot_config.stat_defense,
+            'stat_reaction': pilot_config.stat_reaction,
+            'weapon_proficiency': pilot_config.weapon_proficiency,
+            'mecha_proficiency': pilot_config.mecha_proficiency,
+        }
 
     @staticmethod
-    def create_weapon_from_config(config: EquipmentConfig) -> WeaponSnapshot:
-        """从 EquipmentConfig 创建 WeaponSnapshot
+    def _apply_equipment_modifiers(
+        equipments: List[EquipmentConfig] | None,
+        base_mobility: float,
+        base_hit: float
+    ) -> tuple[float, float, List[WeaponSnapshot]]:
+        """Apply equipment stat modifiers and collect weapons.
 
         Args:
-            config: 装备配置
+            equipments: List of equipment configurations.
+            base_mobility: Base mobility value.
+            base_hit: Base hit rate value.
 
         Returns:
-            WeaponSnapshot: 武器快照
+            Tuple of (modified mobility, modified hit rate, weapon list).
         """
-        return WeaponSnapshot(
-            uid=f"{config.id}_uid",
-            definition_id=config.id,
-            name=config.name,
-            type=config.weapon_type or WeaponType.SHOOTING,
-            final_power=config.weapon_power or 1000,
-            en_cost=config.weapon_en_cost or 10,
-            range_min=config.weapon_range_min or 0,
-            range_max=config.weapon_range_max or 6000,
-            will_req=config.weapon_will_req or 0,
-            anim_id=config.weapon_anim_id or "default_anim",
-            tags=config.weapon_tags or [],
-        )
+        weapons = []
+        final_mobility = base_mobility
+        final_hit = base_hit
 
+        if not equipments:
+            return final_mobility, final_hit, weapons
 
-class SnapshotFactory:
-    """快照工厂 - 用于测试"""
+        for equip in equipments:
+            # Collect weapons
+            if equip.type == "WEAPON":
+                weapons.append(MechaFactory.create_weapon_snapshot(equip))
+
+            # Apply stat modifiers
+            for stat_name, value in equip.stat_modifiers.items():
+                if stat_name == "mobility":
+                    final_mobility += int(value)
+                elif stat_name == "hit_rate":
+                    final_hit += value
+
+        return final_mobility, final_hit, weapons
 
     @staticmethod
     def create_mecha_snapshot(
@@ -108,54 +87,37 @@ class SnapshotFactory:
         equipments: List[EquipmentConfig] | None = None,
         upgrade_level: int = 0
     ) -> MechaSnapshot:
-        """创建 MechaSnapshot
+        """Create a MechaSnapshot from configuration with optional enhancements.
 
         Args:
-            mecha_conf: 机体配置
-            pilot_conf: 驾驶员配置
-            equipments: 装备列表
-            upgrade_level: 改造等级
+            mecha_conf: Mecha configuration object.
+            pilot_conf: Optional pilot configuration for stat backup.
+            equipments: Optional list of equipment to apply modifiers.
+            upgrade_level: Upgrade level for stat bonuses (default: 0).
 
         Returns:
-            MechaSnapshot: 机体快照
+            Fully configured MechaSnapshot ready for combat.
         """
-        # 备份驾驶员属性
-        pilot_stats_backup = {}
-        if pilot_conf:
-            pilot_stats_backup = {
-                'stat_shooting': pilot_conf.stat_shooting,
-                'stat_melee': pilot_conf.stat_melee,
-                'stat_awakening': pilot_conf.stat_awakening,
-                'stat_defense': pilot_conf.stat_defense,
-                'stat_reaction': pilot_conf.stat_reaction,
-                'weapon_proficiency': pilot_conf.weapon_proficiency,
-                'mecha_proficiency': pilot_conf.mecha_proficiency,
-            }
+        # Backup pilot stats
+        pilot_stats_backup = MechaFactory._backup_pilot_stats(pilot_conf)
 
-        # 应用改造加成
+        # Apply upgrade bonuses
         hp_bonus = upgrade_level * 200
         armor_bonus = upgrade_level * 20
 
-        # 初始化属性
+        # Calculate base stats
         final_hp = mecha_conf.init_hp + hp_bonus
         final_armor = mecha_conf.init_armor + armor_bonus
         final_mobility = mecha_conf.init_mobility
         final_hit = mecha_conf.init_hit
 
-        # 应用装备属性修正
-        weapons = []
-        if equipments:
-            for equip in equipments:
-                if equip.type == "WEAPON":
-                    weapons.append(SnapshotFactory.create_weapon_snapshot(equip))
-                # 应用装备属性修正
-                for stat_name, value in equip.stat_modifiers.items():
-                    if stat_name == "mobility":
-                        final_mobility += int(value)
-                    elif stat_name == "hit_rate":
-                        final_hit += value
+        # Apply equipment modifiers
+        final_mobility, final_hit, weapons = MechaFactory._apply_equipment_modifiers(
+            equipments, final_mobility, final_hit
+        )
 
-        snapshot = MechaSnapshot(
+        # Construct snapshot
+        return MechaSnapshot(
             instance_id=mecha_conf.id,
             mecha_name=mecha_conf.name,
             main_portrait=mecha_conf.portrait_id,
@@ -178,11 +140,16 @@ class SnapshotFactory:
             skills=[],
         )
 
-        return snapshot
-
     @staticmethod
     def create_weapon_snapshot(config: EquipmentConfig) -> WeaponSnapshot:
-        """从 EquipmentConfig 创建 WeaponSnapshot"""
+        """Create a WeaponSnapshot from equipment configuration.
+
+        Args:
+            config: Equipment configuration object.
+
+        Returns:
+            WeaponSnapshot with default values for missing attributes.
+        """
         return WeaponSnapshot(
             uid=f"{config.id}_uid",
             definition_id=config.id,

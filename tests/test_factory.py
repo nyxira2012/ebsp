@@ -1,15 +1,15 @@
 
 """
-测试 SnapshotFactory
+测试 MechaFactory
 验证 Config -> Snapshot 的转换逻辑
 """
 import pytest
 from src.models import (
     MechaConfig, PilotConfig, EquipmentConfig, WeaponType, MechaSnapshot
 )
-from src.factory import SnapshotFactory
+from src.factory import MechaFactory
 
-class TestSnapshotFactory:
+class TestMechaFactory:
     
     @pytest.fixture
     def mecha_conf(self):
@@ -48,7 +48,7 @@ class TestSnapshotFactory:
 
     def test_basic_creation(self, mecha_conf, pilot_conf):
         """测试基础快照生成"""
-        snapshot = SnapshotFactory.create_mecha_snapshot(
+        snapshot = MechaFactory.create_mecha_snapshot(
             mecha_conf, pilot_conf
         )
         
@@ -60,7 +60,7 @@ class TestSnapshotFactory:
 
     def test_with_weapon_and_parts(self, mecha_conf, pilot_conf, weapon_conf, equip_parts):
         """测试带武器和装备的快照生成"""
-        snapshot = SnapshotFactory.create_mecha_snapshot(
+        snapshot = MechaFactory.create_mecha_snapshot(
             mecha_conf, pilot_conf, equipments=[weapon_conf, equip_parts]
         )
         
@@ -68,7 +68,7 @@ class TestSnapshotFactory:
         # Base Mobility 90 + Booster 10 = 100
         assert snapshot.final_mobility == 100
         # Base Hit 10 + Booster 5 = 15
-        assert snapshot.hit_rate == 15.0 # Check compatibility prop
+        assert snapshot.final_hit == 15.0 # Check direct field access
         assert snapshot.final_hit == 15.0
         
         # 验证武器列表
@@ -81,7 +81,7 @@ class TestSnapshotFactory:
     def test_upgrade_bonuses(self, mecha_conf, pilot_conf):
         """测试改造加成"""
         # Level 5 upgrade
-        snapshot = SnapshotFactory.create_mecha_snapshot(
+        snapshot = MechaFactory.create_mecha_snapshot(
             mecha_conf, pilot_conf, upgrade_level=5
         )
         

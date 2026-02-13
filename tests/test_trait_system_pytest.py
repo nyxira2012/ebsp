@@ -14,7 +14,7 @@ class TestTraitSystem:
     def test_newtype_trait_hit_rate(self, basic_mecha, basic_context):
         """验证 Newtype 特性的命中加成"""
         # 应用特性
-        basic_mecha.traits = ["trait_nt"]
+        basic_mecha.skills = ["trait_nt"]
         TraitManager.apply_traits(basic_mecha)
 
         # 验证效果数量
@@ -28,7 +28,7 @@ class TestTraitSystem:
 
     def test_newtype_trait_dodge_rate(self, basic_mecha, basic_context):
         """验证 Newtype 特性的回避加成"""
-        basic_mecha.traits = ["trait_nt"]
+        basic_mecha.skills = ["trait_nt"]
         TraitManager.apply_traits(basic_mecha)
 
         final_eva = SkillRegistry.process_hook(
@@ -38,7 +38,7 @@ class TestTraitSystem:
 
     def test_expert_trait_damage_bonus(self, basic_mecha, basic_context):
         """验证精英驾驶员特性的伤害加成"""
-        basic_mecha.traits = ["trait_expert"]
+        basic_mecha.skills = ["trait_expert"]
         TraitManager.apply_traits(basic_mecha)
 
         val = SkillRegistry.process_hook(
@@ -48,7 +48,7 @@ class TestTraitSystem:
 
     def test_expert_trait_en_saving(self, basic_mecha, basic_context):
         """验证精英驾驶员特性的EN节省"""
-        basic_mecha.traits = ["trait_expert"]
+        basic_mecha.skills = ["trait_expert"]
         TraitManager.apply_traits(basic_mecha)
 
         en_cost = SkillRegistry.process_hook(

@@ -36,7 +36,7 @@ class TestProficiencyImpact:
             mecha_a=balanced_mecha, mecha_b=balanced_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 验证段结构存在
         assert 'MISS' in segments or 'HIT' in segments
@@ -48,7 +48,7 @@ class TestProficiencyImpact:
             mecha_a=high_hit_mecha, mecha_b=high_hit_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 高命中率下，MISS应该很低或不存在
         if 'MISS' in segments:
@@ -61,7 +61,7 @@ class TestProficiencyImpact:
             mecha_a=balanced_mecha, mecha_b=high_dodge_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 应该有DODGE段
         assert 'DODGE' in segments
@@ -82,7 +82,7 @@ class TestPrecisionImpact:
             mecha_a=offensive_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 高精度应该显著降低防御率
         dodge_rate = segments.get('DODGE', {}).get('rate', 0)
@@ -110,7 +110,7 @@ class TestPrecisionImpact:
             mecha_a=attacker, mecha_b=defensive_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 低精度时防御率削减较小
         dodge_rate = segments.get('DODGE', {}).get('rate', 0)
@@ -139,7 +139,7 @@ class TestDefenseCaps:
             mecha_a=balanced_mecha, mecha_b=defender, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # PARRY不应该超过50%
         parry_rate = segments.get('PARRY', {}).get('rate', 0)
@@ -158,7 +158,7 @@ class TestDefenseCaps:
             mecha_a=balanced_mecha, mecha_b=defender, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # BLOCK不应该超过80%
         block_rate = segments.get('BLOCK', {}).get('rate', 0)
@@ -179,7 +179,7 @@ class TestCritSqueezing:
             mecha_a=crit_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # CRIT应该被挤压，实际值可能小于理论值
         crit_rate = segments.get('CRIT', {}).get('rate', 0)
@@ -200,7 +200,7 @@ class TestCritSqueezing:
             mecha_a=balanced_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 验证CRIT可能被挤压
         total_non_crit = segments.get('MISS', {}).get('rate', 0) + \
@@ -223,7 +223,7 @@ class TestHitAsFallback:
 
     def test_hit_fills_remaining_space(self, standard_context):
         """测试HIT填充剩余空间"""
-        segments = AttackTableResolver._calculate_segments(standard_context)
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
 
         # HIT应该填充到100
         assert 'HIT' in segments
@@ -231,7 +231,7 @@ class TestHitAsFallback:
 
     def test_hit_rate_calculated_correctly(self, standard_context):
         """测试HIT率计算正确"""
-        segments = AttackTableResolver._calculate_segments(standard_context)
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
 
         hit_rate = segments['HIT']['rate']
         hit_start = segments['HIT']['start']
@@ -253,7 +253,7 @@ class TestHitAsFallback:
             mecha_a=attacker, mecha_b=balanced_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 如果MISS已经100了，HIT应该为0
         if segments.get('MISS', {}).get('rate', 0) >= 100:
@@ -270,7 +270,7 @@ class TestSegmentBoundaries:
 
     def test_segments_are_continuous(self, standard_context):
         """测试段是连续的（无缝隙）"""
-        segments = AttackTableResolver._calculate_segments(standard_context)
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
 
         # 按start排序
         ordered_segments = sorted(
@@ -286,7 +286,7 @@ class TestSegmentBoundaries:
 
     def test_segment_ranges_not_negative(self, standard_context):
         """测试段的范围不为负"""
-        segments = AttackTableResolver._calculate_segments(standard_context)
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
 
         for name, segment in segments.items():
             if name == 'total':
@@ -297,7 +297,7 @@ class TestSegmentBoundaries:
 
     def test_total_does_not_exceed_100(self, standard_context):
         """测试总段不超过100"""
-        segments = AttackTableResolver._calculate_segments(standard_context)
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
 
         total = segments.get('total', 0)
         # 由于各种修正，total可能略超过100
@@ -337,7 +337,7 @@ class TestExtremeScenarios:
             mecha_a=attacker, mecha_b=defender, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # 应该有MISS段（低熟练度）
         # 应该有HIT段作为兜底
@@ -350,7 +350,7 @@ class TestExtremeScenarios:
             mecha_a=high_hit_mecha, mecha_b=balanced_mecha, weapon=None
         )
 
-        segments = AttackTableResolver._calculate_segments(ctx)
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
 
         # MISS应该为0或很小
         miss_rate = segments.get('MISS', {}).get('rate', 0)

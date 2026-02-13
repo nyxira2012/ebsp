@@ -118,8 +118,8 @@ class InitiativeCalculator:
         """
         # 基底
         base_score: float = (
-            mecha.mobility * Config.INITIATIVE_MOBILITY_WEIGHT +
-            mecha.pilot.stat_reaction * Config.INITIATIVE_REACTION_WEIGHT
+            mecha.final_mobility * Config.INITIATIVE_MOBILITY_WEIGHT +
+            mecha.pilot_stats_backup.get('stat_reaction', 0) * Config.INITIATIVE_REACTION_WEIGHT
         )
 
         # 气力修正
@@ -157,8 +157,8 @@ class InitiativeCalculator:
             InitiativeReason: 先手原因枚举值
         """
         # 简化逻辑
-        mobility_diff: int = abs(winner.mobility - loser.mobility)
-        reaction_diff: int = abs(winner.pilot.stat_reaction - loser.pilot.stat_reaction)
+        mobility_diff: int = abs(winner.final_mobility - loser.final_mobility)
+        reaction_diff: int = abs(winner.pilot_stats_backup.get('stat_reaction', 0) - loser.pilot_stats_backup.get('stat_reaction', 0))
         will_diff: int = abs(winner.current_will - loser.current_will)
 
         if mobility_diff > 20:
@@ -393,11 +393,11 @@ class BattleSimulator:
         EffectManager.tick_effects(self.mecha_b)
 
         print()
-        print(f"📊 {self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.max_hp} | "
-              f"EN={self.mecha_a.current_en}/{self.mecha_a.max_en} | "
+        print(f"📊 {self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
+              f"EN={self.mecha_a.current_en}/{self.mecha_a.final_max_en} | "
               f"气力={self.mecha_a.current_will}")
-        print(f"📊 {self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.max_hp} | "
-              f"EN={self.mecha_b.current_en}/{self.mecha_b.max_en} | "
+        print(f"📊 {self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
+              f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
               f"气力={self.mecha_b.current_will}")
     
     def _generate_distance(self) -> int:

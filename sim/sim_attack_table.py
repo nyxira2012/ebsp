@@ -115,7 +115,7 @@ def create_test_mechas(
             'mecha_proficiency': 2000
         }
     )
-    m_a.block_value = 0
+    m_a.block_reduction = 0
     m_a.weapons = []
 
     # 防御方驾驶员属性
@@ -146,7 +146,7 @@ def create_test_mechas(
             'mecha_proficiency': defender_mecha_prof
         }
     )
-    m_b.block_value = 100
+    m_b.block_reduction = 100
     m_b.weapons = []
 
     return m_a, m_b
@@ -190,7 +190,7 @@ def run_simulation(
     results = []
     for _ in range(iterations):
         ctx = BattleContext(
-            attacker=m_a, defender=m_b, weapon=weapon,
+            mecha_a=m_a, mecha_b=m_b, weapon=weapon,
             round_number=1, distance=1000
         )
         res, _ = AttackTableResolver.resolve_attack(ctx)
@@ -220,8 +220,8 @@ def print_statistics(stats: Counter, iterations: int, segments: dict | None = No
     print(f"{'─'*70}")
 
 def analyze_attack_table(
-    attacker: Mecha,
-    defender: Mecha,
+    mecha_a: Mecha,
+    mecha_b: Mecha,
     weapon: Weapon
 ):
     """分析圆桌判定表的理论分布
@@ -230,8 +230,8 @@ def analyze_attack_table(
     这样确保模拟器与实际游戏逻辑完全一致。
 
     Args:
-        attacker: 攻击方机体
-        defender: 防御方机体
+        mecha_a: 攻击方机体
+        mecha_b: 防御方机体
         weapon: 攻击使用的武器
     """
 
@@ -239,8 +239,8 @@ def analyze_attack_table(
 
     # 创建战场上下文
     ctx = BattleContext(
-        attacker=attacker,
-        defender=defender,
+        mecha_a=mecha_a,
+        mecha_b=mecha_b,
         weapon=weapon,
         round_number=1,
         distance=1000
@@ -255,9 +255,9 @@ def analyze_attack_table(
     from src.config import Config
 
     # === MISS段详情 ===
-    weapon_proficiency = attacker.pilot.weapon_proficiency
+    weapon_proficiency = mecha_a.pilot_stats_backup.get('weapon_proficiency', 500)
     base_miss = CombatCalculator.calculate_proficiency_miss_penalty(weapon_proficiency)
-    hit_bonus = attacker.hit_rate
+    hit_bonus = mecha_a.final_hit
 
     print(f"\n--- MISS段 ---")
     print(f"  基础MISS惩罚: {base_miss:.1f}% (武器熟练度 {weapon_proficiency})")
@@ -268,15 +268,15 @@ def analyze_attack_table(
         print(f"  最终MISS率: 0.0% (被命中加成完全抵消)")
 
     # === 防御段详情 ===
-    mecha_proficiency = defender.pilot.mecha_proficiency
-    precision = attacker.precision
+    mecha_proficiency = mecha_b.pilot_stats_backup.get('mecha_proficiency', 2000)
+    precision = mecha_a.final_precision
     precision_reduction = CombatCalculator.calculate_precision_reduction(precision)
 
     if 'DODGE' in segments:
         dodge_base = CombatCalculator.calculate_proficiency_defense_ratio(
             mecha_proficiency, Config.BASE_DODGE_RATE
         )
-        dodge_bonus = defender.dodge_rate
+        dodge_bonus = mecha_b.final_dodge
         print(f"\n--- DODGE段 ---")
         print(f"  基础躲闪: {Config.BASE_DODGE_RATE:.1f}% (机体熟练度 {mecha_proficiency}) -> {dodge_base:.1f}%")
         print(f"  躲闪加成: +{dodge_bonus:.1f}%")
@@ -287,7 +287,7 @@ def analyze_attack_table(
         parry_base = CombatCalculator.calculate_proficiency_defense_ratio(
             mecha_proficiency, Config.BASE_PARRY_RATE
         )
-        parry_bonus = defender.parry_rate
+        parry_bonus = mecha_b.final_parry
         print(f"\n--- PARRY段 ---")
         print(f"  基础招架: {Config.BASE_PARRY_RATE:.1f}% (机体熟练度 {mecha_proficiency}) -> {parry_base:.1f}%")
         print(f"  招架加成: +{parry_bonus:.1f}%")
@@ -295,7 +295,7 @@ def analyze_attack_table(
         print(f"  最终招架率: {segments['PARRY']['rate']:.1f}% (上限50%)")
 
     if 'BLOCK' in segments:
-        block_bonus = defender.block_rate
+        block_bonus = mecha_b.final_block
         print(f"\n--- BLOCK段 ---")
         print(f"  基础格挡: {Config.BASE_BLOCK_RATE:.1f}%")
         print(f"  格挡加成: +{block_bonus:.1f}%")
@@ -303,7 +303,7 @@ def analyze_attack_table(
         print(f"  最终格挡率: {segments['BLOCK']['rate']:.1f}% (上限80%)")
 
     if 'CRIT' in segments:
-        crit_bonus = attacker.crit_rate
+        crit_bonus = mecha_a.final_crit
         print(f"\n--- CRIT段 ---")
         print(f"  基础暴击: {Config.BASE_CRIT_RATE:.1f}%")
         print(f"  暴击加成: +{crit_bonus:.1f}%")
@@ -346,7 +346,7 @@ def run_all_scenarios(iterations: int = 2000):
 
         # 获取理论值
         ctx = BattleContext(
-            attacker=m_a, defender=m_b, weapon=weapon,
+            mecha_a=m_a, mecha_b=m_b, weapon=weapon,
             round_number=1, distance=1000
         )
         segments = AttackTableResolver.calculate_attack_table_segments(ctx)
@@ -374,7 +374,7 @@ def run_single_scenario(scenario_id: int, iterations: int = 2000):
 
     # 获取理论值
     ctx = BattleContext(
-        attacker=m_a, defender=m_b, weapon=weapon,
+        mecha_a=m_a, mecha_b=m_b, weapon=weapon,
         round_number=1, distance=1000
     )
     segments = AttackTableResolver.calculate_attack_table_segments(ctx)

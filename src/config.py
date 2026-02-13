@@ -14,7 +14,7 @@ class Config:
     WILL_EXTENDED_MAX = 200     # 特殊技能可解锁的上限
     
     # ========== 回合限制 ==========
-    MAX_ROUNDS = 4              # 最大回合数
+    MAX_ROUNDS = 100            # 最大回合数
     
     # ========== 距离配置 ==========
     DISTANCE_INITIAL_MIN = 3000     # 初始最小距离 (米)
@@ -32,7 +32,7 @@ class Config:
     
     # ========== 护甲系数 ==========
     # 减伤公式: 减伤% = 护甲 / (护甲 + K)
-    ARMOR_K = 100
+    ARMOR_K = 4000
     
     # ========== 伤害倍率 ==========
     CRIT_MULTIPLIER = 1.5       # 暴击伤害倍率

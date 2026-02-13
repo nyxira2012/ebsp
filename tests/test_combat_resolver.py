@@ -22,7 +22,7 @@ class TestAttackTableResolution:
         mock_uniform.return_value = 0.5  # 假设miss_rate足够大
 
         # 设置高未命中率
-        basic_context.attacker.pilot.weapon_proficiency = 0  # 最低熟练度
+        basic_context.attacker.pilot_stats_backup['weapon_proficiency'] = 0  # 最低熟练度
 
         result, damage = AttackTableResolver.resolve_attack(basic_context)
         assert result == AttackResult.MISS
@@ -64,7 +64,7 @@ class TestPriorityOrder:
         mock_uniform.return_value = 0.0
 
         # 设置高未命中率
-        basic_context.attacker.pilot.weapon_proficiency = 100
+        basic_context.attacker.pilot_stats_backup['weapon_proficiency'] = 100
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
         # 最低熟练度会miss
@@ -73,13 +73,13 @@ class TestPriorityOrder:
     def test_hit_is_fallback(self, basic_context):
         """测试Hit是兜底结果"""
         # 设置所有防御概率为0，降低暴击率
-        basic_context.defender.dodge_rate = 0
-        basic_context.defender.parry_rate = 0
-        basic_context.defender.block_rate = 0
-        basic_context.attacker.crit_rate = 0
+        basic_context.defender.final_dodge = 0
+        basic_context.defender.final_parry = 0
+        basic_context.defender.final_block = 0
+        basic_context.attacker.final_crit = 0
 
         # 设置高命中加成
-        basic_context.attacker.pilot.weapon_proficiency = 1000
+        basic_context.attacker.pilot_stats_backup['weapon_proficiency'] = 1000
 
         # 应该大部分时候是Hit或MISS，但由于命中率很高，主要是Hit
         with patch('random.uniform', return_value=50.0):
@@ -129,7 +129,7 @@ class TestCriticalHit:
         mock_uniform.return_value = 95.0  # 假设暴击率足够高
 
         # 设置高暴击率
-        basic_context.attacker.crit_rate = 50
+        basic_context.attacker.final_crit = 50
 
         result, damage = AttackTableResolver.resolve_attack(basic_context)
 
@@ -144,7 +144,7 @@ class TestCriticalHit:
         mock_uniform.return_value = 95.0
 
         initial_will = basic_context.attacker.current_will
-        basic_context.attacker.crit_rate = 50
+        basic_context.attacker.final_crit = 50
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -178,8 +178,8 @@ class TestDamageCalculation:
         """测试格挡减伤"""
         # 设置高格挡率，强制格挡
         mock_uniform.return_value = 30.0
-        basic_context.defender.block_rate = 50
-        basic_context.defender.block_value = 500
+        basic_context.defender.final_block = 50
+        basic_context.defender.block_reduction = 500
 
         result, damage = AttackTableResolver.resolve_attack(basic_context)
 
@@ -200,7 +200,7 @@ class TestWillChanges:
     def test_miss_will_change(self, mock_uniform, basic_context):
         """测试Miss的气力变化"""
         mock_uniform.return_value = 0.0
-        basic_context.attacker.pilot.weapon_proficiency = 0  # 确保miss
+        basic_context.attacker.pilot_stats_backup['weapon_proficiency'] = 0  # 确保miss
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -225,7 +225,7 @@ class TestWillChanges:
         """测试招架的气力变化"""
         # 设置高招架率
         mock_uniform.return_value = 5.0
-        basic_context.defender.parry_rate = 30
+        basic_context.defender.final_parry = 30
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -237,10 +237,10 @@ class TestWillChanges:
     def test_hit_will_change(self, mock_uniform, basic_context):
         """测试命中的气力变化"""
         mock_uniform.return_value = 95.0
-        basic_context.defender.dodge_rate = 0
-        basic_context.defender.parry_rate = 0
-        basic_context.defender.block_rate = 0
-        basic_context.attacker.crit_rate = 0
+        basic_context.defender.final_dodge = 0
+        basic_context.defender.final_parry = 0
+        basic_context.defender.final_block = 0
+        basic_context.attacker.final_crit = 0
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -263,11 +263,11 @@ class TestArmorMitigation:
         mock_uniform.return_value = 95.0
 
         # 设置高防御
-        basic_context.defender.defense_level = 2000
-        basic_context.defender.dodge_rate = 0
-        basic_context.defender.parry_rate = 0
-        basic_context.defender.block_rate = 0
-        basic_context.attacker.crit_rate = 0
+        basic_context.defender.final_armor = 2000
+        basic_context.defender.final_dodge = 0
+        basic_context.defender.final_parry = 0
+        basic_context.defender.final_block = 0
+        basic_context.attacker.final_crit = 0
 
         result, damage = AttackTableResolver.resolve_attack(basic_context)
 
@@ -281,11 +281,11 @@ class TestArmorMitigation:
         mock_uniform.return_value = 95.0
 
         # 设置极高防御
-        basic_context.defender.defense_level = 10000
-        basic_context.defender.dodge_rate = 0
-        basic_context.defender.parry_rate = 0
-        basic_context.defender.block_rate = 0
-        basic_context.attacker.crit_rate = 0
+        basic_context.defender.final_armor = 10000
+        basic_context.defender.final_dodge = 0
+        basic_context.defender.final_parry = 0
+        basic_context.defender.final_block = 0
+        basic_context.attacker.final_crit = 0
 
         result, damage = AttackTableResolver.resolve_attack(basic_context)
 
@@ -316,11 +316,11 @@ class TestEdgeCases:
         mock_uniform.return_value = 100.0
 
         # 设置低防御，低暴击，确保能到Hit
-        basic_context.defender.dodge_rate = 0
-        basic_context.defender.parry_rate = 0
-        basic_context.defender.block_rate = 0
-        basic_context.attacker.crit_rate = 0
-        basic_context.attacker.pilot.weapon_proficiency = 1000
+        basic_context.defender.final_dodge = 0
+        basic_context.defender.final_parry = 0
+        basic_context.defender.final_block = 0
+        basic_context.attacker.final_crit = 0
+        basic_context.attacker.pilot_stats_backup['weapon_proficiency'] = 1000
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
         # roll=100 应该落在最后一个区间（Hit）
@@ -390,9 +390,9 @@ class TestPrecisionReduction:
         mock_uniform.return_value = 5.0
 
         # 设置高精准
-        basic_context.attacker.precision = 50
+        basic_context.attacker.final_precision = 50
         # 设置高躲闪
-        basic_context.defender.dodge_rate = 50
+        basic_context.defender.final_dodge = 50
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -406,7 +406,7 @@ class TestPrecisionReduction:
         mock_uniform.return_value = 5.0
 
         # 设置极高躲闪基础值（通过机体熟练度）
-        basic_context.defender.pilot.mecha_proficiency = 4000  # 最高
+        basic_context.defender.pilot_stats_backup['mecha_proficiency'] = 4000  # 最高
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -419,7 +419,7 @@ class TestPrecisionReduction:
         mock_uniform.return_value = 10.0
 
         # 设置极高格挡率
-        basic_context.defender.block_rate = 100
+        basic_context.defender.final_block = 100
 
         result, _ = AttackTableResolver.resolve_attack(basic_context)
 
@@ -443,10 +443,10 @@ class TestParametrizedScenarios:
     ])
     def test_different_scenarios(self, dodge_rate, parry_rate, block_rate, crit_rate, expected_results, basic_context):
         """测试不同配置下的结果分布"""
-        basic_context.defender.dodge_rate = dodge_rate
-        basic_context.defender.parry_rate = parry_rate
-        basic_context.defender.block_rate = block_rate
-        basic_context.attacker.crit_rate = crit_rate
+        basic_context.defender.final_dodge = dodge_rate
+        basic_context.defender.final_parry = parry_rate
+        basic_context.defender.final_block = block_rate
+        basic_context.attacker.final_crit = crit_rate
 
         results = []
         for _ in range(50):

@@ -32,8 +32,8 @@ def main() -> int:
         # 4. 获取参战机体 - 从 Config 创建 Snapshot
         config_a = loader.get_mecha_config("mech_rx78")
         config_b = loader.get_mecha_config("mech_zaku")
-        mecha_a: Mecha = MechaFactory.create_from_config(config_a)
-        mecha_b: Mecha = MechaFactory.create_from_config(config_b)
+        mecha_a: Mecha = MechaFactory.create_mecha_snapshot(config_a)
+        mecha_b: Mecha = MechaFactory.create_mecha_snapshot(config_b)
 
         # 5. 应用机体特性
         print("应用机体特性...")

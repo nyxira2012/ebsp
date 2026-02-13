@@ -1,3 +1,11 @@
+"""Combat resolution system using round table mechanics.
+
+This module provides the core attack resolution logic, including:
+- Round table probability segment calculation
+- Damage resolution with armor mitigation
+- Hook-based skill system integration
+"""
+
 import random
 from ..config import Config
 from ..models import BattleContext, AttackResult, WeaponType
@@ -6,97 +14,152 @@ from .calculator import CombatCalculator
 
 
 class AttackTableResolver:
-    """圆桌判定系统 (核心难点)"""
+    """Round table attack resolution system (core mechanic).
+
+    The round table uses priority-based segments:
+    1. MISS (affected by weapon proficiency)
+    2. DODGE (affected by mecha proficiency, reduced by precision)
+    3. PARRY (affected by mecha proficiency, reduced by precision, capped at 50%)
+    4. BLOCK (reduced by precision, capped at 80%)
+    5. CRIT (squeezed by previous segments)
+    6. HIT (remaining space)
+    """
 
     @staticmethod
-    def _calculate_segments(ctx: BattleContext) -> dict:
-        """计算圆桌判定的各个段 (内部方法)
+    def _calculate_all_segments_data(ctx: BattleContext) -> dict:
+        """Calculate all round table segment rates.
 
-        计算并返回圆桌判定中各个段的阈值范围。
+        This unified method computes MISS, DODGE, PARRY, BLOCK, and CRIT rates
+        with all hook modifications applied. Used by both segment display
+        and attack resolution.
 
         Args:
-            ctx: 战场上下文
+            ctx: Battle context containing attacker and defender information.
 
         Returns:
-            dict: 包含各个段的名称、阈值范围的字典
+            Dictionary with keys: 'miss_rate', 'dodge_rate', 'parry_rate',
+            'block_rate', 'crit_rate', 'precision_reduction'.
         """
         attacker = ctx.get_attacker()
         defender = ctx.get_defender()
 
-        # 确保攻击者和防御者存在（类型安全）
-        assert attacker is not None, "攻击者不能为 None"
-        assert defender is not None, "防御者不能为 None"
+        # Type safety checks
+        assert attacker is not None, "Attacker cannot be None"
+        assert defender is not None, "Defender cannot be None"
 
-        # === 1. 计算 MISS 段 ===
+        # 1. Calculate MISS segment
         base_miss: float = CombatCalculator.calculate_proficiency_miss_penalty(
-            attacker.pilot.weapon_proficiency
+            attacker.pilot_stats_backup.get('weapon_proficiency', 500)
         )
         miss_rate = SkillRegistry.process_hook("HOOK_PRE_MISS_RATE", base_miss, ctx)
 
-        hit_bonus: float = attacker.hit_rate
+        hit_bonus: float = attacker.final_hit
         hit_bonus = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", hit_bonus, ctx)
 
         miss_rate = max(0.0, miss_rate - hit_bonus)
 
-        # === 2. 计算防御段 ===
-        precision_reduction: float = CombatCalculator.calculate_precision_reduction(attacker.precision)
-        precision_reduction = SkillRegistry.process_hook("HOOK_PRE_PRECISION", precision_reduction, ctx)
-
-        # DODGE
+        # DODGE segment
         dodge_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-            defender.pilot.mecha_proficiency,
+            defender.pilot_stats_backup.get('mecha_proficiency', 2000),
             Config.BASE_DODGE_RATE
         )
-        dodge_total: float = dodge_base + defender.dodge_rate
+        dodge_total: float = dodge_base + defender.final_dodge
         dodge_total = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", dodge_total, ctx)
-        dodge_rate: float = max(0.0, dodge_total * (1 - precision_reduction))
+        # 精准削减：使用减法公式（设计文档：每1点精准降低0.66%躲闪率）
+        dodge_rate: float = max(0.0, dodge_total - (attacker.final_precision * 0.66))
 
-        # PARRY
+        # PARRY segment
         parry_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-            defender.pilot.mecha_proficiency,
+            defender.pilot_stats_backup.get('mecha_proficiency', 2000),
             Config.BASE_PARRY_RATE
         )
-        parry_total: float = parry_base + defender.parry_rate
+        parry_total: float = parry_base + defender.final_parry
         parry_total = SkillRegistry.process_hook("HOOK_PRE_PARRY_RATE", parry_total, ctx)
-        parry_rate: float = max(0.0, min(50.0, parry_total * (1 - precision_reduction)))
+        # 精准削减：使用减法公式（设计文档：每1点精准降低0.66%招架率）
+        parry_rate: float = max(0.0, min(50.0, parry_total - (attacker.final_precision * 0.66)))
 
-        # BLOCK
-        block_base: float = Config.BASE_BLOCK_RATE + defender.block_rate
-        block_base = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_base, ctx)
-        block_rate: float = max(0.0, min(80.0, block_base * (1 - precision_reduction)))
+        # BLOCK segment
+        block_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
+            defender.pilot_stats_backup.get('mecha_proficiency', 2000),
+            Config.BASE_BLOCK_RATE
+        )
+        block_total: float = block_base + defender.final_block
+        block_total = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_total, ctx)
+        # 精准削减：使用减法公式（设计文档：每1点精准降低0.33%格挡率）
+        block_rate: float = max(0.0, min(80.0, block_total - (attacker.final_precision * 0.33)))
 
-        # === 3. 计算 CRIT 段 ===
-        crit_rate: float = Config.BASE_CRIT_RATE + attacker.crit_rate
+        # 3. Calculate CRIT segment
+        crit_rate: float = Config.BASE_CRIT_RATE + attacker.final_crit
         crit_rate = SkillRegistry.process_hook("HOOK_PRE_CRIT_RATE", crit_rate, ctx)
 
-        # === 4. 构建圆桌段 ===
+        return {
+            'miss_rate': miss_rate,
+            'dodge_rate': dodge_rate,
+            'parry_rate': parry_rate,
+            'block_rate': block_rate,
+            'crit_rate': crit_rate,
+        }
+
+    @staticmethod
+    def _build_segments_from_data(data: dict) -> dict:
+        """Build segment ranges from calculated rates.
+
+        Round table priority: MISS > DODGE > PARRY > BLOCK > CRIT > HIT
+        Each segment may be squeezed by previous segments if space runs out.
+
+        Args:
+            data: Dictionary containing rate values from _calculate_all_segments_data.
+
+        Returns:
+            Dictionary with segment info: name, rate, start, end.
+        """
         segments = {}
         current = 0.0
 
+        miss_rate = data['miss_rate']
+        dodge_rate = data['dodge_rate']
+        parry_rate = data['parry_rate']
+        block_rate = data['block_rate']
+        crit_rate = data['crit_rate']
+
+        # MISS - highest priority, never squeezed
         if miss_rate > 0:
             segments['MISS'] = {'rate': miss_rate, 'start': current, 'end': current + miss_rate}
             current += miss_rate
 
+        # DODGE - may be squeezed by MISS
         if dodge_rate > 0:
-            segments['DODGE'] = {'rate': dodge_rate, 'start': current, 'end': current + dodge_rate}
-            current += dodge_rate
+            available_space = max(0, 100 - current)
+            actual_dodge_rate = min(dodge_rate, available_space)
+            if actual_dodge_rate > 0:
+                segments['DODGE'] = {'rate': actual_dodge_rate, 'start': current, 'end': current + actual_dodge_rate}
+                current += actual_dodge_rate
 
+        # PARRY - may be squeezed by MISS and DODGE
         if parry_rate > 0:
-            segments['PARRY'] = {'rate': parry_rate, 'start': current, 'end': current + parry_rate}
-            current += parry_rate
+            available_space = max(0, 100 - current)
+            actual_parry_rate = min(parry_rate, available_space)
+            if actual_parry_rate > 0:
+                segments['PARRY'] = {'rate': actual_parry_rate, 'start': current, 'end': current + actual_parry_rate}
+                current += actual_parry_rate
 
+        # BLOCK - may be squeezed by previous segments
         if block_rate > 0:
-            segments['BLOCK'] = {'rate': block_rate, 'start': current, 'end': current + block_rate}
-            current += block_rate
+            available_space = max(0, 100 - current)
+            actual_block_rate = min(block_rate, available_space)
+            if actual_block_rate > 0:
+                segments['BLOCK'] = {'rate': actual_block_rate, 'start': current, 'end': current + actual_block_rate}
+                current += actual_block_rate
 
+        # CRIT - may be squeezed by previous segments
         if crit_rate > 0:
-            # CRIT 可能被前面的段挤压
             available_space = max(0, 100 - current)
             actual_crit_rate = min(crit_rate, available_space)
-            segments['CRIT'] = {'rate': actual_crit_rate, 'start': current, 'end': current + actual_crit_rate}
-            current += actual_crit_rate
+            if actual_crit_rate > 0:
+                segments['CRIT'] = {'rate': actual_crit_rate, 'start': current, 'end': current + actual_crit_rate}
+                current += actual_crit_rate
 
-        # HIT (剩余空间)
+        # HIT (remaining space)
         hit_space = max(0, 100 - current)
         if hit_space > 0:
             segments['HIT'] = {'rate': hit_space, 'start': current, 'end': 100}
@@ -108,407 +171,272 @@ class AttackTableResolver:
 
     @staticmethod
     def calculate_attack_table_segments(ctx: BattleContext) -> dict:
-        """计算圆桌判定的各个段 (公共方法)
+        """Calculate round table segments for display and analysis.
 
-        用于显示和分析圆桌判定的组成，返回各个段的理论值。
-        模拟器和测试工具使用此方法来获取圆桌判定的理论分布。
+        Public method used by simulator and testing tools to get the
+        theoretical probability distribution of attack results.
 
         Args:
-            ctx: 战场上下文
+            ctx: Battle context.
 
         Returns:
-            dict: 包含各个段的名称、阈值范围的字典
+            Dictionary containing segment names, rates, and threshold ranges.
         """
-        return AttackTableResolver._calculate_segments(ctx)
+        data = AttackTableResolver._calculate_all_segments_data(ctx)
+        return AttackTableResolver._build_segments_from_data(data)
 
     @staticmethod
     def resolve_attack(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """使用圆桌判定法计算单次攻击的结果和伤害。
+        """Resolve a single attack using round table mechanics.
 
-        圆桌判定优先级顺序 (从高到低):
-        1. Miss (未命中) - 受武器熟练度影响
-        2. Dodge (躲闪) - 受机体熟练度影响,被精准削减
-        3. Parry (招架) - 受机体熟练度影响,被精准削减,上限50%
-        4. Block (格挡) - 被精准削减,上限80%
-        5. Crit (暴击) - 按优先级顺序被前面的段挤压
-        6. Hit (普通命中) - 剩余全部空间
+        Resolution priority (highest to lowest):
+        1. MISS - affected by weapon proficiency
+        2. DODGE - affected by mecha proficiency, reduced by precision
+        3. PARRY - affected by mecha proficiency, reduced by precision, capped at 50%
+        4. BLOCK - reduced by precision, capped at 80%
+        5. CRIT - squeezed by previous segments
+        6. HIT - remaining space
 
-        算法思路:
-        - 生成 0-100 随机数
-        - 按优先级顺序累加各区间阈值
-        - 根据随机数落入的区间返回对应结果
+        Algorithm:
+        - Generate 0-100 random roll
+        - Accumulate segment thresholds by priority
+        - Return result based on which segment the roll falls into
 
         Args:
-            ctx: 战场上下文,包含 mecha_a, mecha_b, weapon 等信息
+            ctx: Battle context containing mecha_a, mecha_b, weapon info.
 
         Returns:
-            tuple[AttackResult, int]: (攻击判定结果, 最终伤害值)
+            Tuple of (AttackResult, final_damage_value).
         """
         attacker = ctx.get_attacker()
         defender = ctx.get_defender()
         weapon = ctx.weapon
 
-        # 确保攻击者、防御者和武器存在（类型安全）
-        assert attacker is not None, "攻击者不能为 None"
-        assert defender is not None, "防御者不能为 None"
-        assert weapon is not None, "武器不能为 None"
+        # Type safety checks
+        assert attacker is not None, "Attacker cannot be None"
+        assert defender is not None, "Defender cannot be None"
+        assert weapon is not None, "Weapon cannot be None"
 
-        # 生成 0-100 随机数 (使用 uniform 避免 randint 产生的 101 个整数导致的 1% 偏移)
+        # Generate random roll (uniform to avoid 101-integer bias)
         roll: float = random.uniform(0, 100)
         ctx.roll = roll
-        
-        # === 1. 计算基础概率 (Base Rates) ===
-        # 基础未命中率
-        base_miss: float = CombatCalculator.calculate_proficiency_miss_penalty(
-            attacker.pilot.weapon_proficiency
-        )
-        # HOOK: 未命中率修正
-        miss_rate = SkillRegistry.process_hook("HOOK_PRE_MISS_RATE", base_miss, ctx)
-        
-        # 命中修正 (Hit Rate Bonus)
-        hit_bonus: float = attacker.hit_rate
-        
-        # HOOK: 命中率修正 (PRE_HIT_RATE)
-        hit_bonus = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", hit_bonus, ctx)
 
-        # 命中加成首先抵消 Miss（必中只影响MISS段，不影响防御判定）
-        miss_rate = max(0.0, miss_rate - hit_bonus)
+        # Calculate segment data
+        data = AttackTableResolver._calculate_all_segments_data(ctx)
 
-        # === 2. 计算防御概率 (受精准削减) ===
-        precision_reduction: float = CombatCalculator.calculate_precision_reduction(attacker.precision)
-        precision_reduction = SkillRegistry.process_hook("HOOK_PRE_PRECISION", precision_reduction, ctx)
-
-        # 躲闪率 (Dodge)
-        # 计算基础值（受机体熟练度影响）
-        dodge_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-            defender.pilot.mecha_proficiency,
-            Config.BASE_DODGE_RATE
-        )
-        # 加上机体提供的加成值
-        dodge_total: float = dodge_base + defender.dodge_rate
-        dodge_total = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", dodge_total, ctx)
-        dodge_rate: float = max(0.0, dodge_total * (1 - precision_reduction))
-
-        # 招架率 (Parry)
-        # 计算基础值（受机体熟练度影响）
-        parry_base: float = CombatCalculator.calculate_proficiency_defense_ratio(
-            defender.pilot.mecha_proficiency,
-            Config.BASE_PARRY_RATE
-        )
-        # 加上机体提供的加成值
-        parry_total: float = parry_base + defender.parry_rate
-        parry_total = SkillRegistry.process_hook("HOOK_PRE_PARRY_RATE", parry_total, ctx)
-        parry_rate: float = max(0.0, min(50.0, parry_total * (1 - precision_reduction)))
-
-        # 格挡率 (Block)
-        # 基础值 + 机体提供的加成值
-        block_base: float = Config.BASE_BLOCK_RATE + defender.block_rate
-        block_base = SkillRegistry.process_hook("HOOK_PRE_BLOCK_RATE", block_base, ctx)
-        block_rate: float = max(0.0, min(80.0, block_base * (1 - precision_reduction)))
-
-        # === 3. 暴击率 (Crit) ===
-        # 暴击率按优先级顺序被前面的段挤压，不占绝对宽度
-        # 基础值 + 攻击方提供的加成值
-        crit_rate: float = Config.BASE_CRIT_RATE + attacker.crit_rate
-        crit_rate = SkillRegistry.process_hook("HOOK_PRE_CRIT_RATE", crit_rate, ctx)
-        
-        # === 4. 圆桌判定 (Standard One-Roll Table) ===
+        # Apply override result hook
         override_result = SkillRegistry.process_hook("HOOK_OVERRIDE_RESULT", None, ctx)
-        
+
         final_result = None
         if override_result is not None:
-             final_result = override_result
+            final_result = override_result
         else:
-            # 优先级顺序：Miss -> Dodge -> Parry -> Block -> Crit -> Hit
-            current_threshold: float = 0.0
-            
-            if roll < (current_threshold := current_threshold + miss_rate):
+            # Build segments with proper squeezing logic
+            segments = AttackTableResolver._build_segments_from_data(data)
+
+            # Check which segment the roll falls into
+            if 'MISS' in segments and roll < segments['MISS']['end']:
                 final_result = AttackResult.MISS
-            elif roll < (current_threshold := current_threshold + dodge_rate):
+            elif 'DODGE' in segments and roll < segments['DODGE']['end']:
                 final_result = AttackResult.DODGE
-            elif roll < (current_threshold := current_threshold + parry_rate):
+            elif 'PARRY' in segments and roll < segments['PARRY']['end']:
                 final_result = AttackResult.PARRY
-            elif roll < (current_threshold := current_threshold + block_rate):
+            elif 'BLOCK' in segments and roll < segments['BLOCK']['end']:
                 final_result = AttackResult.BLOCK
-            elif roll < (current_threshold := current_threshold + crit_rate):
+            elif 'CRIT' in segments and roll < segments['CRIT']['end']:
                 final_result = AttackResult.CRIT
             else:
                 final_result = AttackResult.HIT
 
-        # HOOK: 判定后修正 (POST_ROLL_RESULT)
-        # 允许把 Hit 变成 Dodge (分身)，或者 Parry 变成 Hit (直击)
+        # Apply post-roll result hook
         final_result = SkillRegistry.process_hook("HOOK_POST_ROLL_RESULT", final_result, ctx)
 
-        # === 5. 执行结果逻辑 ===
-        result, damage = (AttackResult.MISS, 0)
-        if final_result == AttackResult.MISS:
-            result, damage = AttackTableResolver._resolve_miss(ctx)
-        elif final_result == AttackResult.DODGE:
-            result, damage = AttackTableResolver._resolve_dodge(ctx)
-        elif final_result == AttackResult.PARRY:
-            result, damage = AttackTableResolver._resolve_parry(ctx)
-        elif final_result == AttackResult.BLOCK:
-            result, damage = AttackTableResolver._resolve_block(ctx)
-        elif final_result == AttackResult.CRIT:
-            result, damage = AttackTableResolver._resolve_crit(ctx)
-        else: # HIT
-            result, damage = AttackTableResolver._resolve_hit(ctx)
+        # Determine will deltas based on result type
+        will_deltas = {
+            AttackResult.MISS: (0, 0),
+            AttackResult.DODGE: (0, 5),
+            AttackResult.PARRY: (0, 15),
+            AttackResult.BLOCK: (0, 5),
+            AttackResult.HIT: (2, 1),
+            AttackResult.CRIT: (5, 0),
+        }
+        attacker_will_delta, defender_will_delta = will_deltas.get(final_result, (0, 0))
 
-        # 存储结果到 context
+        # Resolve outcome
+        result, damage = AttackTableResolver._resolve_damage_outcome(
+            ctx, final_result, attacker_will_delta, defender_will_delta
+        )
+
+        # Store results in context
         ctx.attack_result = result
         ctx.damage = damage
 
-        # 应用气力变化
+        # Apply will changes
         if ctx.current_attacker_will_delta != 0:
             attacker.modify_will(ctx.current_attacker_will_delta)
         if ctx.current_defender_will_delta != 0:
             defender.modify_will(ctx.current_defender_will_delta)
 
         return result, damage
-    
-    
+
     @staticmethod
     def _calculate_base_damage(ctx: BattleContext) -> int:
-        """计算攻击的基础伤害。
+        """Calculate base damage for an attack.
 
-        计算步骤:
-        1. 根据武器类型选择驾驶员的对应属性 (格斗用格斗值,射击用射击值)
-        2. 基础伤害 = 修正后武器威力 + (修正后驾驶员属性 * 2)
-        3. 应用修正后气力修正系数
+        Calculation steps:
+        1. Select pilot stat based on weapon type (melee vs shooting)
+        2. Base damage = weapon_power + (pilot_stat * 2)
+        3. Apply will power modifier
 
         Args:
-            ctx: 战场上下文
+            ctx: Battle context.
 
         Returns:
-            int: 计算后的基础伤害值 (取整)
+            Integer base damage value.
         """
         attacker = ctx.get_attacker()
         weapon = ctx.weapon
 
-        # 确保攻击者和武器存在（类型安全）
-        assert attacker is not None, "攻击者不能为 None"
-        assert weapon is not None, "武器不能为 None"
+        # Type safety checks
+        assert attacker is not None, "Attacker cannot be None"
+        assert weapon is not None, "Weapon cannot be None"
 
-        # HOOK: 武器威力修正
+        # Hook: Weapon power modification
         weapon_power = float(weapon.power)
         weapon_power = SkillRegistry.process_hook("HOOK_PRE_WEAPON_POWER", weapon_power, ctx)
 
-        # 武器威力 + 机体性能修正 (使用动态属性)
+        # Weapon power + mecha performance bonus (using dynamic attributes)
         stat_bonus: float = 0.0
         if weapon.weapon_type == WeaponType.MELEE:
-            stat_bonus = attacker.pilot.get_effective_stat('stat_melee')
+            stat_bonus = attacker.pilot_stats_backup.get('stat_melee', 0)
         elif weapon.weapon_type == WeaponType.SHOOTING:
-            stat_bonus = attacker.pilot.get_effective_stat('stat_shooting')
-            
-        # HOOK: 属性加成修正
+            stat_bonus = attacker.pilot_stats_backup.get('stat_shooting', 0)
+
+        # Hook: Stat bonus modification
         stat_bonus = SkillRegistry.process_hook("HOOK_PRE_STAT_BONUS", stat_bonus, ctx)
 
-        base_damage: float = weapon_power + (stat_bonus * 2)  # 简化公式
+        base_damage: float = weapon_power + (stat_bonus * 2)
 
-        # 气力修正
-        will_modifier: float = CombatCalculator.calculate_will_damage_modifier(attacker.current_will)
-        
-        # HOOK: 气力系数修正
+        # Will modifier
+        will_modifier: float = CombatCalculator.calculate_will_damage_modifier(
+            attacker.current_will
+        )
+
+        # Hook: Will modifier adjustment
         will_modifier = SkillRegistry.process_hook("HOOK_PRE_WILL_MODIFIER", will_modifier, ctx)
-        
+
         base_damage *= will_modifier
 
         return int(base_damage)
-    
+
     @staticmethod
     def _apply_armor_mitigation(damage: int, ctx: BattleContext) -> int:
-        """应用护甲减伤效果。
+        """Apply armor damage reduction.
 
-        使用非线性减伤公式: 减伤比例 = 护甲 / (护甲 + K)
-        气力会提升有效护甲值,技能钩子可以调整减伤比例。
+        Uses nonlinear mitigation formula: mitigation% = armor / (armor + K)
+        Will power increases effective armor value.
 
         Args:
-            damage: 应用护甲前的原始伤害
-            ctx: 战场上下文
+            damage: Pre-armor damage value.
+            ctx: Battle context.
 
         Returns:
-            int: 护甲减伤后的最终伤害 (最小为 0)
+            Final damage after armor reduction (minimum 0).
         """
         defender = ctx.get_defender()
 
-        # 确保防御者存在（类型安全）
-        assert defender is not None, "防御者不能为 None"
+        # Type safety check
+        assert defender is not None, "Defender cannot be None"
 
-        # HOOK: 防御等级修正
-        defense_level = float(defender.defense_level)
+        # Hook: Defense level modification
+        defense_level = float(defender.final_armor)
         defense_level = SkillRegistry.process_hook("HOOK_PRE_DEFENSE_LEVEL", defense_level, ctx)
 
-        # HOOK: 护甲值修正 (装甲强化、合金装甲等)
+        # Hook: Armor value modification
         defense_level = SkillRegistry.process_hook("HOOK_PRE_ARMOR_VALUE", defense_level, ctx)
 
-        # 气力对防御的修正
-        will_def_modifier: float = CombatCalculator.calculate_will_defense_modifier(defender.current_will)
+        # Will modifier for defense
+        will_def_modifier: float = CombatCalculator.calculate_will_defense_modifier(
+            defender.current_will
+        )
 
-        # 护甲减伤
+        # Armor mitigation
         mitigation_ratio: float = CombatCalculator.calculate_armor_mitigation(
             int(defense_level),
             will_def_modifier
         )
-        
-        # HOOK: 减伤比例修正 (HOOK_PRE_MITIGATION)
-        # 注意：这里是对 "减伤比例" 的修正。例如 0.3 -> 0.4 (减免更多)
+
+        # Hook: Mitigation ratio adjustment
         mitigation_ratio = SkillRegistry.process_hook("HOOK_PRE_MITIGATION", mitigation_ratio, ctx)
-        
-        # 计算受到的伤害比例
+
+        # Calculate damage taken ratio
         damage_taken_ratio: float = 1.0 - mitigation_ratio
-        
-        # 应用减伤
+
+        # Apply mitigation
         final_damage: int = int(damage * damage_taken_ratio)
         return max(0, final_damage)
-    
+
     @staticmethod
-    def _resolve_miss(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理未命中结果。
+    def _resolve_damage_outcome(
+        ctx: BattleContext,
+        result_type: AttackResult,
+        attacker_will_delta: int = 0,
+        defender_will_delta: int = 0,
+        damage_mult: float = 1.0
+    ) -> tuple[AttackResult, int]:
+        """Resolve damage outcome for any attack result type.
+
+        Unified damage resolution method that handles the common flow:
+        1. Set will deltas
+        2. Calculate base damage
+        3. Apply damage multiplier hooks
+        4. Apply armor mitigation
+        5. Apply result-specific adjustments (block value, crit multiplier)
+        6. Apply damage taken hooks
 
         Args:
-            ctx: 战场上下文
+            ctx: Battle context.
+            result_type: Type of attack result (MISS, DODGE, PARRY, BLOCK, CRIT, HIT).
+            attacker_will_delta: Will change for attacker.
+            defender_will_delta: Will change for defender.
+            damage_mult: Damage multiplier (default 1.0, 2.0 for valor, etc).
 
         Returns:
-            tuple[AttackResult, int]: (MISS, 0)
+            Tuple of (AttackResult, final_damage).
         """
-        return (AttackResult.MISS, 0)
-    
-    @staticmethod
-    def _resolve_dodge(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理躲闪结果。
+        # Set will deltas
+        ctx.current_attacker_will_delta = attacker_will_delta
+        ctx.current_defender_will_delta = defender_will_delta
 
-        躲闪成功会给防御方增加 5 点气力。
+        # MISS, DODGE, PARRY deal no damage
+        if result_type in (AttackResult.MISS, AttackResult.DODGE, AttackResult.PARRY):
+            return (result_type, 0)
 
-        Args:
-            ctx: 战场上下文
-
-        Returns:
-            tuple[AttackResult, int]: (DODGE, 0)
-        """
-        # 气力变动: 防御方 +5
-        ctx.current_defender_will_delta = 5
-        return (AttackResult.DODGE, 0)
-    
-    @staticmethod
-    def _resolve_parry(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理招架结果。
-
-        招架成功会给防御方增加 15 点气力 (高于躲闪)。
-
-        Args:
-            ctx: 战场上下文
-
-        Returns:
-            tuple[AttackResult, int]: (PARRY, 0)
-        """
-        # 气力变动: 防御方 +15
-        ctx.current_defender_will_delta = 15
-        return (AttackResult.PARRY, 0)
-    
-    @staticmethod
-    def _resolve_block(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理格挡结果。
-
-        格挡会减少伤害: 先计算基础伤害和护甲减伤,再减去格挡值。
-        防御方获得 5 点气力。
-
-        Args:
-            ctx: 战场上下文
-
-        Returns:
-            tuple[AttackResult, int]: (BLOCK, 最终伤害)
-        """
-        # 气力变动: 防御方 +5
-        ctx.current_defender_will_delta = 5
-
-        # 计算伤害并减去格挡值
+        # Calculate base damage
         base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
 
-        # HOOK: 伤害倍率修正 (HOOK_PRE_DAMAGE_MULT)
-        damage_mult: float = 1.0
+        # Hook: Damage multiplier adjustment
         damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", damage_mult, ctx)
         damage_before_armor: int = int(base_damage * damage_mult)
 
-        damage_after_armor: int = AttackTableResolver._apply_armor_mitigation(damage_before_armor, ctx)
+        # Apply crit multiplier if CRIT
+        if result_type == AttackResult.CRIT:
+            crit_mult: float = Config.CRIT_MULTIPLIER
+            crit_mult = SkillRegistry.process_hook("HOOK_PRE_CRIT_MULTIPLIER", crit_mult, ctx)
+            damage_before_armor = int(damage_before_armor * crit_mult)
 
-        # HOOK: 格挡值修正 (HOOK_PRE_BLOCK_VALUE)
-        # defender 已在 assert 中检查不为 None
-        defender = ctx.get_defender()
-        assert defender is not None, "防御者不能为 None"
-        block_value: int = defender.block_value
-        block_value = SkillRegistry.process_hook("HOOK_PRE_BLOCK_VALUE", block_value, ctx)
-        
-        final_damage: int = max(0, damage_after_armor - block_value)
-        
-        # HOOK: 伤害抵消 (HOOK_ON_DAMAGE_TAKEN)
-        final_damage = SkillRegistry.process_hook("HOOK_ON_DAMAGE_TAKEN", final_damage, ctx)
-
-        return (AttackResult.BLOCK, final_damage)
-    
-    @staticmethod
-    def _resolve_hit(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理普通命中结果。
-
-        双方都会获得气力: 攻击方 +2, 防御方 +1。
-
-        Args:
-            ctx: 战场上下文
-
-        Returns:
-            tuple[AttackResult, int]: (HIT, 最终伤害)
-        """
-        # 气力变动: 攻击方 +2, 防御方 +1
-        ctx.current_attacker_will_delta = 2
-        ctx.current_defender_will_delta = 1
-
-        base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
-        
-        # HOOK: 伤害倍率修正 (HOOK_PRE_DAMAGE_MULT)
-        # 例如：热血 (2.0)
-        damage_mult: float = 1.0
-        damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", damage_mult, ctx)
-        
-        damage_before_armor: int = int(base_damage * damage_mult)
-        
+        # Apply armor mitigation
         final_damage: int = AttackTableResolver._apply_armor_mitigation(damage_before_armor, ctx)
-        
-        # HOOK: 伤害抵消 (HOOK_ON_DAMAGE_TAKEN)
-        # 例如：I力场 (抵消伤害 -> 变成0)
+
+        # Apply block value if BLOCK
+        if result_type == AttackResult.BLOCK:
+            defender = ctx.get_defender()
+            assert defender is not None, "Defender cannot be None"
+            block_value: int = defender.block_reduction
+            block_value = SkillRegistry.process_hook("HOOK_PRE_BLOCK_VALUE", block_value, ctx)
+            final_damage = max(0, final_damage - block_value)
+
+        # Hook: Damage taken adjustment
         final_damage = SkillRegistry.process_hook("HOOK_ON_DAMAGE_TAKEN", final_damage, ctx)
 
-        return (AttackResult.HIT, final_damage)
-    
-    @staticmethod
-    def _resolve_crit(ctx: BattleContext) -> tuple[AttackResult, int]:
-        """处理暴击结果。
-
-        暴击伤害 = 基础伤害 * 伤害倍率 * 暴击倍率
-        攻击方获得 5 点气力。
-
-        Args:
-            ctx: 战场上下文
-
-        Returns:
-            tuple[AttackResult, int]: (CRIT, 暴击伤害)
-        """
-        # 气力变动: 攻击方 +5
-        ctx.current_attacker_will_delta = 5
-
-        base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
-
-        # HOOK: 伤害倍率修正 (HOOK_PRE_DAMAGE_MULT)
-        damage_mult: float = 1.0
-        damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", damage_mult, ctx)
-        
-        # HOOK: 暴击倍率修正 (HOOK_PRE_CRIT_MULTIPLIER)
-        crit_mult: float = Config.CRIT_MULTIPLIER
-        crit_mult = SkillRegistry.process_hook("HOOK_PRE_CRIT_MULTIPLIER", crit_mult, ctx)
-
-        damage_before_armor: int = int(base_damage * damage_mult * crit_mult)
-        
-        final_damage: int = AttackTableResolver._apply_armor_mitigation(damage_before_armor, ctx)
-        
-        # HOOK: 伤害抵消 (HOOK_ON_DAMAGE_TAKEN)
-        final_damage = SkillRegistry.process_hook("HOOK_ON_DAMAGE_TAKEN", final_damage, ctx)
-
-        return (AttackResult.CRIT, final_damage)
+        return (result_type, final_damage)

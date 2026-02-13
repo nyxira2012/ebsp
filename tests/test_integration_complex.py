@@ -39,8 +39,8 @@ class TestMultiRoundBattle:
         sim.run_battle()
 
         assert sim.round_number >= 2, "应该进行至少2回合"
-        total_damage = (heavy_mecha.max_hp - heavy_mecha.current_hp +
-                       basic_mecha.max_hp - basic_mecha.current_hp)
+        total_damage = (heavy_mecha.final_max_hp - heavy_mecha.current_hp +
+                       basic_mecha.final_max_hp - basic_mecha.current_hp)
         assert total_damage > 0, "应该有伤害产生"
 
     def test_will_growth_across_rounds(self, basic_mecha):
@@ -104,7 +104,7 @@ class TestComplexSkillCombinations:
 
     def test_trait_and_spirit_synergy(self, basic_mecha, basic_context):
         """测试特性和精神协同：精英+热血"""
-        basic_mecha.traits = ["trait_expert"]
+        basic_mecha.skills = ["trait_expert"]
         TraitManager.apply_traits(basic_mecha)
         EffectManager.add_effect(basic_mecha, "spirit_valor")
 
@@ -138,7 +138,7 @@ class TestComplexSkillCombinations:
         mult_full = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, basic_context)
         assert mult_full == 1.0, "满血时狂战士不应触发"
 
-        basic_mecha.current_hp = int(basic_mecha.max_hp * 0.25)
+        basic_mecha.current_hp = int(basic_mecha.final_max_hp * 0.25)
         mult_low = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, basic_context)
         assert mult_low == 1.5, "低HP时狂战士应该触发"
 
@@ -175,7 +175,7 @@ class TestStatePersistence:
 
     def test_trait_effects_are_permanent(self, basic_mecha):
         """测试特性效果是永久的"""
-        basic_mecha.traits = ["trait_nt"]
+        basic_mecha.skills = ["trait_nt"]
         TraitManager.apply_traits(basic_mecha)
 
         initial_count = len(basic_mecha.effects)
@@ -222,7 +222,7 @@ class TestEdgeCaseCombinations:
     ])
     def test_hp_boundary_life_status(self, basic_mecha, hp_percent, expected_alive):
         """测试HP边界值的生存状态"""
-        basic_mecha.current_hp = int(basic_mecha.max_hp * hp_percent / 100)
+        basic_mecha.current_hp = int(basic_mecha.final_max_hp * hp_percent / 100)
         is_alive = basic_mecha.is_alive()
         assert is_alive == expected_alive, f"HP{hp_percent}%时生存状态应该是{expected_alive}"
 
@@ -349,7 +349,7 @@ class TestErrorHandling:
 
     def test_empty_trait_list(self, basic_mecha):
         """测试：空特性列表不会崩溃"""
-        basic_mecha.traits = []
+        basic_mecha.skills = []
         TraitManager.apply_traits(basic_mecha)
         assert len(basic_mecha.effects) == 0, "空特性列表不应该产生效果"
 

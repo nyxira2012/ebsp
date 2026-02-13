@@ -54,7 +54,7 @@ class TestHPThresholdCondition:
     ])
     def test_hp_threshold_parametrized(self, hp_pct, threshold, op, expected, basic_mecha, basic_context):
         """参数化测试HP阈值条件"""
-        basic_mecha.current_hp = int(basic_mecha.max_hp * hp_pct)
+        basic_mecha.current_hp = int(basic_mecha.final_max_hp * hp_pct)
         condition = {"type": "hp_threshold", "val": threshold, "op": op}
         assert ConditionChecker.check([condition], basic_context, basic_mecha) == expected
 
