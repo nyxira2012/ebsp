@@ -20,8 +20,12 @@ class AttackTableResolver:
         Returns:
             dict: 包含各个段的名称、阈值范围的字典
         """
-        attacker = ctx.attacker
-        defender = ctx.defender
+        attacker = ctx.get_attacker()
+        defender = ctx.get_defender()
+
+        # 确保攻击者和防御者存在（类型安全）
+        assert attacker is not None, "攻击者不能为 None"
+        assert defender is not None, "防御者不能为 None"
 
         # === 1. 计算 MISS 段 ===
         base_miss: float = CombatCalculator.calculate_proficiency_miss_penalty(
@@ -135,15 +139,20 @@ class AttackTableResolver:
         - 根据随机数落入的区间返回对应结果
 
         Args:
-            ctx: 战场上下文,包含攻击方、防御方、武器等信息
+            ctx: 战场上下文,包含 mecha_a, mecha_b, weapon 等信息
 
         Returns:
             tuple[AttackResult, int]: (攻击判定结果, 最终伤害值)
         """
-        attacker = ctx.attacker
-        defender = ctx.defender
+        attacker = ctx.get_attacker()
+        defender = ctx.get_defender()
         weapon = ctx.weapon
-        
+
+        # 确保攻击者、防御者和武器存在（类型安全）
+        assert attacker is not None, "攻击者不能为 None"
+        assert defender is not None, "防御者不能为 None"
+        assert weapon is not None, "武器不能为 None"
+
         # 生成 0-100 随机数 (使用 uniform 避免 randint 产生的 101 个整数导致的 1% 偏移)
         roll: float = random.uniform(0, 100)
         ctx.roll = roll
@@ -250,10 +259,10 @@ class AttackTableResolver:
         ctx.damage = damage
 
         # 应用气力变化
-        if ctx.attacker_will_delta != 0:
-            attacker.modify_will(ctx.attacker_will_delta)
-        if ctx.defender_will_delta != 0:
-            defender.modify_will(ctx.defender_will_delta)
+        if ctx.current_attacker_will_delta != 0:
+            attacker.modify_will(ctx.current_attacker_will_delta)
+        if ctx.current_defender_will_delta != 0:
+            defender.modify_will(ctx.current_defender_will_delta)
 
         return result, damage
     
@@ -273,8 +282,12 @@ class AttackTableResolver:
         Returns:
             int: 计算后的基础伤害值 (取整)
         """
-        attacker = ctx.attacker
+        attacker = ctx.get_attacker()
         weapon = ctx.weapon
+
+        # 确保攻击者和武器存在（类型安全）
+        assert attacker is not None, "攻击者不能为 None"
+        assert weapon is not None, "武器不能为 None"
 
         # HOOK: 武器威力修正
         weapon_power = float(weapon.power)
@@ -316,8 +329,10 @@ class AttackTableResolver:
         Returns:
             int: 护甲减伤后的最终伤害 (最小为 0)
         """
-        attacker = ctx.attacker
-        defender = ctx.defender
+        defender = ctx.get_defender()
+
+        # 确保防御者存在（类型安全）
+        assert defender is not None, "防御者不能为 None"
 
         # HOOK: 防御等级修正
         defense_level = float(defender.defense_level)
@@ -371,7 +386,7 @@ class AttackTableResolver:
             tuple[AttackResult, int]: (DODGE, 0)
         """
         # 气力变动: 防御方 +5
-        ctx.defender_will_delta = 5
+        ctx.current_defender_will_delta = 5
         return (AttackResult.DODGE, 0)
     
     @staticmethod
@@ -387,7 +402,7 @@ class AttackTableResolver:
             tuple[AttackResult, int]: (PARRY, 0)
         """
         # 气力变动: 防御方 +15
-        ctx.defender_will_delta = 15
+        ctx.current_defender_will_delta = 15
         return (AttackResult.PARRY, 0)
     
     @staticmethod
@@ -404,20 +419,23 @@ class AttackTableResolver:
             tuple[AttackResult, int]: (BLOCK, 最终伤害)
         """
         # 气力变动: 防御方 +5
-        ctx.defender_will_delta = 5
+        ctx.current_defender_will_delta = 5
 
         # 计算伤害并减去格挡值
         base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
-        
+
         # HOOK: 伤害倍率修正 (HOOK_PRE_DAMAGE_MULT)
         damage_mult: float = 1.0
         damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", damage_mult, ctx)
         damage_before_armor: int = int(base_damage * damage_mult)
-        
+
         damage_after_armor: int = AttackTableResolver._apply_armor_mitigation(damage_before_armor, ctx)
-        
+
         # HOOK: 格挡值修正 (HOOK_PRE_BLOCK_VALUE)
-        block_value: int = ctx.defender.block_value
+        # defender 已在 assert 中检查不为 None
+        defender = ctx.get_defender()
+        assert defender is not None, "防御者不能为 None"
+        block_value: int = defender.block_value
         block_value = SkillRegistry.process_hook("HOOK_PRE_BLOCK_VALUE", block_value, ctx)
         
         final_damage: int = max(0, damage_after_armor - block_value)
@@ -440,8 +458,8 @@ class AttackTableResolver:
             tuple[AttackResult, int]: (HIT, 最终伤害)
         """
         # 气力变动: 攻击方 +2, 防御方 +1
-        ctx.attacker_will_delta = 2
-        ctx.defender_will_delta = 1
+        ctx.current_attacker_will_delta = 2
+        ctx.current_defender_will_delta = 1
 
         base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
         
@@ -474,7 +492,7 @@ class AttackTableResolver:
             tuple[AttackResult, int]: (CRIT, 暴击伤害)
         """
         # 气力变动: 攻击方 +5
-        ctx.attacker_will_delta = 5
+        ctx.current_attacker_will_delta = 5
 
         base_damage: int = AttackTableResolver._calculate_base_damage(ctx)
 

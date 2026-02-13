@@ -155,7 +155,7 @@ class RoundStatistics:
 
     # 后手攻击统计
     second_weapon: str = ""
-    second_result: AttackResult = None
+    second_result: AttackResult | None = None
     second_damage: int = 0
     second_roll: float = 0.0
     second_en_cost: int = 0
@@ -181,7 +181,7 @@ class BattleStatistics:
     total_damage_dealt: int = 0
     total_damage_taken: int = 0
     max_single_damage: int = 0
-    min_single_damage: int = float('inf')
+    min_single_damage: float = float('inf')
 
     # 判定结果统计
     attack_results: Counter = field(default_factory=Counter)
@@ -273,7 +273,7 @@ class DummyBossSimulator(BattleSimulator):
             first_mover="",
             initiative_reason="",
             first_weapon="",
-            first_result=None,
+            first_result=AttackResult.MISS,  # 默认值，稍后会被覆盖
             first_damage=0,
             first_roll=0.0,
             first_en_cost=0,
@@ -377,12 +377,13 @@ class DummyBossSimulator(BattleSimulator):
         weapon_cost = float(weapon.en_cost)
         weapon_cost = SkillRegistry.process_hook("HOOK_PRE_EN_COST_MULT", weapon_cost, ctx)
 
-        if attacker.current_en < int(weapon_cost):
+        final_en_cost = int(weapon_cost)
+        if attacker.current_en < final_en_cost:
             if self.verbose:
                 print(f"   ❌ EN不足! 无法攻击")
             return
 
-        attacker.consume_en(int(weapon_cost))
+        attacker.consume_en(final_en_cost)
 
         # 圆桌判定
         from src.combat.resolver import AttackTableResolver
@@ -512,20 +513,28 @@ class BossChallenger:
 
         # 创建机体
         boss = Mecha(
-            id="boss", name=BOSS_CONFIG['name'],
-            pilot=pilot,
-            max_hp=BOSS_CONFIG['hp'],
+            instance_id="boss", mecha_name=BOSS_CONFIG['name'],
+            final_max_hp=BOSS_CONFIG['hp'],
             current_hp=BOSS_CONFIG['hp'],
-            max_en=BOSS_CONFIG['en'],
+            final_max_en=BOSS_CONFIG['en'],
             current_en=BOSS_CONFIG['en'],
-            hit_rate=BOSS_CONFIG['hit_rate'],
-            precision=BOSS_CONFIG['precision'],
-            crit_rate=BOSS_CONFIG['crit_rate'],
-            dodge_rate=dodge_rate,
-            parry_rate=BOSS_CONFIG['parry_rate'],
-            block_rate=BOSS_CONFIG['block_rate'],
-            defense_level=BOSS_CONFIG['defense'],
-            mobility=BOSS_CONFIG['mobility']
+            final_hit=BOSS_CONFIG['hit_rate'],
+            final_precision=BOSS_CONFIG['precision'],
+            final_crit=BOSS_CONFIG['crit_rate'],
+            final_dodge=dodge_rate,
+            final_parry=BOSS_CONFIG['parry_rate'],
+            final_block=BOSS_CONFIG['block_rate'],
+            final_armor=BOSS_CONFIG['defense'],
+            final_mobility=BOSS_CONFIG['mobility'],
+            pilot_stats_backup={
+                'stat_shooting': BOSS_CONFIG['pilot_shooting'],
+                'stat_melee': BOSS_CONFIG['pilot_melee'],
+                'stat_awakening': BOSS_CONFIG['pilot_awakening'],
+                'stat_defense': BOSS_CONFIG['pilot_defense'],
+                'stat_reaction': BOSS_CONFIG['pilot_reaction'],
+                'weapon_proficiency': 500,
+                'mecha_proficiency': 2000,
+            }
         )
 
         # Boss 武器

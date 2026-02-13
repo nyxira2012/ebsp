@@ -43,8 +43,8 @@
 
 5. **测试代码的现代化适配**
    - **逻辑变化**：
-     - `tests/test_loader.py`：适配 Pydantic v2 的字段结构（`stats.shooting` → `stat_shooting`，移除 `proficiency` 字段），从 433 行精简到更清晰的测试数据结构。
-     - `tests/test_resolver_coverage.py`：标注了 TODO，将熟练度相关测试标记为"等待新系统实现"，因为熟练度字段已从 PilotConfig 移除，改为通过技能系统实现。
+     - `tests/test_loader.py`：适配 Pydantic v2 的字段结构（`stats.shooting` → `stat_shooting`），从 433 行精简到更清晰的测试数据结构。
+     - `tests/test_resolver_coverage.py`：标注了 TODO，标记熟练度相关测试为待完善，确保熟练度计算在圆桌判定中正确生效。
    - **设计思路**：测试代码与业务代码同步重构。当模型字段变更时，测试数据必须立即适配，否则测试会变成"虚假的通过"（在测试旧逻辑）。同时，明确标注哪些功能已废弃或待实现，避免后续维护者困惑。
 
 6. **文档的同步更新**
@@ -58,7 +58,7 @@
 - 测试覆盖率通过 `pytest-cov --cov=src/combat/engine --cov-report=term-missing` 生成缺失行报告
 
 **后续计划**
-1. 完善"熟练度"系统的技能化实现（将 `weapon_proficiency` 转化为技能效果）
+1. 在战斗系统中正确使用 `calculator.py` 中的熟练度计算函数（`calculate_proficiency_miss_penalty`、`calculate_proficiency_defense_ratio`）
 2. 编写更多技能组合的集成测试（如"热血 + 气魄 + 看破"的极限伤害场景）
 3. 将木桩模拟器的统计结果导出为 CSV/JSON，支持数值策划的批量分析
 

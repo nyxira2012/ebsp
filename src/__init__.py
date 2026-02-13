@@ -6,6 +6,7 @@ from .config import Config
 from .models import Pilot, Weapon, Mecha, WeaponType, AttackResult, InitiativeReason
 from .loader import DataLoader
 from .skills import SkillRegistry, EffectManager, SpiritCommands
+from .factory import MechaFactory
 
 __all__ = [
     'Config',
@@ -16,5 +17,5 @@ __all__ = [
     'AttackResult',
     'InitiativeReason',
     'DataLoader',
-    'SkillManager',
+    'MechaFactory',
 ]

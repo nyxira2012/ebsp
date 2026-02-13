@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 class ConditionChecker:
     """条件检查器"""
-    
+
     @staticmethod
-    def check(conditions: list[dict], context: BattleContext, owner: Mecha) -> bool:
+    def check(conditions: list[dict] | list[Any], context: BattleContext, owner: Mecha) -> bool:
         """检查效果的所有触发条件是否满足。
 
         Args:
-            conditions: 条件配置字典列表 (来自 JSON)
+            conditions: 条件配置字典列表 (来自 JSON 或 Effect.dataclass)
             context: 战斗上下文快照
             owner: 效果持有人 (机体)
 
@@ -66,16 +66,18 @@ class ConditionChecker:
             Mecha | None: 目标机体对象，若无法识别则返回 None
         """
         target_type = condition.get("target", "self")
-        
+
         if target_type == "self":
             return owner
         elif target_type == "enemy":
-            # 如果 owner 是 attacker，目标就是 defender，反之亦然
-            if owner == context.attacker:
-                return context.defender
-            elif owner == context.defender:
-                return context.attacker
-        
+            # 如果 owner 是当前攻击方，目标就是当前防御方，反之亦然
+            attacker = context.get_attacker()
+            defender = context.get_defender()
+            if owner == attacker:
+                return defender
+            elif owner == defender:
+                return attacker
+
         return None
 
     # --- 具体检查实现 ---
@@ -130,19 +132,28 @@ class ConditionChecker:
     def _check_enemy_will_threshold(condition: dict, context: BattleContext, owner: Mecha) -> bool:
         """检查敌方气力 (enemy_will_threshold)"""
         opponent = context.defender if owner == context.attacker else context.attacker
-        
+
+        # 确保对手存在（类型安全）
+        if opponent is None:
+            return False
+
         current_will = opponent.current_will
         threshold = condition.get("val", 100)
         op = condition.get("op", ">=")
-        
+
         return ConditionChecker._compare(current_will, threshold, op)
 
     @staticmethod
     def _check_enemy_stat_check(condition: dict, context: BattleContext, owner: Mecha) -> bool:
         """检查敌方基础属性 (enemy_stat_check)"""
         opponent = context.defender if owner == context.attacker else context.attacker
+
+        # 确保对手存在（类型安全）
+        if opponent is None:
+            return False
+
         stat_name = condition.get("stat")
-        
+
         if stat_name and hasattr(opponent.pilot, stat_name):
             val = getattr(opponent.pilot, stat_name)
         elif stat_name and hasattr(opponent, stat_name):

@@ -285,10 +285,10 @@ class MechaSnapshot(BaseModel):
     def defense_level(self) -> int: return self.final_armor
     @defense_level.setter
     def defense_level(self, value: int): self.final_armor = value
-    
+
     @property
     def mobility(self) -> int: return self.final_mobility
-    
+
     @property
     def pilot(self):
         """Mock pilot object for legacy access like mecha.pilot.stat_shooting"""
@@ -303,13 +303,10 @@ class MechaSnapshot(BaseModel):
                 self.weapon_proficiency = stats.get('weapon_proficiency', 500)
                 self.mecha_proficiency = stats.get('mecha_proficiency', 2000)
                 self._stats = stats
-            
+
             def get_effective_stat(self, stat_name: str) -> int:
                 return self._stats.get(stat_name, 0)
         return MockPilot(stats_backup)
-
-    def is_alive(self) -> bool:
-        return self.current_hp > 0
     
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.final_max_hp) * 100 if self.final_max_hp > 0 else 0
@@ -361,28 +358,89 @@ class Modifier:
 
 @dataclass
 class BattleContext:
-    """战场快照 - 单回合上下文"""
+    """战场快照 - 单回合上下文
+
+    命名约定:
+    - mecha_a/mecha_b: 战斗中的两侧机体（位置性命名，不固定表示攻击方或防御方）
+    - 具体的攻防角色由战斗流程动态决定，每回合可能互换
+    """
     round_number: int
     distance: int
     terrain: Terrain = Terrain.SPACE
-    attacker: Optional['MechaSnapshot'] = None
-    defender: Optional['MechaSnapshot'] = None
+    mecha_a: Optional['MechaSnapshot'] = None
+    mecha_b: Optional['MechaSnapshot'] = None
     weapon: Optional['WeaponSnapshot'] = None
-    
+
     initiative_holder: Optional['MechaSnapshot'] = None
     initiative_reason: Optional[InitiativeReason] = None
-    
-    roll: int = 0
+
+    roll: float = 0.0
     attack_result: Optional[AttackResult] = None
     damage: int = 0
-    
-    attacker_will_delta: int = 0
-    defender_will_delta: int = 0
-    
+
+    # 当前攻击方和防御方的气力变化（由战斗流程动态决定）
+    current_attacker_will_delta: int = 0
+    current_defender_will_delta: int = 0
+
     modifiers: Dict[str, Any] = field(default_factory=dict)
     shared_state: Dict[tuple[str, str, str], Any] = field(default_factory=dict)
     hook_stack: List[str] = field(default_factory=list)
     cached_results: Dict[str, Any] = field(default_factory=dict)
+
+    # ========================================================================
+    # 辅助方法 (Helper Methods)
+    # ========================================================================
+
+    @property
+    def attacker(self) -> Optional['MechaSnapshot']:
+        """获取当前攻击方（兼容性属性，推荐使用 get_attacker()）"""
+        return self.get_attacker()
+
+    @property
+    def defender(self) -> Optional['MechaSnapshot']:
+        """获取当前防御方（兼容性属性，推荐使用 get_defender()）"""
+        return self.get_defender()
+
+    def get_attacker(self) -> Optional['MechaSnapshot']:
+        """获取当前攻击方机体
+
+        通过 weapon 的所有者判断谁是当前攻击方。
+        如果无法判断，按优先级返回：initiative_holder > mecha_a > None
+        """
+        if self.mecha_a and self.weapon in self.mecha_a.weapons:
+            return self.mecha_a
+        if self.mecha_b and self.weapon in self.mecha_b.weapons:
+            return self.mecha_b
+        # Fallback 1: 如果 initiative_holder 设置了，使用它
+        if self.initiative_holder:
+            return self.initiative_holder
+        # Fallback 2: 默认返回 mecha_a（兼容测试场景）
+        return self.mecha_a
+
+    def get_defender(self) -> Optional['MechaSnapshot']:
+        """获取当前防御方机体
+
+        通过 weapon 的所有者判断谁是当前防御方（即另一侧）。
+        如果无法判断，返回 None。
+        """
+        attacker = self.get_attacker()
+        if attacker is None:
+            return None
+        if attacker == self.mecha_a:
+            return self.mecha_b
+        return self.mecha_a
+
+    def set_attacker(self, mecha: 'MechaSnapshot') -> None:
+        """设置当前攻击方
+
+        根据传入的机体是 mecha_a 还是 mecha_b，确保 weapon 属于该机体。
+        """
+        if mecha == self.mecha_a:
+            self.initiative_holder = self.mecha_a
+        elif mecha == self.mecha_b:
+            self.initiative_holder = self.mecha_b
+        else:
+            raise ValueError("传入的机体必须是 mecha_a 或 mecha_b 之一")
 
 # 保留 Effect 相关的 Dataclasses 供技能系统使用
 @dataclass

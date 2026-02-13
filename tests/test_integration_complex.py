@@ -853,11 +853,13 @@ class TestEngineCoverage:
 
     def test_round_survivor_check_first_mover_dies(self, ace_pilot):
         """测试先攻方被击破时停止回合 (未覆盖行 379-380)"""
-        from src.combat.engine import BattleSimulator
+        from src.combat.engine import BattleSimulator, InitiativeCalculator
+        from src.models import InitiativeReason
 
-        attacker = Mecha(
-            instance_id="m_att", mecha_name="Attacker", main_portrait="m_img",
-            final_max_hp=5000, current_hp=1,  # 接近死亡
+        # 使用中性命名，避免角色语义误导
+        mecha_a = Mecha(
+            instance_id="m_a", mecha_name="MechaA", main_portrait="m_img",
+            final_max_hp=5000, current_hp=5000,
             final_max_en=100, current_en=100,
             final_armor=1000, final_mobility=100,
             final_hit=10.0, final_precision=10.0, final_crit=5.0,
@@ -866,8 +868,8 @@ class TestEngineCoverage:
                             "stat_defense": 100, "stat_reaction": 100}
         )
 
-        defender = Mecha(
-            instance_id="m_def", mecha_name="Defender", main_portrait="m_img",
+        mecha_b = Mecha(
+            instance_id="m_b", mecha_name="MechaB", main_portrait="m_img",
             final_max_hp=5000, current_hp=5000,
             final_max_en=100, current_en=100,
             final_armor=1000, final_mobility=100,
@@ -885,10 +887,14 @@ class TestEngineCoverage:
             range_min=100, range_max=1000,
             will_req=0, anim_id="a_test"
         )
-        defender.weapons = [weapon]
+        mecha_b.weapons = [weapon]
 
-        sim = BattleSimulator(attacker, defender)
+        sim = BattleSimulator(mecha_a, mecha_b)
         sim.round_number = 1
+
+        # Mock 先手判定，确保 mecha_a 是先手方
+        def mock_initiative(self_calc, a, b, round_num):
+            return a, b, InitiativeReason.PERFORMANCE
 
         # Mock 圆表判定 - 先攻方攻击 miss，后攻方反击击杀先攻方
         call_count = [0]
@@ -897,20 +903,22 @@ class TestEngineCoverage:
             from src.models import AttackResult
             call_count[0] += 1
             if call_count[0] == 1:
-                # 先攻方攻击，miss
+                # 先攻方（mecha_a）攻击，miss
                 return AttackResult.MISS, 0
             else:
-                # 后攻方反击，击杀先攻方（ctx.defender）
+                # 后攻方（mecha_b）反击，击杀先攻方
+                # 此时 ctx.defender 是先攻方 mecha_a
                 ctx.defender.take_damage(10000)
                 return AttackResult.HIT, 10000
 
         from unittest.mock import patch
-        with patch('src.combat.engine.AttackTableResolver.resolve_attack', side_effect=mock_resolve):
-            sim._execute_round()
+        with patch.object(InitiativeCalculator, 'calculate_initiative', mock_initiative):
+            with patch('src.combat.engine.AttackTableResolver.resolve_attack', side_effect=mock_resolve):
+                sim._execute_round()
 
-        # 先攻方死亡，后攻方存活
-        assert not attacker.is_alive()
-        assert defender.is_alive()
+        # 验证：先手方死亡，后手方存活
+        assert not mecha_a.is_alive(), "先手方应该被击杀"
+        assert mecha_b.is_alive(), "后手方应该存活"
 
     def test_en_cost_modification(self, ace_pilot):
         """测试 EN 消耗被修正 (未覆盖行 469-470)"""

@@ -1,168 +1,198 @@
-
 """
-快照工厂 (Snapshot Factory)
-负责将静态配置 (Config) 聚合为运行时快照 (Snapshot)。
-核心逻辑参考 doc/4.stat_equip_design.md
+工厂模块 - 从配置创建运行时快照
 """
 
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Any
 from .models import (
-    MechaConfig, PilotConfig, EquipmentConfig,
-    MechaSnapshot, WeaponSnapshot, WeaponType, SlotType
+    MechaSnapshot, PilotConfig, WeaponSnapshot, WeaponType,
+    MechaConfig, EquipmentConfig
 )
-from .config import Config
+
+
+class MechaFactory:
+    """机体工厂 - 从配置创建运行时快照"""
+
+    @staticmethod
+    def create_from_config(config: MechaConfig, pilot_config: PilotConfig | None = None) -> MechaSnapshot:
+        """从 MechaConfig 创建 MechaSnapshot
+
+        Args:
+            config: 机体配置
+            pilot_config: 驾驶员配置（可选）
+
+        Returns:
+            MechaSnapshot: 机体运行时快照
+        """
+        # 备份驾驶员属性
+        pilot_stats_backup = {}
+        if pilot_config:
+            pilot_stats_backup = {
+                'stat_shooting': pilot_config.stat_shooting,
+                'stat_melee': pilot_config.stat_melee,
+                'stat_awakening': pilot_config.stat_awakening,
+                'stat_defense': pilot_config.stat_defense,
+                'stat_reaction': pilot_config.stat_reaction,
+                'weapon_proficiency': pilot_config.weapon_proficiency,
+                'mecha_proficiency': pilot_config.mecha_proficiency,
+            }
+
+        # 创建 MechaSnapshot
+        snapshot = MechaSnapshot(
+            instance_id=config.id,
+            mecha_name=config.name,
+            main_portrait=config.portrait_id,
+            model_asset=config.model_asset,
+
+            # 资源属性
+            final_max_hp=config.init_hp,
+            current_hp=config.init_hp,
+            final_max_en=config.init_en,
+            current_en=config.init_en,
+
+            # 战斗属性
+            final_armor=config.init_armor,
+            final_mobility=config.init_mobility,
+
+            # 判定属性
+            final_hit=config.init_hit,
+            final_precision=config.init_precision,
+            final_crit=config.init_crit,
+
+            final_dodge=config.init_dodge,
+            final_parry=config.init_parry,
+            final_block=config.init_block,
+            block_reduction=config.init_block_red,
+
+            # 驾驶员属性备份
+            pilot_stats_backup=pilot_stats_backup,
+
+            # 初始武器列表（需要额外加载装备配置）
+            weapons=[],
+            skills=[],
+        )
+
+        return snapshot
+
+    @staticmethod
+    def create_weapon_from_config(config: EquipmentConfig) -> WeaponSnapshot:
+        """从 EquipmentConfig 创建 WeaponSnapshot
+
+        Args:
+            config: 装备配置
+
+        Returns:
+            WeaponSnapshot: 武器快照
+        """
+        return WeaponSnapshot(
+            uid=f"{config.id}_uid",
+            definition_id=config.id,
+            name=config.name,
+            type=config.weapon_type or WeaponType.SHOOTING,
+            final_power=config.weapon_power or 1000,
+            en_cost=config.weapon_en_cost or 10,
+            range_min=config.weapon_range_min or 0,
+            range_max=config.weapon_range_max or 6000,
+            will_req=config.weapon_will_req or 0,
+            anim_id=config.weapon_anim_id or "default_anim",
+            tags=config.weapon_tags or [],
+        )
+
 
 class SnapshotFactory:
-    """快照生成工厂"""
-    
+    """快照工厂 - 用于测试"""
+
     @staticmethod
     def create_mecha_snapshot(
         mecha_conf: MechaConfig,
-        pilot_conf: PilotConfig,
-        equipments: List[EquipmentConfig] = [],
-        sub_pilots: List[PilotConfig] = [], # 副驾驶视为虚拟装备
-        upgrade_level: int = 0, # 机体改造等级
-        will: int = 100
+        pilot_conf: PilotConfig | None = None,
+        equipments: List[EquipmentConfig] | None = None,
+        upgrade_level: int = 0
     ) -> MechaSnapshot:
-        """
-        生成机体运行时快照
-        
-        计算流程:
-        1. 基础属性 (Level 0) + 改造加成
-        2. 装备修正 (累加 Stat Modifiers)
-        3. 副驾驶修正 (累加 Stat Modifiers)
-        4. 驾驶员修正 (五维影响) -> 这个是在 Combat Resolver 中动态计算，还是在这里预计算？
-           根据设计文档，Hit/Crit/Dodge等概率由"硬件(机体+装备)"决定，
-           然后 Pilot Stats 作为 Attack/Defense Power 的修正，或最终概率的修正。
-           MechaSnapshot 存储的是 "硬件性能" + "驾驶员能力备份"。
-           
-        5. 生成 WeaponSnapshot 列表 (合并固定武器和装备武器)
-        """
-        
-        # 1. 基础属性处理
-        # 改造加成 (示例：简单的线性加成，实际可能查表)
-        hp_up = upgrade_level * 200
-        en_up = upgrade_level * 5
-        armor_up = upgrade_level * 20
-        mobility_up = upgrade_level * 2
-        hit_up = upgrade_level * 1
-        
-        base_hp = mecha_conf.init_hp + hp_up
-        base_en = mecha_conf.init_en + en_up
-        base_armor = mecha_conf.init_armor + armor_up
-        base_mobility = mecha_conf.init_mobility + mobility_up
-        
-        base_hit = mecha_conf.init_hit + hit_up
-        base_prec = mecha_conf.init_precision
-        base_crit = mecha_conf.init_crit
-        
-        base_dodge = mecha_conf.init_dodge
-        base_parry = mecha_conf.init_parry
-        base_block = mecha_conf.init_block
-        base_block_red = mecha_conf.init_block_red
-        
-        # 2. 装备与副驾驶修正聚合
-        # 副驾驶转换为虚拟装备 (TODO: 需要定义转换逻辑，这里简化为无属性修正或特定逻辑)
-        # 假设 EquipmentConfig 和 PilotConfig 结构不同，需要分别处理
-        
-        modifiers: Dict[str, float] = {}
-        
-        def add_mod(key: str, value: float):
-            modifiers[key] = modifiers.get(key, 0.0) + value
-            
-        # 遍历装备
-        for eq in equipments:
-            for stat, val in eq.stat_modifiers.items():
-                add_mod(stat, val)
-                
-        # 遍历副驾驶 (根据设计，副驾驶提供精神指令和被动技能，也能提供属性修正?)
-        # 假设副驾驶的 stat_modifiers 存在于某个字段，或者硬编码转换
-        # 这里暂时忽略副驾驶的直接属性修正，除非 doc 有明确映射
-        
-        # 3. 应用修正
-        final_hp = int(base_hp + modifiers.get("max_hp", 0))
-        final_en = int(base_en + modifiers.get("max_en", 0))
-        final_armor = int(base_armor + modifiers.get("armor", 0))
-        final_mobility = int(base_mobility + modifiers.get("mobility", 0))
-        
-        final_hit = base_hit + modifiers.get("hit_rate", 0)
-        final_prec = base_prec + modifiers.get("precision", 0)
-        final_crit = base_crit + modifiers.get("crit_rate", 0)
-        
-        final_dodge = base_dodge + modifiers.get("dodge_rate", 0)
-        final_parry = base_parry + modifiers.get("parry_rate", 0)
-        final_block = base_block + modifiers.get("block_rate", 0)
-        
-        # 4. 武器快照生成
-        weapon_snapshots: List[WeaponSnapshot] = []
-        
-        # 处理内置武器 (需要从 id 查找 Config，这里假设有 loader，暂且跳过查找，
-        # 实际应传入 WeaponConfigs 列表或由 caller 准备好)
-        # 为了演示，我们假设 caller 已经解析好了武器配置，或者我们需要一个 weapon_lookup
-        # 这里先只处理 equipments 中的武器
-        
-        # 处理装备提供的武器
-        for eq in equipments:
-            if eq.type == "WEAPON" and eq.weapon_type:
-                w_type = eq.weapon_type
-                if isinstance(w_type, str): # Handle potential string vs Enum
-                    try:
-                        w_type = WeaponType(w_type)
-                    except ValueError:
-                        w_type = WeaponType.SHOOTING # Fallback
-                
-                ws = WeaponSnapshot(
-                    uid=f"{eq.id}_{id(eq)}", # 临时唯一ID
-                    definition_id=eq.id,
-                    name=eq.name,
-                    type=w_type,
-                    final_power=eq.weapon_power or 1000,
-                    range_min=eq.weapon_range_min or 1,
-                    range_max=eq.weapon_range_max or 1,
-                    en_cost=eq.weapon_en_cost or 0,
-                    will_req=eq.weapon_will_req,
-                    anim_id=eq.weapon_anim_id,
-                    hit_mod=0.0, # 初始修正
-                    crit_mod=0.0,
-                    tags=eq.weapon_tags
-                )
-                weapon_snapshots.append(ws)
+        """创建 MechaSnapshot
 
-        # 5. 组装 Pilot Backup
-        pilot_backup = {
-            "stat_shooting": pilot_conf.stat_shooting,
-            "stat_melee": pilot_conf.stat_melee,
-            "stat_awakening": pilot_conf.stat_awakening,
-            "stat_defense": pilot_conf.stat_defense,
-            "stat_reaction": pilot_conf.stat_reaction,
-        }
-        
-        return MechaSnapshot(
-            instance_id=f"{mecha_conf.id}_inst_{pilot_conf.id}",
+        Args:
+            mecha_conf: 机体配置
+            pilot_conf: 驾驶员配置
+            equipments: 装备列表
+            upgrade_level: 改造等级
+
+        Returns:
+            MechaSnapshot: 机体快照
+        """
+        # 备份驾驶员属性
+        pilot_stats_backup = {}
+        if pilot_conf:
+            pilot_stats_backup = {
+                'stat_shooting': pilot_conf.stat_shooting,
+                'stat_melee': pilot_conf.stat_melee,
+                'stat_awakening': pilot_conf.stat_awakening,
+                'stat_defense': pilot_conf.stat_defense,
+                'stat_reaction': pilot_conf.stat_reaction,
+                'weapon_proficiency': pilot_conf.weapon_proficiency,
+                'mecha_proficiency': pilot_conf.mecha_proficiency,
+            }
+
+        # 应用改造加成
+        hp_bonus = upgrade_level * 200
+        armor_bonus = upgrade_level * 20
+
+        # 初始化属性
+        final_hp = mecha_conf.init_hp + hp_bonus
+        final_armor = mecha_conf.init_armor + armor_bonus
+        final_mobility = mecha_conf.init_mobility
+        final_hit = mecha_conf.init_hit
+
+        # 应用装备属性修正
+        weapons = []
+        if equipments:
+            for equip in equipments:
+                if equip.type == "WEAPON":
+                    weapons.append(SnapshotFactory.create_weapon_snapshot(equip))
+                # 应用装备属性修正
+                for stat_name, value in equip.stat_modifiers.items():
+                    if stat_name == "mobility":
+                        final_mobility += int(value)
+                    elif stat_name == "hit_rate":
+                        final_hit += value
+
+        snapshot = MechaSnapshot(
+            instance_id=mecha_conf.id,
             mecha_name=mecha_conf.name,
-            main_portrait=pilot_conf.portrait_id,
-            sub_portrait=sub_pilots[0].portrait_id if sub_pilots else None,
+            main_portrait=mecha_conf.portrait_id,
             model_asset=mecha_conf.model_asset,
-            
-            final_max_hp=final_hp,
-            current_hp=final_hp,
-            final_max_en=final_en,
-            current_en=final_en,
-            
-            final_armor=final_armor,
-            final_mobility=final_mobility,
-            
+            final_max_hp=int(final_hp),
+            current_hp=int(final_hp),
+            final_max_en=mecha_conf.init_en,
+            current_en=mecha_conf.init_en,
+            final_armor=int(final_armor),
+            final_mobility=int(final_mobility),
             final_hit=final_hit,
-            final_precision=final_prec,
-            final_crit=final_crit,
-            
-            final_dodge=final_dodge,
-            final_parry=final_parry,
-            final_block=final_block,
-            block_reduction=base_block_red, # 暂无修正
-            
-            weapons=weapon_snapshots,
-            skills=pilot_conf.innate_skills + [s for eq in equipments for s in eq.passive_skills],
-            pilot_stats_backup=pilot_backup,
-            current_will=will
+            final_precision=mecha_conf.init_precision,
+            final_crit=mecha_conf.init_crit,
+            final_dodge=mecha_conf.init_dodge,
+            final_parry=mecha_conf.init_parry,
+            final_block=mecha_conf.init_block,
+            block_reduction=mecha_conf.init_block_red,
+            pilot_stats_backup=pilot_stats_backup,
+            weapons=weapons,
+            skills=[],
+        )
+
+        return snapshot
+
+    @staticmethod
+    def create_weapon_snapshot(config: EquipmentConfig) -> WeaponSnapshot:
+        """从 EquipmentConfig 创建 WeaponSnapshot"""
+        return WeaponSnapshot(
+            uid=f"{config.id}_uid",
+            definition_id=config.id,
+            name=config.name,
+            type=config.weapon_type or WeaponType.SHOOTING,
+            final_power=config.weapon_power or 1000,
+            en_cost=config.weapon_en_cost or 10,
+            range_min=config.weapon_range_min or 0,
+            range_max=config.weapon_range_max or 6000,
+            will_req=config.weapon_will_req or 0,
+            anim_id=config.weapon_anim_id or "default_anim",
+            tags=config.weapon_tags or [],
         )

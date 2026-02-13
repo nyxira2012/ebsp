@@ -151,7 +151,7 @@ class TestCriticalHit:
         if result == AttackResult.CRIT:
             # 暴击应该给攻击方+5气力
             # 但气力变化存储在context中，不是直接修改mecha
-            assert basic_context.attacker_will_delta == 5
+            assert basic_context.current_attacker_will_delta == 5
 
 
 # ============================================================================
@@ -206,8 +206,8 @@ class TestWillChanges:
 
         if result == AttackResult.MISS:
             # Miss没有气力变化
-            assert basic_context.attacker_will_delta == 0
-            assert basic_context.defender_will_delta == 0
+            assert basic_context.current_attacker_will_delta == 0
+            assert basic_context.current_defender_will_delta == 0
 
     @patch('random.uniform')
     def test_dodge_will_change(self, mock_uniform, basic_context):
@@ -218,7 +218,7 @@ class TestWillChanges:
 
         if result == AttackResult.DODGE:
             # 躲闪: 防御方+5气力
-            assert basic_context.defender_will_delta == 5
+            assert basic_context.current_defender_will_delta == 5
 
     @patch('random.uniform')
     def test_parry_will_change(self, mock_uniform, basic_context):
@@ -231,7 +231,7 @@ class TestWillChanges:
 
         if result == AttackResult.PARRY:
             # 招架: 防御方+15气力
-            assert basic_context.defender_will_delta == 15
+            assert basic_context.current_defender_will_delta == 15
 
     @patch('random.uniform')
     def test_hit_will_change(self, mock_uniform, basic_context):
@@ -246,8 +246,8 @@ class TestWillChanges:
 
         if result == AttackResult.HIT:
             # 命中: 攻击方+2, 防御方+1
-            assert basic_context.attacker_will_delta == 2
-            assert basic_context.defender_will_delta == 1
+            assert basic_context.current_attacker_will_delta == 2
+            assert basic_context.current_defender_will_delta == 1
 
 
 # ============================================================================
@@ -367,7 +367,7 @@ class TestEdgeCases:
         from src.models import WeaponSnapshot as Weapon
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
-            attacker=attacker, defender=defender,
+            mecha_a=attacker, mecha_b=defender,
             weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
                         final_power=1000, en_cost=10, range_min=1, range_max=5000,
                         will_req=0, anim_id="default")

@@ -30,8 +30,8 @@ class TestAceVsNormal:
     def test_ace_advantage_in_hit_rate(self, battlefield):
         """测试王牌驾驶员命中优势"""
         # 应用特性
-        TraitManager.apply_traits(battlefield.attacker)
-        TraitManager.apply_traits(battlefield.defender)
+        TraitManager.apply_traits(battlefield.get_attacker())
+        TraitManager.apply_traits(battlefield.get_defender())
 
         # 计算圆桌段
         segments = AttackTableResolver.calculate_attack_table_segments(battlefield)
@@ -47,7 +47,7 @@ class TestAceVsNormal:
 
     def test_ace_higher_crit_chance(self, battlefield):
         """测试王牌驾驶员高暴击率"""
-        TraitManager.apply_traits(battlefield.attacker)
+        TraitManager.apply_traits(battlefield.get_attacker())
 
         segments = AttackTableResolver.calculate_attack_table_segments(battlefield)
 
@@ -61,8 +61,8 @@ class TestAceVsNormal:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=zaku_ii,
-            defender=gundam_rx78,
+            mecha_a=zaku_ii,
+            mecha_b=gundam_rx78,
             weapon=zaku_ii.weapons[0]
         )
 
@@ -95,8 +95,8 @@ class TestSpiritTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -115,8 +115,8 @@ class TestSpiritTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -140,8 +140,8 @@ class TestSpiritTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -153,8 +153,8 @@ class TestSpiritTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=zaku_ii,
-            defender=gundam_rx78,
+            mecha_a=zaku_ii,
+            mecha_b=gundam_rx78,
             weapon=zaku_ii.weapons[0]
         )
 
@@ -205,8 +205,8 @@ class TestMultiRoundCombat:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -255,8 +255,8 @@ class TestMultiRoundCombat:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -306,8 +306,8 @@ class TestExtremeCombat:
             round_number=1,
             distance=10000,  # 超出光束步枪射程6000
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -335,8 +335,8 @@ class TestComplexComboTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -366,8 +366,8 @@ class TestComplexComboTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -383,8 +383,8 @@ class TestComplexComboTactics:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -401,8 +401,8 @@ class TestComplexComboTactics:
             round_number=2,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -431,8 +431,8 @@ class TestFullBattleSimulation:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -447,8 +447,8 @@ class TestFullBattleSimulation:
             round_number=2,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -464,8 +464,8 @@ class TestFullBattleSimulation:
             round_number=3,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 
@@ -500,8 +500,8 @@ class TestFullBattleSimulation:
             round_number=1,
             distance=3000,
             terrain=None,
-            attacker=gundam_rx78,
-            defender=zaku_ii,
+            mecha_a=gundam_rx78,
+            mecha_b=zaku_ii,
             weapon=gundam_rx78.weapons[0]
         )
 

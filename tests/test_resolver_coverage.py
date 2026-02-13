@@ -1,6 +1,11 @@
 """
 补充 resolver.py 的边界条件测试
 主要覆盖 _calculate_segments 方法 (23-103行) 的各种场景
+
+注意：熟练度系统 (weapon_proficiency, mecha_proficiency) 保留在 PilotConfig 中
+并通过 CombatCalculator 的 calculate_proficiency_* 函数在圆桌判定中生效：
+- calculate_proficiency_miss_penalty: 影响未命中率 (0次时30% → 1000次时12%)
+- calculate_proficiency_defense_ratio: 影响闪避/招架率 (0次时0% → 4000次时基础值)
 """
 
 import pytest
@@ -9,26 +14,26 @@ from src.combat.resolver import AttackTableResolver
 
 
 # ============================================================================
-# 测试熟练度影响 (注意：熟练度系统已重构，这些测试暂时跳过)
+# 测试熟练度影响 (使用 calculator.py 中的熟练度计算函数)
 # ============================================================================
 
 # 注意：所有 fixtures 已移至 conftest.py
 # 包括: standard_pilot, high_proficiency_pilot, low_proficiency_pilot
 #       balanced_mecha, offensive_mecha, defensive_mecha, standard_context
 #
-# 熟练度字段 (weapon_proficiency, mecha_proficiency) 已从 PilotConfig 移除
-# 新的熟练度系统需要在 data/skills.json 中配置相关技能
+# 熟练度系统保留在 PilotConfig 中：
+# - weapon_proficiency: 影响未命中率 (通过 calculate_proficiency_miss_penalty)
+# - mecha_proficiency: 影响闪避/招架率 (通过 calculate_proficiency_defense_ratio)
 
 class TestProficiencyImpact:
     """测试熟练度对圆桌判定的影响"""
-    # TODO: 等待新的熟练度系统实现后，重新设计这些测试
 
     def test_placeholder_low_stat_increases_miss(self, balanced_mecha):
         """测试低射击值增加MISS率 (占位测试)"""
         # 使用基础属性进行测试
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=balanced_mecha, defender=balanced_mecha, weapon=None
+            mecha_a=balanced_mecha, mecha_b=balanced_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -40,7 +45,7 @@ class TestProficiencyImpact:
         """测试高命中率减少MISS率 (占位测试)"""
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=high_hit_mecha, defender=high_hit_mecha, weapon=None
+            mecha_a=high_hit_mecha, mecha_b=high_hit_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -53,7 +58,7 @@ class TestProficiencyImpact:
         """测试高躲闪增加防御率 (占位测试)"""
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=balanced_mecha, defender=high_dodge_mecha, weapon=None
+            mecha_a=balanced_mecha, mecha_b=high_dodge_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -74,7 +79,7 @@ class TestPrecisionImpact:
         """测试高精度降低防御率"""
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=offensive_mecha, defender=defensive_mecha, weapon=None
+            mecha_a=offensive_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -102,7 +107,7 @@ class TestPrecisionImpact:
 
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=attacker, defender=defensive_mecha, weapon=None
+            mecha_a=attacker, mecha_b=defensive_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -131,7 +136,7 @@ class TestDefenseCaps:
 
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=balanced_mecha, defender=defender, weapon=None
+            mecha_a=balanced_mecha, mecha_b=defender, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -150,7 +155,7 @@ class TestDefenseCaps:
 
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=balanced_mecha, defender=defender, weapon=None
+            mecha_a=balanced_mecha, mecha_b=defender, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -171,7 +176,7 @@ class TestCritSqueezing:
         """测试高防御率挤压CRIT空间"""
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=crit_mecha, defender=defensive_mecha, weapon=None
+            mecha_a=crit_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -192,7 +197,7 @@ class TestCritSqueezing:
         # 构造高防御方场景
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=balanced_mecha, defender=defensive_mecha, weapon=None
+            mecha_a=balanced_mecha, mecha_b=defensive_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -245,7 +250,7 @@ class TestHitAsFallback:
 
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=attacker, defender=balanced_mecha, weapon=None
+            mecha_a=attacker, mecha_b=balanced_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -329,7 +334,7 @@ class TestExtremeScenarios:
 
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=attacker, defender=defender, weapon=None
+            mecha_a=attacker, mecha_b=defender, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)
@@ -342,7 +347,7 @@ class TestExtremeScenarios:
         """测试超高命中率"""
         ctx = BattleContext(
             round_number=1, distance=1000, terrain=None,
-            attacker=high_hit_mecha, defender=balanced_mecha, weapon=None
+            mecha_a=high_hit_mecha, mecha_b=balanced_mecha, weapon=None
         )
 
         segments = AttackTableResolver._calculate_segments(ctx)

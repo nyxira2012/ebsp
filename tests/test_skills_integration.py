@@ -101,8 +101,8 @@ def battle_context():
         round_number=1,
         distance=1000,
         terrain=Terrain.SPACE,
-        attacker=attacker,
-        defender=defender,
+        mecha_a=attacker,
+        mecha_b=defender,
         weapon=None
     )
 

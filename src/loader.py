@@ -84,7 +84,8 @@ class DataLoader:
             # Pydantic 会自动处理嵌套字典和枚举
             try:
                 obj = model_cls.model_validate(item)
-                container[obj.id] = obj
+                # 所有具体的配置类都有 id 属性
+                container[obj.id] = obj  # type: ignore
             except Exception as e:
                 print(f"加载 {filename} 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
 

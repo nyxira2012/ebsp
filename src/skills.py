@@ -4,7 +4,7 @@
 """
 
 from typing import Callable, Any, TypeAlias, List
-from .models import Mecha, BattleContext, Effect, Modifier
+from .models import Mecha, BattleContext, Effect, Modifier, AttackResult, WeaponType
 from .skill_system.processor import EffectProcessor
 from .skill_system.effect_factory import EffectFactory
 
@@ -123,7 +123,6 @@ def cb_gn_recover(val, ctx, owner):
 @SkillRegistry.register_callback("cb_miracle_hit")
 def cb_miracle_hit(val, ctx, owner):
     """奇迹: 强制命中 (将 HOOK_OVERRIDE_RESULT 设为 HIT)"""
-    from ..models import AttackResult
     # 只在未命中时强制命中
     if val is None or val == AttackResult.MISS:
         return AttackResult.HIT
@@ -132,7 +131,6 @@ def cb_miracle_hit(val, ctx, owner):
 @SkillRegistry.register_callback("cb_instinct_dodge")
 def cb_instinct_dodge(val, ctx, owner):
     """本能: 30%概率将 HIT 扭转为 DODGE"""
-    from ..models import AttackResult
     import random
     if val == AttackResult.HIT and random.random() < 0.3:
         print(f"   [Skill] {owner.name} 本能触发! HIT -> DODGE")
@@ -150,8 +148,8 @@ def cb_auto_repair(damage, ctx, owner):
 @SkillRegistry.register_callback("cb_ablat")
 def cb_ablat(damage, ctx, owner):
     """烧蚀装甲: 对光束伤害减少200点"""
-    from ..models import WeaponType
-    if ctx.weapon and ctx.weapon.weapon_type in [WeaponType.BEAM, WeaponType.BEAM_SABER]:
+    # TODO: 确认武器类型区分方式，光束武器目前归为 SHOOTING 类型
+    if ctx.weapon and ctx.weapon.weapon_type in [WeaponType.SHOOTING, WeaponType.MELEE]:
         damage = max(0, damage - 200)
         print(f"   [Trait] {owner.name} 烧蚀装甲减少200点光束伤害")
     return damage

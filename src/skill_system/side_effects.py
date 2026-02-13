@@ -52,15 +52,18 @@ class SideEffectExecutor:
             Mecha | None: 目标机体对象
         """
         target_type = effect_data.get("target", "self")
-        
+
         if target_type == "self":
             return owner
         elif target_type == "enemy":
-            if owner == context.attacker:
-                return context.defender
-            elif owner == context.defender:
-                return context.attacker
-        
+            # 如果 owner 是当前攻击方，目标就是当前防御方，反之亦然
+            attacker = context.get_attacker()
+            defender = context.get_defender()
+            if owner == attacker:
+                return defender
+            elif owner == defender:
+                return attacker
+
         return None
 
     # --- 具体副作用实现 ---

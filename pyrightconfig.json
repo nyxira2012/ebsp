@@ -1,0 +1,16 @@
+{
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/test_*.py"
+  ],
+  "ignore": [
+    "**/.*"
+  ],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.13",
+  "stubPath": "src/typings"
+}

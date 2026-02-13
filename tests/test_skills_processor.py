@@ -485,7 +485,7 @@ class TestTargetSelection:
 
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
-            attacker=basic_mecha, defender=enemy,
+            mecha_a=basic_mecha, mecha_b=enemy,
             weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
                         final_power=1000, en_cost=10, range_min=1, range_max=5000,
                         will_req=0, anim_id="default")
@@ -516,7 +516,7 @@ class TestTargetSelection:
 
         context = BattleContext(
             round_number=1, distance=1000, terrain=Terrain.SPACE,
-            attacker=basic_mecha, defender=enemy,
+            mecha_a=basic_mecha, mecha_b=enemy,
             weapon=Weapon(uid="w_uid", definition_id="w", name="W", type=WeaponType.SHOOTING,
                         final_power=1000, en_cost=10, range_min=1, range_max=5000,
                         will_req=0, anim_id="default")

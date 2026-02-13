@@ -142,8 +142,8 @@ def basic_context(basic_mecha, basic_weapon):
         round_number=1,
         distance=1000,
         terrain=Terrain.SPACE,
-        attacker=basic_mecha,
-        defender=basic_mecha,
+        mecha_a=basic_mecha,
+        mecha_b=basic_mecha,
         weapon=basic_weapon
     )
 
@@ -412,22 +412,24 @@ def effect_prob_dodge():
 @pytest.fixture
 def effect_conditional_low_hp():
     """HP<30%触发伤害x1.5"""
+    from src.models import Condition
     return Effect(
         id="test_low_hp_berserk", name="Low HP Berserk",
         hook="HOOK_PRE_DAMAGE_MULT",
         operation="mul", value=1.5,
-        conditions=[{"type": "hp_threshold", "val": 0.3, "op": "<"}],
+        conditions=[Condition(type="hp_threshold", params={"val": 0.3, "op": "<"})],
         duration=-1, priority=60
     )
 
 @pytest.fixture
 def effect_conditional_high_will():
     """气力>=130触发伤害x1.3"""
+    from src.models import Condition
     return Effect(
         id="test_high_will", name="High Will Boost",
         hook="HOOK_PRE_DAMAGE_MULT",
         operation="mul", value=1.3,
-        conditions=[{"type": "will_threshold", "val": 130, "op": ">="}],
+        conditions=[Condition(type="will_threshold", params={"val": 130, "op": ">="})],
         duration=1, priority=60
     )
 
@@ -444,11 +446,12 @@ def effect_with_charges():
 @pytest.fixture
 def effect_with_side_effects():
     """带副作用的效果 (消耗EN)"""
+    from src.models import SideEffect
     return Effect(
         id="test_side_effect", name="Test Side Effect",
         hook="HOOK_PRE_DAMAGE_MULT",
         operation="mul", value=2.0,
-        side_effects=[{"type": "consume_en", "val": 10}],
+        side_effects=[SideEffect(type="consume_en", params={"val": 10})],
         duration=1, priority=60
     )
 
@@ -464,8 +467,8 @@ def close_range_context(basic_mecha, melee_weapon):
         round_number=1,
         distance=500,
         terrain=Terrain.SPACE,
-        attacker=basic_mecha,
-        defender=basic_mecha,
+        mecha_a=basic_mecha,
+        mecha_b=basic_mecha,
         weapon=melee_weapon
     )
 
@@ -476,8 +479,8 @@ def mid_range_context(basic_mecha, rifle_weapon):
         round_number=1,
         distance=3000,
         terrain=Terrain.SPACE,
-        attacker=basic_mecha,
-        defender=basic_mecha,
+        mecha_a=basic_mecha,
+        mecha_b=basic_mecha,
         weapon=rifle_weapon
     )
 
@@ -488,8 +491,8 @@ def long_range_context(basic_mecha, sniper_weapon):
         round_number=1,
         distance=6000,
         terrain=Terrain.SPACE,
-        attacker=basic_mecha,
-        defender=basic_mecha,
+        mecha_a=basic_mecha,
+        mecha_b=basic_mecha,
         weapon=sniper_weapon
     )
 
@@ -500,8 +503,8 @@ def out_of_range_context(basic_mecha, rifle_weapon):
         round_number=1,
         distance=8000,
         terrain=Terrain.SPACE,
-        attacker=basic_mecha,
-        defender=basic_mecha,
+        mecha_a=basic_mecha,
+        mecha_b=basic_mecha,
         weapon=rifle_weapon
     )
 
@@ -796,30 +799,30 @@ def zaku_ii(normal_pilot):
 @pytest.fixture
 def standard_context(balanced_mecha):
     """标准战斗上下文"""
-    defender = MechaSnapshot(
+    mecha_b = MechaSnapshot(
         instance_id="m_defender", mecha_name="Defender",
         main_portrait="m_001", model_asset="default",
         final_max_hp=5000, current_hp=5000,
         final_max_en=100, current_en=100,
         final_armor=1000, final_mobility=100,
         final_hit=10.0, final_precision=10.0, final_crit=5.0,
-        final_dodge=10.0, final_parry=10.0, final_block=10.0, int_block_reduction=500,
+        final_dodge=10.0, final_parry=10.0, final_block=10.0, block_reduction=500,
         pilot_stats_backup=balanced_mecha.pilot_stats_backup
     )
 
     return BattleContext(
         round_number=1,
         distance=1000,
-        terrain=None,
-        attacker=balanced_mecha,
-        defender=defender,
+        terrain=Terrain.SPACE,
+        mecha_a=balanced_mecha,
+        mecha_b=mecha_b,
         weapon=None
     )
 
 @pytest.fixture
 def full_context(full_mecha):
     """满资源战斗上下文"""
-    defender = MechaSnapshot(
+    mecha_b = MechaSnapshot(
         instance_id="m_enemy", mecha_name="EnemyMecha",
         main_portrait="m_001", model_asset="default",
         final_max_hp=5000, current_hp=5000,
@@ -833,9 +836,9 @@ def full_context(full_mecha):
     return BattleContext(
         round_number=1,
         distance=1000,
-        terrain=None,
-        attacker=full_mecha,
-        defender=defender,
+        terrain=Terrain.SPACE,
+        mecha_a=full_mecha,
+        mecha_b=mecha_b,
         weapon=None
     )
 
@@ -845,8 +848,8 @@ def battlefield(gundam_rx78, zaku_ii):
     return BattleContext(
         round_number=1,
         distance=3000,  # 中距离
-        terrain=None,
-        attacker=gundam_rx78,
-        defender=zaku_ii,
+        terrain=Terrain.SPACE,
+        mecha_a=gundam_rx78,
+        mecha_b=zaku_ii,
         weapon=gundam_rx78.weapons[0]  # 使用光束步枪
     )

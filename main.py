@@ -11,6 +11,7 @@ if sys.platform.startswith('win'):
 from src import DataLoader, Mecha
 from src.skills import TraitManager
 from src.combat import BattleSimulator
+from src.factory import MechaFactory
 
 
 def main() -> int:
@@ -19,18 +20,20 @@ def main() -> int:
     print("真实系机甲战斗模拟器 v2.0 (数据驱动版)")
     print("=" * 80)
     print()
-    
+
     # 1. 初始化数据加载器
     loader: DataLoader = DataLoader(data_dir="data")
-    
+
     try:
         # 2. 加载所有数据
         loader.load_all()
         print()
-        
-        # 4. 获取参战机体
-        mecha_a: Mecha = loader.get_mecha("mech_rx78")
-        mecha_b: Mecha = loader.get_mecha("mech_zaku")
+
+        # 4. 获取参战机体 - 从 Config 创建 Snapshot
+        config_a = loader.get_mecha_config("mech_rx78")
+        config_b = loader.get_mecha_config("mech_zaku")
+        mecha_a: Mecha = MechaFactory.create_from_config(config_a)
+        mecha_b: Mecha = MechaFactory.create_from_config(config_b)
 
         # 5. 应用机体特性
         print("应用机体特性...")

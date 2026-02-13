@@ -239,7 +239,8 @@ class TestLoadPilots:
         assert amuro.stat_awakening == 120
         assert amuro.stat_defense == 100
         assert amuro.stat_reaction == 160
-        # 熟练度字段已从 PilotConfig 移除
+        # 熟练度字段 (weapon_proficiency, mecha_proficiency) 保留在 PilotConfig 中
+        # 用于计算武器命中惩罚和机体防御率
 
     def test_pilot_portrait_id(self, loader):
         """测试驾驶员头像ID"""

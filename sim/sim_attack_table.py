@@ -96,13 +96,13 @@ def create_test_mechas(
     crit_bonus = attacker_stats.get("crit_bonus", 0.0)
 
     m_a = Mecha(
-        id="m_a", name="Attacker",
-        max_hp=1000, current_hp=1000,
-        max_en=100, current_en=100,
-        mobility=100, defense_level=1000,
-        final_hit=hit_bonus,  # 使用实际字段名
+        instance_id="m_a", mecha_name="Attacker",
+        final_max_hp=1000, current_hp=1000,
+        final_max_en=100, current_en=100,
+        final_mobility=100, final_armor=1000,
+        final_hit=hit_bonus,
         final_precision=0.0,
-        final_crit=crit_bonus,  # 使用实际字段名
+        final_crit=crit_bonus,
         final_dodge=0.0, final_parry=0.0, final_block=0.0,
         # 备份驾驶员属性，供 MockPilot 使用
         pilot_stats_backup={
@@ -127,14 +127,14 @@ def create_test_mechas(
     block_bonus = defender_stats.get("block_bonus", 0.0)
 
     m_b = Mecha(
-        id="m_b", name="Defender",
-        max_hp=1000, current_hp=1000,
-        max_en=100, current_en=100,
-        mobility=100, defense_level=1000,
+        instance_id="m_b", mecha_name="Defender",
+        final_max_hp=1000, current_hp=1000,
+        final_max_en=100, current_en=100,
+        final_mobility=100, final_armor=1000,
         final_hit=0.0, final_precision=0.0, final_crit=0.0,
-        final_dodge=dodge_bonus,  # 使用实际字段名
-        final_parry=parry_bonus,  # 使用实际字段名
-        final_block=block_bonus,  # 使用实际字段名
+        final_dodge=dodge_bonus,
+        final_parry=parry_bonus,
+        final_block=block_bonus,
         # 备份驾驶员属性，供 MockPilot 使用
         pilot_stats_backup={
             'stat_shooting': 100,
@@ -198,7 +198,7 @@ def run_simulation(
 
     return Counter(results), m_a, m_b, weapon
 
-def print_statistics(stats: Counter, iterations: int, segments: dict = None):
+def print_statistics(stats: Counter, iterations: int, segments: dict | None = None):
     """打印统计结果
 
     Args:

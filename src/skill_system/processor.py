@@ -124,25 +124,25 @@ class EffectProcessor:
             List[tuple[Effect, Mecha]]: 效果及其持有机体的元组列表
         """
         effects = []
-        
+
         # 使用 set 记录已处理的机体，防止同一机体参与多个角色(如测试场景)导致效果重复触发
         processed_mechas = set()
-        
-        # 1. 收集攻击方
-        if context.attacker and id(context.attacker) not in processed_mechas:
-            for effect in context.attacker.effects:
-                effects.append((effect, context.attacker))
-            processed_mechas.add(id(context.attacker))
-            
-        # 2. 收集防御方
-        if context.defender and id(context.defender) not in processed_mechas:
-            for effect in context.defender.effects:
-                effects.append((effect, context.defender))
-            processed_mechas.add(id(context.defender))
-            
+
+        # 1. 收集 mecha_a
+        if context.mecha_a and id(context.mecha_a) not in processed_mechas:
+            for effect in context.mecha_a.effects:
+                effects.append((effect, context.mecha_a))
+            processed_mechas.add(id(context.mecha_a))
+
+        # 2. 收集 mecha_b
+        if context.mecha_b and id(context.mecha_b) not in processed_mechas:
+            for effect in context.mecha_b.effects:
+                effects.append((effect, context.mecha_b))
+            processed_mechas.add(id(context.mecha_b))
+
         # 3. 收集全局效果 (可以通过 context.global_effects 传入)
         # 例如地形、指挥官灵气等
-        
+
         return effects
 
     @staticmethod
@@ -167,7 +167,7 @@ class EffectProcessor:
         val = effect.value
         
         # 数值运算
-        if isinstance(current_value, (int, float)):
+        if isinstance(current_value, (int, float)) and isinstance(val, (int, float)):
              if op == "add":
                  return current_value + val
              elif op == "sub":
