@@ -43,7 +43,7 @@ class TestMechaFactory:
     def equip_parts(self):
         return EquipmentConfig(
             id="e_001", name="Booster", type="EQUIP",
-            stat_modifiers={"mobility": 10.0, "hit_rate": 5.0}
+            stat_modifiers={"final_mobility": 10.0, "final_hit": 5.0}
         )
 
     def test_basic_creation(self, mecha_conf, pilot_conf):

@@ -550,7 +550,8 @@ class TestEngineCoverage:
 
         # 在 50m 距离下（超短程），应该返回保底武器
         selected = WeaponSelector.select_best_weapon(mecha, 50)
-        assert selected.type == "撞击"  # 保底武器
+        assert selected.name == "撞击"  # 保底武器名称
+        assert selected.type == WeaponType.FALLBACK  # 保底武器类型
 
     def test_battle_simulator_insufficient_en(self, ace_pilot):
         """测试 EN 不足时无法攻击 (未覆盖行 468-470)"""

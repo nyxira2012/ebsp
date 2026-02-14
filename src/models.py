@@ -5,7 +5,7 @@
 
 from enum import Enum
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from dataclasses import dataclass, field
 from .config import Config
 
@@ -15,11 +15,12 @@ from .config import Config
 
 class WeaponType(str, Enum):
     """武器类型"""
-    MELEE = "格斗"      # < 2000m
-    SHOOTING = "射击"   # 1000m - 6000m
-    AWAKENING = "觉醒"  # 浮游炮等
-    SPECIAL = "特殊"    # 地图炮或其他
-    FALLBACK = "撞击"   # 保底武器
+    MELEE = "MELEE"      # < 2000m
+    SHOOTING = "RIFLE"   # 1000m - 6000m
+    AWAKENING = "AWAKENING"  # 浮游炮等
+    SPECIAL = "SPECIAL"    # 地图炮或其他
+    FALLBACK = "FALLBACK"   # 保底武器
+    HEAVY = "HEAVY"     # 重武器
 
 class SlotType(str, Enum):
     """槽位类型"""
@@ -90,25 +91,67 @@ class EquipmentConfig(BaseModel):
     """装备/部件配置表"""
     id: str
     name: str
-    type: str               # WEAPON / EQUIP
-    
+    type: str               # WEAPON / EQUIP - 装备类型
+
     # 属性修正 (加法叠加)
     # key 必须匹配 MechaSnapshot 中的属性名 (e.g. "final_max_hp", "final_mobility")
     # 或者原始属性名 (e.g. "init_hp")，具体由 Factory 处理
     stat_modifiers: Dict[str, float] = {}
-    
+
     # 武器特有属性 (仅当 type="WEAPON" 时有效)
-    weapon_power: Optional[int] = None
+    # 使用 alias 兼容 JSON 中的字段名
+    weapon_power: Optional[int] = Field(default=None, alias="power")
     weapon_range_min: Optional[int] = None
     weapon_range_max: Optional[int] = None
-    weapon_en_cost: Optional[int] = None
-    weapon_type: Optional[WeaponType] = None 
+    weapon_en_cost: Optional[int] = Field(default=None, alias="en_cost")
+    weapon_type: Optional[WeaponType] = None  # 具体武器类型 (MELEE/RIFLE等)
     weapon_will_req: int = 0  # 气力需求
     weapon_tags: List[str] = []
-    weapon_anim_id: str = "default_anim" 
-    
+    weapon_anim_id: str = "default_anim"
+
+    # 用于接收嵌套的 range 对象 (from weapons.json)
+    range: Optional[Dict[str, int]] = None
+
     # 携带技能
     passive_skills: List[str] = []
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_range_fields(cls, data: Any) -> Any:
+        """从嵌套的 range 对象中提取 min/max 值到 weapon_range_min/max，并处理 weapon_type"""
+        if not isinstance(data, dict):
+            return data
+
+        # 如果有 range 对象，提取 min 和 max
+        if 'range' in data and isinstance(data['range'], dict):
+            range_data = data['range']
+            # 只在还没有 weapon_range_min/max 时才设置
+            if 'min' in range_data and 'weapon_range_min' not in data:
+                data['weapon_range_min'] = range_data['min']
+            if 'max' in range_data and 'weapon_range_max' not in data:
+                data['weapon_range_max'] = range_data['max']
+
+        # 处理 weapon_type 中英文映射
+        if 'weapon_type' in data:
+            weapon_type_map = {
+                "格斗": "MELEE",
+                "射击": "RIFLE",
+                "觉醒": "AWAKENING",
+                "特殊": "SPECIAL",
+                "撞击": "FALLBACK",
+                "MELEE": "MELEE",
+                "RIFLE": "RIFLE",
+                "AWAKENING": "AWAKENING",
+                "SPECIAL": "SPECIAL",
+                "FALLBACK": "FALLBACK",
+                "HEAVY": "HEAVY"
+            }
+            if data['weapon_type'] in weapon_type_map:
+                data['weapon_type'] = weapon_type_map[data['weapon_type']]
+
+        return data
 
 class PilotConfig(BaseModel):
     """驾驶员配置表"""

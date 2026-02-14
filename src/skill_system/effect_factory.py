@@ -17,17 +17,31 @@ class EffectFactory:
         """
         if cls._data_loaded:
             return
-            
-        skill_file = Path("data/skills.json")
-        if not skill_file.exists():
-            print(f"⚠️  警告: 找不到技能数据文件 {skill_file}")
+
+        # 尝试多个可能的路径
+        possible_paths = [
+            Path("data/skills.json"),
+            Path("../data/skills.json"),
+            Path("skills.json"),
+        ]
+
+        skill_file = None
+        for path in possible_paths:
+            if path.exists():
+                skill_file = path
+                break
+
+        if not skill_file:
+            print(f"⚠️  警告: 找不到技能数据文件，尝试了以下路径:")
+            for path in possible_paths:
+                print(f"  - {path.absolute()}")
             return
             
         try:
             with open(skill_file, 'r', encoding='utf-8') as f:
                 cls._skill_data = json.load(f)
             cls._data_loaded = True
-            # print(f"✓ 已加载 {len(cls._skill_data)} 个技能定义")
+            print(f"✓ 已加载 {len(cls._skill_data)} 个技能定义 (从 {skill_file})")
         except Exception as e:
             print(f"❌ 加载技能数据失败: {e}")
 

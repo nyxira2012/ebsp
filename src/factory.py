@@ -47,24 +47,38 @@ class MechaFactory:
     def _apply_equipment_modifiers(
         equipments: List[EquipmentConfig] | None,
         base_mobility: float,
-        base_hit: float
-    ) -> tuple[float, float, List[WeaponSnapshot]]:
+        base_hit: float,
+        base_hp: int = 0,
+        base_en: int = 0,
+        base_armor: int = 0
+    ) -> tuple[int, int, int, int, float, float, float, float, float, float, float, List[WeaponSnapshot]]:
         """Apply equipment stat modifiers and collect weapons.
 
         Args:
             equipments: List of equipment configurations.
             base_mobility: Base mobility value.
             base_hit: Base hit rate value.
+            base_hp: Base HP value.
+            base_en: Base EN value.
+            base_armor: Base armor value.
 
         Returns:
-            Tuple of (modified mobility, modified hit rate, weapon list).
+            Tuple of (hp, en, armor, mobility, hit, dodge, parry, block, precision, crit, weapons).
         """
         weapons = []
+        final_hp = base_hp
+        final_en = base_en
+        final_armor = base_armor
         final_mobility = base_mobility
         final_hit = base_hit
+        final_dodge = 0.0
+        final_parry = 0.0
+        final_block = 0.0
+        final_precision = 0.0
+        final_crit = 0.0
 
         if not equipments:
-            return final_mobility, final_hit, weapons
+            return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, weapons
 
         for equip in equipments:
             # Collect weapons
@@ -73,18 +87,35 @@ class MechaFactory:
 
             # Apply stat modifiers
             for stat_name, value in equip.stat_modifiers.items():
-                if stat_name == "mobility":
+                if stat_name == "final_max_hp":
+                    final_hp += int(value)
+                elif stat_name == "final_max_en":
+                    final_en += int(value)
+                elif stat_name == "final_armor":
+                    final_armor += int(value)
+                elif stat_name == "final_mobility":
                     final_mobility += int(value)
-                elif stat_name == "hit_rate":
+                elif stat_name == "final_hit":
                     final_hit += value
+                elif stat_name == "final_dodge":
+                    final_dodge += value
+                elif stat_name == "final_parry":
+                    final_parry += value
+                elif stat_name == "final_block":
+                    final_block += value
+                elif stat_name == "final_precision":
+                    final_precision += value
+                elif stat_name == "final_crit":
+                    final_crit += value
 
-        return final_mobility, final_hit, weapons
+        return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, weapons
 
     @staticmethod
     def create_mecha_snapshot(
         mecha_conf: MechaConfig,
         pilot_conf: PilotConfig | None = None,
         equipments: List[EquipmentConfig] | None = None,
+        weapon_configs: dict | None = None,
         upgrade_level: int = 0
     ) -> MechaSnapshot:
         """Create a MechaSnapshot from configuration with optional enhancements.
@@ -106,15 +137,25 @@ class MechaFactory:
         armor_bonus = upgrade_level * 20
 
         # Calculate base stats
-        final_hp = mecha_conf.init_hp + hp_bonus
-        final_armor = mecha_conf.init_armor + armor_bonus
-        final_mobility = mecha_conf.init_mobility
-        final_hit = mecha_conf.init_hit
+        base_hp = mecha_conf.init_hp + hp_bonus
+        base_en = mecha_conf.init_en
+        base_armor = mecha_conf.init_armor + armor_bonus
+        base_mobility = mecha_conf.init_mobility
+        base_hit = mecha_conf.init_hit
 
-        # Apply equipment modifiers
-        final_mobility, final_hit, weapons = MechaFactory._apply_equipment_modifiers(
-            equipments, final_mobility, final_hit
+        # Apply equipment modifiers (returns all modified stats)
+        (final_hp, final_en, final_armor, final_mobility, final_hit,
+         final_dodge, final_parry, final_block, final_precision, final_crit, weapons) = (
+            MechaFactory._apply_equipment_modifiers(
+                equipments, base_mobility, base_hit, base_hp, base_en, base_armor
+            )
         )
+
+        # Load fixed weapons from mecha configuration
+        if hasattr(mecha_conf, 'fixed_weapons') and mecha_conf.fixed_weapons:
+            for weapon_id in mecha_conf.fixed_weapons:
+                if weapon_configs and weapon_id in weapon_configs:
+                    weapons.append(MechaFactory.create_weapon_snapshot(weapon_configs[weapon_id]))
 
         # Construct snapshot
         return MechaSnapshot(
@@ -124,16 +165,16 @@ class MechaFactory:
             model_asset=mecha_conf.model_asset,
             final_max_hp=int(final_hp),
             current_hp=int(final_hp),
-            final_max_en=mecha_conf.init_en,
-            current_en=mecha_conf.init_en,
+            final_max_en=int(final_en),
+            current_en=int(final_en),
             final_armor=int(final_armor),
             final_mobility=int(final_mobility),
             final_hit=final_hit,
-            final_precision=mecha_conf.init_precision,
-            final_crit=mecha_conf.init_crit,
-            final_dodge=mecha_conf.init_dodge,
-            final_parry=mecha_conf.init_parry,
-            final_block=mecha_conf.init_block,
+            final_precision=mecha_conf.init_precision + final_precision,
+            final_crit=mecha_conf.init_crit + final_crit,
+            final_dodge=mecha_conf.init_dodge + final_dodge,
+            final_parry=mecha_conf.init_parry + final_parry,
+            final_block=mecha_conf.init_block + final_block,
             block_reduction=mecha_conf.init_block_red,
             pilot_stats_backup=pilot_stats_backup,
             weapons=weapons,

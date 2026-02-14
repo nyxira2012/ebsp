@@ -15,9 +15,6 @@ from ..models import TriggerEvent
 class InitiativeCalculator:
     """先手判定系统"""
 
-    # 连续先攻阈值
-    _WIN_THRESHOLD = 2
-
     def __init__(self) -> None:
         """初始化先手判定系统。
 
@@ -25,7 +22,7 @@ class InitiativeCalculator:
         """
         self.consecutive_wins: dict[str, int] = {'A': 0, 'B': 0}
         self.last_winner: str | None = None
-    
+
     def calculate_initiative(
         self,
         mecha_a: Mecha,
@@ -97,7 +94,7 @@ class InitiativeCalculator:
         return (mecha_a if winner_id == 'A' else mecha_b,
                 mecha_b if winner_id == 'A' else mecha_a,
                 InitiativeReason.COUNTER)
-    
+
     def _calculate_initiative_score(self, mecha: Mecha) -> float:
         """计算机体的先手判定得分。
 
@@ -133,7 +130,7 @@ class InitiativeCalculator:
         final_score = SkillRegistry.process_hook("HOOK_INITIATIVE_SCORE", final_score, ctx)
 
         return final_score
-    
+
     def _determine_reason(self, winner: Mecha, loser: Mecha) -> InitiativeReason:
         """根据双方属性差异判断先手原因。
 
@@ -183,7 +180,7 @@ class InitiativeCalculator:
 
 class WeaponSelector:
     """武器选择策略 (AI)"""
-    
+
     @staticmethod
     def select_best_weapon(mecha: Mecha, distance: int) -> Weapon:
         """选择当前距离下期望伤害最高的武器。
@@ -203,42 +200,30 @@ class WeaponSelector:
             Weapon: 选中的最佳武器
         """
         available_weapons: list[tuple[Weapon, float]] = []
-        
+
         for weapon in mecha.weapons:
             # 检查EN是否足够
             if not mecha.can_attack(weapon):
                 continue
-            
+
             # 检查距离是否适用
             if not weapon.can_use_at_distance(distance):
                 continue
-            
+
             # 计算期望伤害 (威力 * 距离修正)
             hit_mod: float = weapon.get_hit_modifier_at_distance(distance)
             if hit_mod <= -999.0:
                 continue
-            
+
             expected_damage: float = weapon.power * (1.0 + hit_mod / 100.0)
             available_weapons.append((weapon, expected_damage))
-        
+
         # 如果有可用武器,选择期望伤害最高的
         if available_weapons:
             available_weapons.sort(key=lambda x: x[1], reverse=True)
             return available_weapons[0][0]
-        
-        # 否则返回保底武器
-        return WeaponSelector._create_fallback_weapon()
-    
-    @staticmethod
-    def _create_fallback_weapon() -> Weapon:
-        """创建保底撞击武器。
 
-        当机体没有可用武器时使用。
-        特点: 低威力 (50), 零 EN 消耗, 全距离可用。
-
-        Returns:
-            Weapon: 保底撞击武器对象
-        """
+        # 否则返回保底撞击武器
         return Weapon(
             uid="wpn_fallback_uid",
             definition_id="wpn_fallback",
@@ -255,7 +240,7 @@ class WeaponSelector:
 
 class BattleSimulator:
     """战斗模拟器主控"""
-    
+
     def __init__(self, mecha_a: Mecha, mecha_b: Mecha) -> None:
         """初始化战斗模拟器。
 
@@ -268,7 +253,7 @@ class BattleSimulator:
         self.initiative_calc: InitiativeCalculator = InitiativeCalculator()
         self.round_number: int = 0
         self.battle_log: list[str] = []
-    
+
     def run_battle(self) -> None:
         """运行完整的战斗流程。
 
@@ -322,7 +307,7 @@ class BattleSimulator:
 
         # 战斗结算
         self._conclude_battle()
-    
+
     def _execute_round(self) -> None:
         """执行单个战斗回合。
 
@@ -342,7 +327,7 @@ class BattleSimulator:
 
         # 1. 生成距离
         distance: int = self._generate_distance()
-        print(f"📍 交战距离: {distance}m")
+        print(f"交战距离: {distance}m")
 
         # 2. 先手判定
         first_mover, second_mover, reason = self.initiative_calc.calculate_initiative(
@@ -350,7 +335,7 @@ class BattleSimulator:
             self.mecha_b,
             self.round_number
         )
-        print(f"⚔️  先手方: {first_mover.name} ({reason.value})")
+        print(f"先手方: {first_mover.name} ({reason.value})")
         print()
 
         # 3. 先攻方攻击
@@ -358,7 +343,7 @@ class BattleSimulator:
 
         # 检查后攻方是否存活
         if not second_mover.is_alive():
-            print(f"💀 {second_mover.name} 被击破!")
+            print(f"{second_mover.name} 被击破!")
             return
 
         print()
@@ -368,7 +353,7 @@ class BattleSimulator:
 
         # 检查先攻方是否存活
         if not first_mover.is_alive():
-            print(f"💀 {first_mover.name} 被击破!")
+            print(f"{first_mover.name} 被击破!")
             return
 
         # 5. 回合结束 - 气力基础增长
@@ -385,13 +370,13 @@ class BattleSimulator:
         EffectManager.tick_effects(self.mecha_b)
 
         print()
-        print(f"📊 {self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
+        print(f"{self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
               f"EN={self.mecha_a.current_en}/{self.mecha_a.final_max_en} | "
               f"气力={self.mecha_a.current_will}")
-        print(f"📊 {self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
+        print(f"{self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
               f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
               f"气力={self.mecha_b.current_will}")
-    
+
     def _generate_distance(self) -> int:
         """生成当前回合的交战距离。
 
@@ -410,7 +395,7 @@ class BattleSimulator:
 
         # 在范围内随机
         return random.randint(range_min, range_max)
-    
+
     def _execute_attack(
         self,
         attacker: Mecha,
@@ -455,12 +440,12 @@ class BattleSimulator:
         weapon_cost = float(weapon.en_cost)
         # HOOK: 修正 EN 消耗 (例如 节能)
         weapon_cost = SkillRegistry.process_hook("HOOK_PRE_EN_COST_MULT", weapon_cost, ctx)
-        
+
         # 检查 EN (修正后的消耗)
         if attacker.current_en < int(weapon_cost):
-            print(f"   ❌ EN不足! 无法攻击 (当前EN: {attacker.current_en}, 需要: {int(weapon_cost)})")
+            print(f"   EN不足! 无法攻击 (当前EN: {attacker.current_en}, 需要: {int(weapon_cost)})")
             return
-            
+
         attacker.consume_en(int(weapon_cost))
 
         # 5. 圆桌判定
@@ -478,32 +463,32 @@ class BattleSimulator:
 
         # 8. 输出结果
         result_emoji: dict[AttackResult, str] = {
-            AttackResult.MISS: "❌",
-            AttackResult.DODGE: "💨",
-            AttackResult.PARRY: "⚔️",
-            AttackResult.BLOCK: "🛡️",
-            AttackResult.HIT: "💥",
-            AttackResult.CRIT: "💥✨"
+            AttackResult.MISS: "MISS",
+            AttackResult.DODGE: "DODGE",
+            AttackResult.PARRY: "PARRY",
+            AttackResult.BLOCK: "BLOCK",
+            AttackResult.HIT: "HIT",
+            AttackResult.CRIT: "CRIT"
         }
 
-        print(f"   {result_emoji.get(result, '❓')} {result.value}! "
+        print(f"   {result_emoji.get(result, '?')} {result.value}! "
               f"Roll点: {ctx.roll} | 伤害: {damage} | "
-              f"气力变化: ⚡{attacker.name}({ctx.current_attacker_will_delta:+d}) "
-              f"⚡{defender.name}({ctx.current_defender_will_delta:+d})")
+              f"气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) "
+              f"{defender.name}({ctx.current_defender_will_delta:+d})")
 
         # 9. 结算钩子 (HOOK_ON_DAMAGE_DEALT, HOOK_ON_KILL, HOOK_ON_ATTACK_END)
-        
+
         # HOOK: 造成伤害后
         if damage > 0:
             SkillRegistry.process_hook("HOOK_ON_DAMAGE_DEALT", damage, ctx)
-            
+
         # HOOK: 击坠判定
         if not defender.is_alive():
             SkillRegistry.process_hook("HOOK_ON_KILL", None, ctx)
-            
+
         # HOOK: 攻击结束 (常用于清理 ATTACK_BASED 状态，或触发再动等)
         SkillRegistry.process_hook("HOOK_ON_ATTACK_END", None, ctx)
-    
+
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。
 
@@ -519,9 +504,9 @@ class BattleSimulator:
 
         # 判断胜负
         if not self.mecha_a.is_alive():
-            print(f"🏆 胜者: {self.mecha_b.name} (击破)")
+            print(f"胜者: {self.mecha_b.name} (击破)")
         elif not self.mecha_b.is_alive():
-            print(f"🏆 胜者: {self.mecha_a.name} (击破)")
+            print(f"胜者: {self.mecha_a.name} (击破)")
         else:
             # 判定胜
             hp_a: float = self.mecha_a.get_hp_percentage()
@@ -532,11 +517,11 @@ class BattleSimulator:
             print(f"{self.mecha_b.name} HP: {hp_b:.1f}%")
 
             if hp_a > hp_b:
-                print(f"🏆 胜者: {self.mecha_a.name} (判定胜)")
+                print(f"胜者: {self.mecha_a.name} (判定胜)")
             elif hp_b > hp_a:
-                print(f"🏆 胜者: {self.mecha_b.name} (判定胜)")
+                print(f"胜者: {self.mecha_b.name} (判定胜)")
             else:
-                print(f"🤝 平局!")
+                print(f"平局!")
 
     def set_event_callback(self, callback: Callable[[TriggerEvent], None]) -> None:
         """设置前端事件回调（用于接收技能触发事件）

@@ -22,8 +22,8 @@
             "EQUIP"
         ],
         "fixed_weapons": [
-            "w_beam_rifle",
-            "w_beam_saber"
+            "wpn_beam_rifle",
+            "wpn_bazooka"
         ]
     },
     {
@@ -48,8 +48,9 @@
             "EQUIP"
         ],
         "fixed_weapons": [
-            "w_machine_gun",
-            "w_heat_hawk"
+            "wpn_machine_gun",
+            "wpn_heat_axe",
+            "wpn_bazooka"
         ]
     }
 ]

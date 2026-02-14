@@ -2,7 +2,8 @@
     {
         "id": "wpn_beam_rifle",
         "name": "光束步枪",
-        "type": "RIFLE",
+        "type": "WEAPON",
+        "weapon_type": "RIFLE",
         "power": 800,
         "en_cost": 20,
         "range": {
@@ -14,7 +15,8 @@
     {
         "id": "wpn_beam_saber",
         "name": "光束军刀",
-        "type": "MELEE",
+        "type": "WEAPON",
+        "weapon_type": "MELEE",
         "power": 1200,
         "en_cost": 15,
         "range": {
@@ -26,7 +28,8 @@
     {
         "id": "wpn_machine_gun",
         "name": "120mm机炮",
-        "type": "RIFLE",
+        "type": "WEAPON",
+        "weapon_type": "RIFLE",
         "power": 700,
         "en_cost": 18,
         "range": {
@@ -38,7 +41,8 @@
     {
         "id": "wpn_heat_axe",
         "name": "热能斧",
-        "type": "MELEE",
+        "type": "WEAPON",
+        "weapon_type": "MELEE",
         "power": 1100,
         "en_cost": 20,
         "range": {
@@ -50,7 +54,8 @@
     {
         "id": "wpn_bazooka",
         "name": "光束火箭炮",
-        "type": "HEAVY",
+        "type": "WEAPON",
+        "weapon_type": "HEAVY",
         "power": 1400,
         "en_cost": 35,
         "range": {
@@ -62,7 +67,8 @@
     {
         "id": "wpn_dummy",
         "name": "木桩撞击",
-        "type": "FALLBACK",
+        "type": "WEAPON",
+        "weapon_type": "FALLBACK",
         "power": 1,
         "en_cost": 0,
         "range": {

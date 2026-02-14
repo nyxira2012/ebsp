@@ -36,7 +36,43 @@
         "type": "EQUIP",
         "stat_modifiers": {
             "final_max_hp": 1000,
-            "final_armor": 200
+            "final_armor": 2000
+        }
+    },
+    {
+        "id": "e_magnetron_coating",
+        "name": "磁气覆膜",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_dodge": 10.0,
+            "final_parry": 5.0
+        }
+    },
+    {
+        "id": "e_targeting_sensor",
+        "name": "瞄准传感器",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_precision": 10.0,
+            "final_crit": 5.0
+        }
+    },
+    {
+        "id": "e_power_generator",
+        "name": "动力发电机",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_max_en": 50
+        }
+    },
+    {
+        "id": "e_reactor_upgrade",
+        "name": "反应堆升级",
+        "type": "EQUIP",
+        "stat_modifiers": {
+            "final_max_hp": 500,
+            "final_max_en": 100,
+            "final_mobility": 5.0
         }
     }
 ]
