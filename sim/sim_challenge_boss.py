@@ -196,9 +196,9 @@ class BattleStatistics:
     # 回合统计
     round_stats: List[RoundStatistics] = field(default_factory=list)
 
-    # 技能触发统计
-    skills_triggered: Counter = field(default_factory=Counter)
-    skills_trigger_count: Dict[str, int] = field(default_factory=dict)  # 每个技能在多少场中触发
+    # 技能统计（新设计）
+    skills_applied: List[str] = field(default_factory=list)  # 本场应用的技能列表
+    skill_trigger_stats: Dict[str, Dict[str, int]] = field(default_factory=dict)  # {skill_id: {attempts, success}}
     total_battles_count: int = 0  # 总场数，用于计算应用率
 
     # 资源消耗
@@ -703,13 +703,20 @@ class BossChallenger:
             print(f"\n--- 战斗开始: {attacker.name} vs {boss.name} ---")
             print(f"挑战者 HP: {attacker.current_hp:,} | Boss HP: {boss.current_hp:,}")
 
+        # 清空EventManager统计（避免累积多场战斗的数据）
+        from src.skill_system.event_manager import EventManager
+        EventManager.clear_statistics()
+
         # 执行战斗并收集统计（不抑制输出，让技能触发日志显示）
         sim = DummyBossSimulator(attacker, boss, battle_id=round_idx, verbose=self.verbose)
         stats = sim.run_battle_with_stats()
 
-        # 记录应用的技能（这些是战斗开始时应用的被动技能）
-        for skill_id in skills_applied:
-            stats.skills_triggered[skill_id] += 1
+        # 记录本场应用的技能列表
+        stats.skills_applied = skills_applied
+
+        # 从EventManager获取技能触发统计
+        all_skill_stats = EventManager.get_statistics()
+        stats.skill_trigger_stats = all_skill_stats
 
         if self.verbose:
             print(f"\n{'─'*70}")
@@ -973,19 +980,24 @@ def print_statistics(all_stats: List[BattleStatistics]):
             print(f"  挑战者击杀Boss需: {ttk_boss:.1f} 回合")
             print(f"  Boss击杀挑战者需: {ttk_challenger:.1f} 回合")
 
-    # 技能触发统计（如果有）
-    all_skills = Counter()
-    skill_battle_count = {}  # 记录每个技能在多少场中出现
+    # 技能触发统计（新逻辑）
+    from collections import defaultdict as dd
+
+    # 1. 统计每个技能的出现次数和触发情况
+    skill_appearance_count = Counter()  # 每个技能在多少场中出现
+    skill_trigger_stats = defaultdict(lambda: {"attempts": 0, "success": 0})  # 每个技能的总触发统计
 
     for s in all_stats:
-        for skill_id in s.skills_triggered:
-            all_skills[skill_id] += s.skills_triggered[skill_id]
-            # 统计该技能出现的场次
-            if skill_id not in skill_battle_count:
-                skill_battle_count[skill_id] = 0
-            skill_battle_count[skill_id] += 1
+        # 记录本场应用的技能
+        for skill_id in s.skills_applied:
+            skill_appearance_count[skill_id] += 1
 
-    if all_skills:
+        # 记录本场技能的触发统计
+        for skill_id, trigger_data in s.skill_trigger_stats.items():
+            skill_trigger_stats[skill_id]["attempts"] += trigger_data.get("attempts", 0)
+            skill_trigger_stats[skill_id]["success"] += trigger_data.get("success", 0)
+
+    if skill_appearance_count:
         # 加载技能名称映射
         try:
             with open("data/skills.json", "r", encoding="utf-8") as f:
@@ -999,23 +1011,43 @@ def print_statistics(all_stats: List[BattleStatistics]):
                         return effects_list[0].get("name", skill_id)
                 return skill_id
 
+            def get_skill_chance(skill_id: str) -> float | None:
+                """获取技能的触发概率"""
+                if skill_id in skills_data:
+                    effects_list = skills_data[skill_id]
+                    if isinstance(effects_list, list) and len(effects_list) > 0:
+                        effect = effects_list[0]
+                        trigger_chance = effect.get("trigger_chance", 1.0)
+                        if trigger_chance < 1.0:
+                            return trigger_chance
+                return None
+
             # 按技能类型分类统计
             spirit_skills = []
             trait_skills = []
 
-            for skill_id, total_count in all_skills.items():
-                battle_count = skill_battle_count.get(skill_id, 0)
-                trigger_rate = (battle_count / total_battles) * 100
-                avg_per_battle = total_count / battle_count if battle_count > 0 else 0
+            for skill_id, appearance_count in skill_appearance_count.items():
+                appearance_rate = (appearance_count / total_battles) * 100
+
+                # 获取触发统计
+                trigger_data = skill_trigger_stats[skill_id]
+                attempts = trigger_data["attempts"]
+                success = trigger_data["success"]
+                actual_trigger_rate = (success / attempts * 100) if attempts > 0 else 0
+
+                # 获取理论触发概率
+                theory_chance = get_skill_chance(skill_id)
 
                 skill_name = get_skill_name(skill_id)
                 skill_info = {
                     'id': skill_id,
                     'name': skill_name,
-                    'total_count': total_count,
-                    'battle_count': battle_count,
-                    'trigger_rate': trigger_rate,
-                    'avg_per_battle': avg_per_battle
+                    'appearance_count': appearance_count,
+                    'appearance_rate': appearance_rate,
+                    'attempts': attempts,
+                    'success': success,
+                    'actual_trigger_rate': actual_trigger_rate,
+                    'theory_trigger_rate': theory_chance * 100 if theory_chance else None
                 }
 
                 if skill_id.startswith("spirit_"):
@@ -1023,38 +1055,64 @@ def print_statistics(all_stats: List[BattleStatistics]):
                 elif skill_id.startswith("trait_"):
                     trait_skills.append(skill_info)
 
-            # 按应用率和总次数排序
-            spirit_skills.sort(key=lambda x: (-x['trigger_rate'], -x['total_count']))
-            trait_skills.sort(key=lambda x: (-x['trigger_rate'], -x['total_count']))
+            # 按出现率和触发次数排序
+            spirit_skills.sort(key=lambda x: (-x['appearance_rate'], -x['success']))
+            trait_skills.sort(key=lambda x: (-x['appearance_rate'], -x['success']))
 
-            print(f"\n【技能应用统计】(共 {len(all_skills)} 个不同技能，总场数: {total_battles})")
+            print(f"\n【技能统计】(共 {len(skill_appearance_count)} 个不同技能，总场数: {total_battles})")
+            print(f"  说明：出现率 = 技能被随机抽取并应用的场次比例")
+            print(f"        实际触发率 = 技能在战斗中的实际触发次数 / 触发机会次数")
+            print(f"        理论触发率 = 技能配置中定义的触发概率（仅概率型技能显示）")
 
             # 精神指令统计
             if spirit_skills:
                 print(f"\n  【精神指令】(共 {len(spirit_skills)} 个)")
-                print(f"  {'技能名称':<12} | {'应用场次':<8} | {'应用率':<8} | {'总次数':<8} | {'场均次数'}")
-                print(f"  {'-'*70}")
+                print(f"  {'技能名称':<12} | {'出现场次':<8} | {'出现率':<8} | {'尝试/成功':<12} | {'实际触发率':<10} | {'理论触发率'}")
+                print(f"  {'-'*90}")
 
-                for skill in spirit_skills[:10]:  # 显示前10个
-                    print(f"  {skill['name']:<12} | {skill['battle_count']:<8} | {skill['trigger_rate']:>6.1f}% | {skill['total_count']:<8} | {skill['avg_per_battle']:>.1f}")
+                for skill in spirit_skills[:15]:  # 显示前15个
+                    theory_rate = f"{skill['theory_trigger_rate']:.1f}%" if skill['theory_trigger_rate'] is not None else "-"
+                    attempts_success = f"{skill['attempts']}/{skill['success']}"
+                    print(f"  {skill['name']:<12} | {skill['appearance_count']:<8} | {skill['appearance_rate']:>6.1f}% | {attempts_success:<12} | {skill['actual_trigger_rate']:>8.1f}% | {theory_rate:>12}")
 
             # 机体特性统计
             if trait_skills:
                 print(f"\n  【机体特性】(共 {len(trait_skills)} 个)")
-                print(f"  {'技能名称':<12} | {'应用场次':<8} | {'应用率':<8} | {'总次数':<8} | {'场均次数'}")
-                print(f"  {'-'*70}")
+                print(f"  {'技能名称':<12} | {'出现场次':<8} | {'出现率':<8} | {'尝试/成功':<12} | {'实际触发率':<10} | {'理论触发率'}")
+                print(f"  {'-'*90}")
 
-                for skill in trait_skills[:10]:  # 显示前10个
-                    print(f"  {skill['name']:<12} | {skill['battle_count']:<8} | {skill['trigger_rate']:>6.1f}% | {skill['total_count']:<8} | {skill['avg_per_battle']:>.1f}")
+                for skill in trait_skills[:15]:  # 显示前15个
+                    theory_rate = f"{skill['theory_trigger_rate']:.1f}%" if skill['theory_trigger_rate'] is not None else "-"
+                    attempts_success = f"{skill['attempts']}/{skill['success']}"
+                    print(f"  {skill['name']:<12} | {skill['appearance_count']:<8} | {skill['appearance_rate']:>6.1f}% | {attempts_success:<12} | {skill['actual_trigger_rate']:>8.1f}% | {theory_rate:>12}")
+
+            # 概率型技能触发率对比分析
+            print(f"\n  【概率型技能触发率分析】")
+            prob_skills = [s for s in spirit_skills + trait_skills if s['theory_trigger_rate'] is not None]
+            if prob_skills:
+                print(f"  共 {len(prob_skills)} 个概率型技能")
+                print(f"  {'技能名称':<12} | {'理论':<8} | {'实际':<8} | {'偏差'}")
+                print(f"  {'-'*50}")
+
+                for skill in prob_skills:
+                    theory = skill['theory_trigger_rate']
+                    actual = skill['actual_trigger_rate']
+                    diff = actual - theory
+                    diff_str = f"{diff:+.1f}%"
+                    print(f"  {skill['name']:<12} | {theory:>6.1f}% | {actual:>6.1f}% | {diff_str:>8}")
+            else:
+                print(f"  本轮测试中未出现概率型技能")
 
         except FileNotFoundError:
             # 如果文件不存在，使用原始ID
-            print(f"\n【技能应用情况】(共 {len(all_skills)} 个不同技能)")
-            top_skills = all_skills.most_common(10)
-            for skill_id, count in top_skills:
-                battle_count = skill_battle_count.get(skill_id, 0)
-                trigger_rate = (battle_count / total_battles) * 100
-                print(f"  {skill_id}: {count} 次 (在 {battle_count} 场中出现，应用率 {trigger_rate:.1f}%)")
+            print(f"\n【技能应用情况】(共 {len(skill_appearance_count)} 个不同技能)")
+            for skill_id, appearance_count in skill_appearance_count.most_common(10):
+                appearance_rate = (appearance_count / total_battles) * 100
+                trigger_data = skill_trigger_stats[skill_id]
+                attempts = trigger_data["attempts"]
+                success = trigger_data["success"]
+                actual_trigger_rate = (success / attempts * 100) if attempts > 0 else 0
+                print(f"  {skill_id}: 出现 {appearance_count} 次 ({appearance_rate:.1f}%) | 触发 {success}/{attempts} ({actual_trigger_rate:.1f}%)")
 
     print("\n" + "="*80)
 

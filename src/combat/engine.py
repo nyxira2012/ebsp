@@ -8,6 +8,8 @@ from ..config import Config
 from ..models import Mecha, Weapon, WeaponType, BattleContext, InitiativeReason, AttackResult
 from ..skills import SkillRegistry, EffectManager
 from .resolver import AttackTableResolver
+from typing import Callable, Any, List
+from ..models import TriggerEvent
 
 
 class InitiativeCalculator:
@@ -545,3 +547,23 @@ class BattleSimulator:
                 print(f"🏆 胜者: {self.mecha_b.name} (判定胜)")
             else:
                 print(f"🤝 平局!")
+
+    def set_event_callback(self, callback: Callable[[TriggerEvent], None]) -> None:
+        """设置前端事件回调（用于接收技能触发事件）
+
+        Args:
+            callback: 回调函数，接收 TriggerEvent 参数
+        """
+        from ..skill_system.event_manager import EventManager
+        EventManager.register_callback(callback)
+
+    def get_trigger_events(self) -> List[TriggerEvent]:
+        """获取本回合的所有触发事件（用于前端演出）
+
+        Returns:
+            本回合的所有触发事件列表
+        """
+        from ..skill_system.event_manager import EventManager
+        # 注意：当前 EventManager 设计没有历史事件存储
+        # 这里返回空列表，实际使用时可能需要扩展 EventManager
+        return []

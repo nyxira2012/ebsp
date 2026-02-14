@@ -4,9 +4,10 @@
 """
 
 from typing import Callable, Any, TypeAlias, List
-from .models import Mecha, BattleContext, Effect, Modifier, AttackResult, WeaponType
+from .models import Mecha, BattleContext, Effect, Modifier, AttackResult, WeaponType, TriggerEvent
 from .skill_system.processor import EffectProcessor
 from .skill_system.effect_factory import EffectFactory
+from .skill_system.event_manager import EventManager
 
 # Hook 回调函数签名: (当前值, 上下文) -> 修改后的值
 HookCallback: TypeAlias = Callable[[Any, BattleContext], Any]
@@ -111,9 +112,8 @@ def cb_learning(val, ctx, owner):
 
 @SkillRegistry.register_callback("cb_gn_recover")
 def cb_gn_recover(val, ctx, owner):
-    """GN炉: 每回合回复 EN"""
+    """GN炉: 每回合回复 EN（永久特性，不产生事件）"""
     owner.current_en = min(owner.final_max_en, owner.current_en + 10)
-    print(f"   [Trait] {owner.name} GN炉回复了 10 EN")
     return val
 
 # ============================================================================
@@ -132,95 +132,98 @@ def cb_miracle_hit(val, ctx, owner):
 def cb_instinct_dodge(val, ctx, owner):
     """本能: 30%概率将 HIT 扭转为 DODGE"""
     import random
-    if val == AttackResult.HIT and random.random() < 0.3:
-        print(f"   [Skill] {owner.name} 本能触发! HIT -> DODGE")
-        return AttackResult.DODGE
+    if val == AttackResult.HIT:
+        roll = random.random()
+        triggered = (roll < 0.3)
+
+        # 发布事件（使用正确的skill_id: spirit_instinct）
+        EventManager.publish_event(TriggerEvent(
+            skill_id="spirit_instinct",  # 修正：使用技能配置中的ID
+            owner=owner,
+            hook_name="OVERRIDE_RESULT",
+            effect_text="本能闪避" if triggered else "本能未触发",
+            old_value=AttackResult.HIT,
+            new_value=AttackResult.DODGE if triggered else AttackResult.HIT,
+            probability=0.3,
+            triggered=triggered
+        ))
+
+        if triggered:
+            return AttackResult.DODGE
     return val
 
 @SkillRegistry.register_callback("cb_auto_repair")
 def cb_auto_repair(damage, ctx, owner):
-    """自动修复: 受到伤害后回复 HP"""
+    """自动修复: 受到伤害后回复 HP（永久特性，不产生事件）"""
     heal = int(damage * 0.2)  # 回复受到伤害的20%
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
-    print(f"   [Trait] {owner.name} 自动修复回复了 {heal} HP")
     return damage
 
 @SkillRegistry.register_callback("cb_ablat")
 def cb_ablat(damage, ctx, owner):
-    """烧蚀装甲: 对光束伤害减少200点"""
+    """烧蚀装甲: 对光束伤害减少200点（永久特性，不产生事件）"""
     # TODO: 确认武器类型区分方式，光束武器目前归为 SHOOTING 类型
     if ctx.weapon and ctx.weapon.weapon_type in [WeaponType.SHOOTING, WeaponType.MELEE]:
         damage = max(0, damage - 200)
-        print(f"   [Trait] {owner.name} 烧蚀装甲减少200点光束伤害")
     return damage
 
 @SkillRegistry.register_callback("cb_rage_will")
 def cb_rage_will(damage, ctx, owner):
-    """气魄: 造成伤害时气力+3"""
+    """气魄: 造成伤害时气力+3（永久特性，不产生事件）"""
     owner.modify_will(3)
-    print(f"   [Skill] {owner.name} 气魄气力+3")
     return damage
 
 @SkillRegistry.register_callback("cb_vampirism")
 def cb_vampirism(damage, ctx, owner):
-    """吸血: 回复造成伤害的10% HP"""
+    """吸血: 回复造成伤害的10% HP（永久特性，不产生事件）"""
     heal = int(damage * 0.1)
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
-    print(f"   [Trait] {owner.name} 吸血回复了 {heal} HP")
     return damage
 
 @SkillRegistry.register_callback("cb_effort_exp")
 def cb_effort_exp(val, ctx, owner):
-    """努力: 击坠时获得双倍经验 (暂只打印日志)"""
-    print(f"   [Skill] {owner.name} 努力触发! 获得双倍经验")
+    """努力: 击坠时获得双倍经验（纯日志，不产生事件）"""
     return val
 
 @SkillRegistry.register_callback("cb_mercy_will")
 def cb_mercy_will(val, ctx, owner):
-    """慈悲: 击坠时回复20点气力"""
+    """慈悲: 击坠时回复20点气力（永久特性，不产生事件）"""
     owner.modify_will(20)
-    print(f"   [Trait] {owner.name} 慈悲回复了20气力")
     return val
 
 @SkillRegistry.register_callback("cb_reunion")
 def cb_reunion(val, ctx, owner):
-    """再动: 概率获得额外行动机会 (暂只打印日志)"""
-    print(f"   [Skill] {owner.name} 再动触发! 可再次行动")
+    """再动: 概率获得额外行动机会（纯日志，不产生事件）"""
     return val
 
 @SkillRegistry.register_callback("cb_quick_reload_en")
 def cb_quick_reload_en(val, ctx, owner):
-    """快速装填: 攻击结束回复15 EN"""
+    """快速装填: 攻击结束回复15 EN（永久特性，不产生事件）"""
     owner.current_en = min(owner.max_en, owner.current_en + 15)
-    print(f"   [Trait] {owner.name} 快速装填回复了15 EN")
     return val
 
 @SkillRegistry.register_callback("cb_energy_save")
 def cb_energy_save(val, ctx, owner):
-    """省能源: 每回合回复5 EN"""
+    """省能源: 每回合回复5 EN（永久特性，不产生事件）"""
     owner.current_en = min(owner.max_en, owner.current_en + 5)
-    print(f"   [Trait] {owner.name} 省能源回复了5 EN")
     return val
 
 @SkillRegistry.register_callback("cb_regen_hp")
 def cb_regen_hp(val, ctx, owner):
-    """再生: 每回合回复5% HP"""
+    """再生: 每回合回复5% HP（永久特性，不产生事件）"""
     heal = int(owner.max_hp * 0.05)
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
-    print(f"   [Trait] {owner.name} 再生回复了 {heal} HP")
     return val
 
 @SkillRegistry.register_callback("cb_spirit_boost")
 def cb_spirit_boost(val, ctx, owner):
-    """精神增幅: 战斗结束回复50% SP (暂只打印日志)"""
-    print(f"   [Trait] {owner.name} 精神增幅回复了50% SP")
+    """精神增幅: 战斗结束回复50% SP（纯日志，不产生事件）"""
     return val
 
 @SkillRegistry.register_callback("cb_morale_en")
 def cb_morale_en(val, ctx, owner):
-    """士气: 战斗结束回复30 EN"""
+    """士气: 战斗结束回复30 EN（永久特性，不产生事件）"""
     owner.current_en = min(owner.max_en, owner.current_en + 30)
-    print(f"   [Trait] {owner.name} 士气回复了30 EN")
     return val
 
 

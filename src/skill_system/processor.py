@@ -4,9 +4,10 @@ Effect Processor System
 """
 
 from typing import Any, Callable, List, Dict
-from ..models import BattleContext, Mecha, Effect, Condition, SideEffect
+from ..models import BattleContext, Mecha, Effect, Condition, SideEffect, TriggerEvent
 from .conditions import ConditionChecker
 from .side_effects import SideEffectExecutor
+from .event_manager import EventManager
 
 class EffectProcessor:
     """效果处理器"""
@@ -66,6 +67,17 @@ class EffectProcessor:
                 # 检查触发概率
                 if effect.trigger_chance < 1.0:
                     if random.random() >= effect.trigger_chance:
+                        # 记录统计（不显示）
+                        EventManager.publish_event(TriggerEvent(
+                            skill_id=effect.id,
+                            owner=owner,
+                            hook_name=hook_name,
+                            effect_text=f"{effect.name} 未触发",
+                            old_value=current_value,
+                            new_value=current_value,
+                            probability=effect.trigger_chance,
+                            triggered=False
+                        ))
                         continue  # 未通过概率判定，跳过
 
                 # 记录旧值用于显示
@@ -83,10 +95,19 @@ class EffectProcessor:
                 
                 if is_triggered:
                     current_value = new_value
-                    
-                    # 透明化输出
-                    print(f"   [Skill] {owner.name}: '{effect.name}' 触发! ({hook_name}: {old_value} -> {current_value})")
-                    
+
+                    # 发布触发事件（包含数值变化信息）
+                    EventManager.publish_event(TriggerEvent(
+                        skill_id=effect.id,
+                        owner=owner,
+                        hook_name=hook_name,
+                        effect_text=effect.name,
+                        old_value=old_value,
+                        new_value=current_value,
+                        probability=effect.trigger_chance if effect.trigger_chance < 1.0 else None,
+                        triggered=True
+                    ))
+
                     # 执行副作用
                     if effect.side_effects:
                         SideEffectExecutor.execute(effect.side_effects, context, owner)
@@ -96,7 +117,17 @@ class EffectProcessor:
                         effect.charges -= 1
                         if effect.charges == 0:
                             effect.duration = 0
-                            print(f"   [Skill] '{effect.name}' 次数耗尽，效果结束。")
+                            # 发布事件（通过 effect_text 标记为耗尽）
+                            EventManager.publish_event(TriggerEvent(
+                                skill_id=effect.id,
+                                owner=owner,
+                                hook_name=hook_name,
+                                effect_text=f"{effect.name} 次数耗尽",
+                                old_value=current_value,
+                                new_value=current_value,
+                                probability=None,
+                                triggered=True
+                            ))
 
             
             # 5. 缓存结果 (用于 ref_hook)

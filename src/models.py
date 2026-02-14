@@ -405,3 +405,42 @@ class Effect:
     side_effects: List[SideEffect] = field(default_factory=list)
     payload: Dict[str, Any] = field(default_factory=dict)
 
+# ============================================================================
+# 轻量级技能系统模型 (Lightweight Skill System Models)
+# ============================================================================
+
+@dataclass(frozen=True)
+class TriggerEvent:
+    """技能触发事件（结构化数据，用于前端演出、统计分析）"""
+    skill_id: str              # 技能ID
+    owner: Any                 # 触发者 (Mecha 对象)
+    hook_name: str             # 触发的钩子
+    effect_text: str           # 描述文本
+    old_value: Any            # 触发前的值
+    new_value: Any            # 触发后的值
+    probability: float | None = None  # 概率技能的触发概率
+    triggered: bool = True    # 是否实际触发（False 表示概率失败）
+
+@dataclass
+class BuffState:
+    """轻量级技能状态（用于 UI 图标显示、持续时间管理）"""
+    skill_id: str               # 技能ID
+    duration: int = -1          # 剩余回合数 (-1 = 永久)
+    charges: int = -1            # 剩余次数 (-1 = 无限)
+
+    def is_expired(self) -> bool:
+        """检查是否过期
+
+        规则：
+        - duration == 0 或 charges == 0 时过期
+        - duration == -1 或 charges == -1 表示永久/无限
+        """
+        return self.duration == 0 or self.charges == 0
+
+    def tick(self) -> None:
+        """回合结束时调用"""
+        if self.duration > 0:
+            self.duration -= 1
+        if self.charges > 0:
+            self.charges -= 1
+

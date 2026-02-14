@@ -4,7 +4,8 @@ Side Effect Executor System
 """
 
 from typing import Any, Callable
-from ..models import BattleContext, Mecha, SideEffect, Effect
+from ..models import BattleContext, Mecha, SideEffect, Effect, TriggerEvent
+from .event_manager import EventManager
 
 class SideEffectExecutor:
     """副作用执行器"""
@@ -81,8 +82,18 @@ class SideEffectExecutor:
         if not target: return
         
         val = data.get("val", 0)
+        old_en = target.current_en
         target.consume_en(val)
-        print(f"   [Effect] {target.name} 消耗了 {val} EN (副作用)")
+        EventManager.publish_event(TriggerEvent(
+            skill_id="side_effect_consume_en",
+            owner=target,
+            hook_name="SIDE_EFFECT",
+            effect_text=f"消耗 {val} EN",
+            old_value=old_en,
+            new_value=target.current_en,
+            probability=None,
+            triggered=True
+        ))
 
     @staticmethod
     def _exec_consume_charges(data: dict, context: BattleContext, owner: Mecha) -> None:
@@ -138,5 +149,14 @@ class SideEffectExecutor:
         new_effects = EffectFactory.create_effect(effect_id, duration=data.get("duration", 1))
         for eff in new_effects:
             target.effects.append(eff)
-            print(f"   [Effect] 副作用触发: 为 {target.name} 施加了 [{eff.name}] ({eff.id})")
+            EventManager.publish_event(TriggerEvent(
+                skill_id="side_effect_apply_effect",
+                owner=target,
+                hook_name="SIDE_EFFECT",
+                effect_text=f"施加 {eff.name}",
+                old_value=None,
+                new_value=eff.id,
+                probability=None,
+                triggered=True
+            ))
 
