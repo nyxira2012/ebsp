@@ -1,0 +1,463 @@
+--- VIRTUAL CONSTANTS: AVAILABLE HOOKS ---
+HOOK_CHECK_MAINTAIN_BATTLE = 'HOOK_CHECK_MAINTAIN_BATTLE'
+HOOK_INITIATIVE_CHECK = 'HOOK_INITIATIVE_CHECK'
+HOOK_INITIATIVE_SCORE = 'HOOK_INITIATIVE_SCORE'
+HOOK_MAX_ROUNDS = 'HOOK_MAX_ROUNDS'
+HOOK_ON_ATTACK_END = 'HOOK_ON_ATTACK_END'
+HOOK_ON_BATTLE_END = 'HOOK_ON_BATTLE_END'
+HOOK_ON_CRIT = 'HOOK_ON_CRIT'
+HOOK_ON_DAMAGE_DEALT = 'HOOK_ON_DAMAGE_DEALT'
+HOOK_ON_DAMAGE_TAKEN = 'HOOK_ON_DAMAGE_TAKEN'
+HOOK_ON_DODGE = 'HOOK_ON_DODGE'
+HOOK_ON_KILL = 'HOOK_ON_KILL'
+HOOK_ON_MISS = 'HOOK_ON_MISS'
+HOOK_ON_TURN_END = 'HOOK_ON_TURN_END'
+HOOK_ON_TURN_START = 'HOOK_ON_TURN_START'
+HOOK_OVERRIDE_RESULT = 'HOOK_OVERRIDE_RESULT'
+HOOK_POST_ATTACK_HIT = 'HOOK_POST_ATTACK_HIT'
+HOOK_POST_ROLL_RESULT = 'HOOK_POST_ROLL_RESULT'
+HOOK_PRE_ARMOR_VALUE = 'HOOK_PRE_ARMOR_VALUE'
+HOOK_PRE_ATTACK_POWER = 'HOOK_PRE_ATTACK_POWER'
+HOOK_PRE_BLOCK_RATE = 'HOOK_PRE_BLOCK_RATE'
+HOOK_PRE_BLOCK_VALUE = 'HOOK_PRE_BLOCK_VALUE'
+HOOK_PRE_CRIT_MULTIPLIER = 'HOOK_PRE_CRIT_MULTIPLIER'
+HOOK_PRE_CRIT_RATE = 'HOOK_PRE_CRIT_RATE'
+HOOK_PRE_DAMAGE_MULT = 'HOOK_PRE_DAMAGE_MULT'
+HOOK_PRE_DAMAGE_TAKEN = 'HOOK_PRE_DAMAGE_TAKEN'
+HOOK_PRE_DEFENSE_LEVEL = 'HOOK_PRE_DEFENSE_LEVEL'
+HOOK_PRE_DEFENSE_MULT = 'HOOK_PRE_DEFENSE_MULT'
+HOOK_PRE_DEFENSE_PENETRATION = 'HOOK_PRE_DEFENSE_PENETRATION'
+HOOK_PRE_DODGE_RATE = 'HOOK_PRE_DODGE_RATE'
+HOOK_PRE_EN_COST_MULT = 'HOOK_PRE_EN_COST_MULT'
+HOOK_PRE_EN_STATS = 'HOOK_PRE_EN_STATS'
+HOOK_PRE_HIT_RATE = 'HOOK_PRE_HIT_RATE'
+HOOK_PRE_IGNORE_DEFENSE = 'HOOK_PRE_IGNORE_DEFENSE'
+HOOK_PRE_MISS_RATE = 'HOOK_PRE_MISS_RATE'
+HOOK_PRE_MITIGATION = 'HOOK_PRE_MITIGATION'
+HOOK_PRE_MOBILITY = 'HOOK_PRE_MOBILITY'
+HOOK_PRE_PARRY_RATE = 'HOOK_PRE_PARRY_RATE'
+HOOK_PRE_STAT_BONUS = 'HOOK_PRE_STAT_BONUS'
+HOOK_PRE_WEAPON_POWER = 'HOOK_PRE_WEAPON_POWER'
+HOOK_PRE_WILL_MODIFIER = 'HOOK_PRE_WILL_MODIFIER'
+
+
+--- main.py ---
+def main() -> int:  """主函数"""
+
+--- script\generate_probabilistic_skills.py ---
+PROBABILISTIC_SKILLS = {'spirit_critical_burst': [{'id': 'spirit_critical_burst', 'name': '暴击爆发', 'description': '30%概率本次攻击必定暴击', 'hook': 'HOOK_PRE_CRIT_RATE', 'operation': 'set', 'value': 100.0, 'duration': 1, 'trigger_chance': 0.3, 'priority': 95}], 'spirit_lucky_dodge': [{'id': 'spirit_lucky_dodge', 'name': '幸运闪避', 'description': '25%概率将HIT转为DODGE', 'hook': 'HOOK_POST_ROLL_RESULT', 'operation': 'callback', 'value': 'cb_lucky_dodge', 'duration': 1, 'trigger_chance': 0.25, 'priority': 95}], 'spirit_desperate_strike':...(truncated)
+CONDITIONAL_SKILLS = {'spirit_execute': [{'id': 'spirit_execute', 'name': '处决', 'description': '对HP<50%的敌人，造成1.5倍伤害', 'hook': 'HOOK_PRE_DAMAGE_MULT', 'operation': 'mul', 'value': 1.5, 'duration': 1, 'priority': 90, 'conditions': [{'type': 'target_hp_below', 'threshold': 0.5}]}], 'spirit_guard_break': [{'id': 'spirit_guard_break', 'name': '破防', 'description': '对防御率>50%的敌人，无视50%防御', 'hook': 'HOOK_PRE_DEFENSE_PENETRATION', 'operation': 'add', 'value': 50.0, 'duration': 1, 'priority': 85, 'conditions': [{'type': 'target...(truncated)
+def generate_extended_skills():  """生成扩展技能配置"""
+
+--- src\config.py ---
+class Config:
+  """全局游戏配置"""
+  ...
+
+--- src\factory.py ---
+class MechaFactory:
+  """Unified factory for creating mecha and weapon snapshots from configs."""
+  def create_mecha_snapshot(mecha_conf: MechaConfig, pilot_conf: PilotConfig | None=None, equipments: List[EquipmentConfig] | None=None, weapon_configs: dict | None=None, upgrade_level: int=0) -> MechaSnapshot:  """Create a MechaSnapshot from configuration with optional enhancements."""
+  def create_weapon_snapshot(config: EquipmentConfig) -> WeaponSnapshot:  """Create a WeaponSnapshot from equipment configuration."""
+
+--- src\loader.py ---
+T = TypeVar('T', bound=BaseModel)
+class DataLoader:
+  """数据加载器 - 配置表驱动中心"""
+  def __init__(data_dir: str='data') -> None:  """初始化数据加载器"""
+  def weapons() -> dict[str, EquipmentConfig]:  """兼容旧测试"""
+  def load_all() -> None:  """加载所有游戏静态配置。"""
+  def get_pilot_config(pilot_id: str) -> PilotConfig:
+  def get_equipment_config(equip_id: str) -> EquipmentConfig:
+  def get_mecha_config(mecha_id: str) -> MechaConfig:
+  def get_all_weapons() -> list[EquipmentConfig]:  """筛选所有类型为 WEAPON 的配置"""
+  def get_pilot(pid: str) -> PilotConfig:
+  def get_weapon(wid: str) -> EquipmentConfig:
+  def get_mecha(mid: str) -> MechaConfig:
+
+--- src\models.py ---
+class WeaponType(str, Enum):
+  """武器类型"""
+  MELEE = 'MELEE'
+  SHOOTING = 'RIFLE'
+  AWAKENING = 'AWAKENING'
+  SPECIAL = 'SPECIAL'
+  FALLBACK = 'FALLBACK'
+  HEAVY = 'HEAVY'
+class SlotType(str, Enum):
+  """槽位类型"""
+  FIXED = 'FIXED'
+  WEAPON = 'WEAPON'
+  EQUIP = 'EQUIP'
+  SUB_PILOT = 'SUB'
+class AttackResult(str, Enum):
+  """攻击判定结果"""
+  MISS = '未命中'
+  DODGE = '躲闪'
+  PARRY = '招架'
+  BLOCK = '格挡'
+  CRIT = '暴击'
+  HIT = '命中'
+class InitiativeReason(str, Enum):
+  """先手原因"""
+  PERFORMANCE = '机体性能优势'
+  PILOT = '驾驶员感知优势'
+  ADVANTAGE = '气力优势延续'
+  COUNTER = '战术反超'
+  FORCED_SWITCH = '强制换手机制'
+class Terrain(str, Enum):
+  """地形类型"""
+  SPACE = '宇宙'
+  SKY = '空中'
+  GROUND = '地面'
+  WATER = '水下'
+  FOREST = '森林'
+  BASE = '基地'
+class MechaConfig(BaseModel):
+  """机体静态配置表"""
+  id: str
+  name: str
+  portrait_id: str
+  model_asset: str
+  init_hp: int
+  init_en: int
+  init_armor: int
+  init_mobility: int
+  init_hit: float
+  init_precision: float
+  init_crit: float
+  init_dodge: float
+  init_parry: float
+  init_block: float
+  init_block_red: int
+  slots: list[str]
+  fixed_weapons: list[str]
+  init_en_regen_rate: float
+  init_en_regen_fixed: int
+class EquipmentConfig(BaseModel):
+  """装备/部件配置表"""
+  id: str
+  name: str
+  type: str
+  stat_modifiers: dict[str, float]
+  weapon_power: int | None
+  weapon_range_min: int | None
+  weapon_range_max: int | None
+  weapon_en_cost: int | None
+  weapon_type: WeaponType | None
+  weapon_will_req: int
+  weapon_tags: list[str]
+  weapon_anim_id: str
+  range: dict[str, int | None | None
+  passive_skills: list[str]
+  def extract_range_fields(cls, data: Any) -> Any:  """从嵌套的 range 对象中提取 min/max 值到 weapon_range_min/max，并处理 weapon_type"""
+class PilotConfig(BaseModel):
+  """驾驶员配置表"""
+  id: str
+  name: str
+  portrait_id: str
+  stat_shooting: int
+  stat_melee: int
+  stat_awakening: int
+  stat_defense: int
+  stat_reaction: int
+  stat_tech: int
+  weapon_proficiency: int
+  mecha_proficiency: int
+  innate_skills: list[str]
+class WeaponSnapshot(BaseModel):
+  """武器运行时快照"""
+  uid: str
+  definition_id: str
+  name: str
+  type: WeaponType
+  final_power: int
+  range_min: int
+  range_max: int
+  en_cost: int
+  will_req: int
+  anim_id: str
+  hit_mod: float
+  crit_mod: float
+  tags: list[str]
+  def can_use_at_distance(distance: int) -> bool:
+  def weapon_type() -> WeaponType:
+  def power() -> int:
+  def id() -> str:
+  def get_hit_modifier_at_distance(distance: int) -> float:  """获取指定距离下的命中补正，超出射程返回 -999"""
+class MechaSnapshot(BaseModel):
+  """机体运行时快照"""
+  instance_id: str
+  mecha_name: str
+  main_portrait: str
+  sub_portrait: str | None
+  model_asset: str
+  final_max_hp: int
+  current_hp: int
+  final_max_en: int
+  current_en: int
+  current_will: int
+  final_armor: int
+  final_mobility: int
+  final_en_regen_rate: float
+  final_en_regen_fixed: int
+  final_hit: float
+  final_precision: float
+  final_crit: float
+  final_dodge: float
+  final_parry: float
+  final_block: float
+  block_reduction: int
+  weapons: list[WeaponSnapshot]
+  skills: list[str]
+  pilot_stats_backup: dict[str, int]
+  effects: list[Any]
+  def id() -> str:
+  def name() -> str:
+  def max_hp() -> int:
+  def max_en() -> int:
+  def is_alive() -> bool:  """检查机体是否存活"""
+  def get_hp_percentage() -> float:
+  def can_attack(weapon: WeaponSnapshot) -> bool:
+  def consume_en(amount: int) -> None:
+  def take_damage(damage: int) -> None:
+  def modify_will(delta: int) -> None:
+  def get_pilot_stat(stat_name: str) -> int:
+  def get_effective_armor(will: int) -> int: # 核心公式: (装甲 + 守备*1.5) * 气力%
+Mecha = MechaSnapshot
+Pilot = PilotConfig
+Weapon = WeaponSnapshot
+class Modifier:
+  """属性修正值 (Legacy/Helper)"""
+  stat_name: str
+  value: float
+  source: str
+  duration: int
+class BattleContext:
+  """战场快照 - 单回合上下文"""
+  round_number: int
+  distance: int
+  terrain: Terrain
+  mecha_a: 'MechaSnapshot' | None
+  mecha_b: 'MechaSnapshot' | None
+  weapon: 'WeaponSnapshot' | None
+  initiative_holder: 'MechaSnapshot' | None
+  initiative_reason: InitiativeReason | None
+  roll: float
+  attack_result: AttackResult | None
+  damage: int
+  current_attacker_will_delta: int
+  current_defender_will_delta: int
+  modifiers: dict[str, Any]
+  shared_state: dict[tuple[str, str, str], Any]
+  hook_stack: list[str]
+  cached_results: dict[str, Any]
+  def attacker() -> 'MechaSnapshot' | None:  """获取当前攻击方（兼容性属性，推荐使用 get_attacker()）"""
+  def defender() -> 'MechaSnapshot' | None:  """获取当前防御方（兼容性属性，推荐使用 get_defender()）"""
+  def get_attacker() -> 'MechaSnapshot' | None:  """获取当前攻击方机体"""
+  def get_defender() -> 'MechaSnapshot' | None:  """获取当前防御方机体"""
+  def set_attacker(mecha: 'MechaSnapshot') -> None:  """设置当前攻击方"""
+class Condition:
+  type: str
+  params: dict[str, Any]
+class SideEffect:
+  type: str
+  params: dict[str, Any]
+class Effect:
+  id: str
+  name: str
+  source_id: str
+  hook: str
+  operation: str
+  value: float | str
+  priority: int
+  sub_priority: int
+  trigger_chance: float
+  target: str
+  duration: int
+  charges: int
+  consume_charges: bool
+  conditions: list[Condition]
+  side_effects: list[SideEffect]
+  payload: dict[str, Any]
+class TriggerEvent:
+  """技能触发事件（结构化数据，用于前端演出、统计分析）"""
+  skill_id: str
+  owner: Any
+  hook_name: str
+  effect_text: str
+  old_value: Any
+  new_value: Any
+  probability: float | None
+  triggered: bool
+class BuffState:
+  """轻量级技能状态（用于 UI 图标显示、持续时间管理）"""
+  skill_id: str
+  duration: int
+  charges: int
+  def is_expired() -> bool:  """检查是否过期"""
+  def tick() -> None:  """回合结束时调用"""
+
+--- src\skills.py ---
+class SkillRegistry:
+  """技能注册表"""
+  _hooks: dict[str, list]
+  _callbacks: dict[str, Callable]
+  def register_hook(cls, hook_point: str) -> Callable:  """装饰器：注册传统的钩子处理函数。"""
+  def register_callback(cls, callback_id: str) -> Callable:  """装饰器：注册供 Effect 使用的回调函数。"""
+  def get_callback(cls, callback_id: str) -> Callable | None:  """获取回调函数"""
+  def process_hook(cls, hook_point: str, initial_value: Any, context: BattleContext) -> Any:  """执行指定钩子点的所有逻辑，返回最终计算结果。"""
+def cb_potential(val: Any, ctx: BattleContext, owner: Mecha) -> Any: # 公式: bonus = 0.5 * ((1 - HP_ratio) ^ 2)
+def cb_learning(val, ctx, owner):  """学习电脑: 随回合数提升命中"""
+def cb_gn_recover(val, ctx, owner):  """GN炉: 每回合回复 EN（永久特性，不产生事件）"""
+def cb_miracle_hit(val, ctx, owner):  """奇迹: 强制命中 (将 HOOK_OVERRIDE_RESULT 设为 HIT)"""
+def cb_instinct_dodge(val, ctx, owner):  """本能: 30%概率将 HIT 扭转为 DODGE"""
+def cb_auto_repair(damage, ctx, owner):  """自动修复: 受到伤害后回复 HP（永久特性，不产生事件）"""
+def cb_ablat(damage, ctx, owner):  """烧蚀装甲: 对光束伤害减少200点（永久特性，不产生事件）"""
+def cb_rage_will(damage, ctx, owner):  """气魄: 造成伤害时气力+3（永久特性，不产生事件）"""
+def cb_vampirism(damage, ctx, owner):  """吸血: 回复造成伤害的10% HP（永久特性，不产生事件）"""
+def cb_effort_exp(val, ctx, owner):  """努力: 击坠时获得双倍经验（纯日志，不产生事件）"""
+def cb_mercy_will(val, ctx, owner):  """慈悲: 击坠时回复20点气力（永久特性，不产生事件）"""
+def cb_reunion(val, ctx, owner):  """再动: 概率获得额外行动机会（纯日志，不产生事件）"""
+def _restore_en(owner: Mecha, amount: int) -> None:  """辅助函数：回复 EN"""
+def cb_quick_reload_en(val, ctx, owner):  """快速装填: 攻击结束回复15 EN（永久特性，不产生事件）"""
+def cb_energy_save(val, ctx, owner):  """省能源: 每回合回复5 EN（永久特性，不产生事件）"""
+def cb_regen_hp(val, ctx, owner):  """再生: 每回合回复5% HP（永久特性，不产生事件）"""
+def cb_spirit_boost(val, ctx, owner):  """精神增幅: 战斗结束回复50% SP（纯日志，不产生事件）"""
+def cb_morale_en(val, ctx, owner):  """士气: 战斗结束回复30 EN（永久特性，不产生事件）"""
+class EffectManager:
+  """效果管理器"""
+  def add_effect(target: Mecha, effect_id: str, duration: int=1) -> None:  """为目标机体添加状态效果。"""
+  def tick_effects(target: Mecha) -> None:  """更新机体所有效果的持续时间，并在过期时移除。"""
+class TraitManager:
+  """特性管理器 - 负责机体和驾驶员特性的初始化"""
+  def apply_traits(mecha: Mecha) -> None:  """初始化机体自带的特性，将其转化为持久效果 (Effect)。"""
+class SpiritCommands:
+  """常见精神指令库"""
+  def activate_strike(user: Mecha):  """必中: 一回合内命中率 100%"""
+  def activate_alert(user: Mecha):  """必闪: 下一次回避率 100% (触发后消耗)"""
+  def activate_valor(user: Mecha):  """热血: 下一次攻击伤害 2 倍"""
+  def activate_iron_wall(user: Mecha):  """铁壁: 一回合内受到伤害 1/4"""
+  def activate_focus(user: Mecha):  """集中: 一回合内命中/回避 +30%"""
+  def activate_dream(user: Mecha):  """梦境: 强制先手"""
+  def activate_suppress(user: Mecha):  """威压: 强制先手"""
+  def activate_confuse(user: Mecha):  """搅乱: 敌人命中率降低"""
+  def activate_miracle(user: Mecha):  """奇迹: 下次攻击必定命中"""
+  def activate_instinct(user: Mecha):  """本能: 30%概率闪避攻击"""
+  def activate_fury(user: Mecha):  """激怒: 暴击倍率×1.5"""
+  def activate_rage(user: Mecha):  """气魄: 造成伤害时气力+3"""
+  def activate_effort(user: Mecha):  """努力: 击坠时获得双倍经验"""
+  def activate_protract(user: Mecha):  """拖延: 战斗回合+5"""
+  def activate_determination(user: Mecha):  """执念: 战斗强制继续1次"""
+  def activate_reunion(user: Mecha):  """再动: 概率获得额外行动"""
+
+--- src\__init__.py ---
+
+--- src\combat\calculator.py ---
+class CombatCalculator:
+  """战斗计算核心"""
+  def calculate_proficiency_miss_penalty(proficiency: int) -> float: # 公式: 当前未命中率 = 12% + (18% * (1 - (Min(次数, 1000)/1000)^1.5))
+    clamped: int = min(proficiency, Config.WEAPON_PROFICIENCY_THRESHOLD)
+    ratio: float = (clamped / Config.WEAPON_PROFICIENCY_THRESHOLD) ** Config.WEAPON_PROFICIENCY_EXPONENT
+    penalty: float = Config.WEAPON_PROFICIENCY_PENALTY_MAX * (1 - ratio)
+    return Config.BASE_MISS_RATE + penalty
+  def calculate_proficiency_defense_ratio(proficiency: int, base_rate: float) -> float: # 公式: 当前比率 = 基础比率 * (log(Min(次数, 4000) + 1) / log(4000 + 1))
+    clamped: int = min(proficiency, Config.MECHA_PROFICIENCY_THRESHOLD)
+    ratio: float = math.log(clamped + 1) / math.log(Config.MECHA_PROFICIENCY_THRESHOLD + 1)
+    return base_rate * ratio
+  def calculate_will_damage_modifier(will: int) -> float: # 公式: 伤害修正系数 = 气力 / 100
+    return will / Config.WILL_MODIFIER_BASE
+  def calculate_will_defense_modifier(will: int) -> float: # 公式: 有效装甲值 = 基础装甲 * (气力 / 100)
+    return will / Config.WILL_MODIFIER_BASE
+  def calculate_will_stability_bonus(will: int) -> float: # 公式: 命中/躲闪附加率 = (气力 - 100) * 0.002
+    return (will - Config.WILL_MODIFIER_BASE) * Config.WILL_STABILITY_COEFFICIENT
+  def calculate_armor_mitigation(armor: int, will_modifier: float) -> float: # 公式: 减伤% = (护甲 * 气力修正) / (护甲 * 气力修正 + K)
+    effective_armor: float = armor * will_modifier
+    return effective_armor / (effective_armor + Config.ARMOR_K)
+  def calculate_precision_reduction(precision: float) -> float: # 公式: 削减比 = precision / 100
+    return min(precision / 100.0, Config.PRECISION_REDUCTION_CAP)
+
+--- src\combat\engine.py ---
+class InitiativeCalculator:
+  """先手判定系统"""
+  def __init__() -> None:  """初始化先手判定系统。"""
+  def calculate_initiative(mecha_a: Mecha, mecha_b: Mecha, round_number: int) -> tuple[Mecha, Mecha, InitiativeReason]:  """计算回合的先手方和后手方。"""
+class WeaponSelector:
+  """武器选择策略 (AI)"""
+  def select_best_weapon(mecha: Mecha, distance: int) -> Weapon:  """选择当前距离下期望伤害最高的武器。"""
+class BattleSimulator:
+  """战斗模拟器主控"""
+  def __init__(mecha_a: Mecha, mecha_b: Mecha) -> None:  """初始化战斗模拟器。"""
+  def run_battle() -> None:  """运行完整的战斗流程。"""
+  def set_event_callback(callback: Callable[[TriggerEvent], None]) -> None:  """设置前端事件回调（用于接收技能触发事件）"""
+  def get_trigger_events() -> list[TriggerEvent]:  """获取本回合的所有触发事件（用于前端演出）"""
+
+--- src\combat\resolver.py ---
+class AttackTableResolver:
+  """Round table attack resolution system (core mechanic)."""
+  def calculate_attack_table_segments(ctx: BattleContext) -> dict:  """Calculate round table segments for display and analysis."""
+    data = AttackTableResolver._calculate_all_segments_data(ctx)
+    return AttackTableResolver._build_segments_from_data(data)
+  def resolve_attack(ctx: BattleContext) -> tuple[AttackResult, int]:  """Resolve a single attack using round table mechanics."""
+    return (result, damage)
+
+--- src\combat\__init__.py ---
+
+--- src\skill_system\conditions.py ---
+def _get_target(condition: dict, context: BattleContext, owner: Mecha) -> Mecha | None:  """根据条件配置获取检查的目标对象。"""
+def _compare(val1, val2, op: str='>') -> bool:  """通用的数值比较逻辑。"""
+def _check_hp_threshold(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """HP 阈值检查 (hp_threshold)"""
+def _check_will_threshold(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """气力阈值检查 (will_threshold)"""
+def _check_round_number(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """回合数检查 (round_number)"""
+def _check_attack_result(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """攻击结果检查 (attack_result)"""
+def _check_enemy_will_threshold(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """检查敌方气力 (enemy_will_threshold)"""
+def _check_enemy_stat_check(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """检查敌方基础属性 (enemy_stat_check)"""
+def _check_ref_hook(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """引用其他钩子的计算结果 (ref_hook)"""
+def _check_weapon_type(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """武器类型检查 (weapon_type)"""
+def _check_damage_type(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """伤害类型检查 (damage_type)"""
+def _check_damage_below(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """伤害阈值检查 (damage_below)"""
+_CONDITION_CHECKERS = {'hp_threshold': _check_hp_threshold, 'will_threshold': _check_will_threshold, 'round_number': _check_round_number, 'attack_result': _check_attack_result, 'enemy_will_threshold': _check_enemy_will_threshold, 'enemy_stat_check': _check_enemy_stat_check, 'ref_hook': _check_ref_hook, 'weapon_type': _check_weapon_type, 'damage_type': _check_damage_type, 'damage_below': _check_damage_below}
+class ConditionChecker:
+  """条件检查器"""
+  def check(conditions: list[dict] | list, context: BattleContext, owner: Mecha) -> bool:  """检查效果的所有触发条件是否满足。"""
+def _check_single(condition: dict, context: BattleContext, owner: Mecha) -> bool:  """检查单个条件是否满足。"""
+
+--- src\skill_system\effect_factory.py ---
+class EffectFactory:
+  """数据驱动的效果工厂"""
+  _skill_data: dict[str, list[dict[str, Any]]]
+  _data_loaded: bool
+  def create_effect(cls, effect_id: str, duration: int=1) -> list[Effect]:  """根据效果 ID 从 JSON 配置中创建标准效果对象列表。"""
+  def create_trait_effects(cls, trait_id: str) -> list[Effect]:  """根据特性 ID 创建永久性的效果对象列表。"""
+
+--- src\skill_system\event_manager.py ---
+class EventManager:
+  """事件管理器"""
+  _callbacks: list[Callable[[Any], None]]
+  _statistics: dict[str, dict[str, int]]
+  def register_callback(cls, callback: Callable[[Any], None]) -> None:  """注册事件回调（用于前端演出、日志记录等）"""
+  def unregister_callback(cls, callback: Callable[[Any], None]) -> None:  """取消注册回调"""
+  def publish_event(cls, event: Any) -> None:  """发布触发事件（所有订阅者都会收到）"""
+  def get_statistics(cls, skill_id: str | None=None) -> Dict:  """获取统计数据"""
+  def clear_statistics(cls) -> None:  """清空统计数据"""
+
+--- src\skill_system\processor.py ---
+def _apply_operation(current_value: float | bool, op: str, val: float | bool) -> float | bool | None:  """应用数值或布尔运算操作。"""
+class EffectProcessor:
+  """效果处理器"""
+  def process(hook_name: str, input_value: Any, context: BattleContext) -> Any:  """处理指定钩子上的所有相关效果。"""
+
+--- src\skill_system\side_effects.py ---
+def _get_target(effect_data: dict, context: BattleContext, owner: Mecha) -> Mecha | None:  """获取副作用作用的目标机体。"""
+class SideEffectExecutor:
+  """副作用执行器"""
+  def execute(side_effects: list[dict], context: BattleContext, owner: Mecha) -> None:  """执行效果触发后定义的所有副作用。"""
+def _exec_consume_en(data: dict, context: BattleContext, owner: Mecha) -> None:  """消耗目标机体的 EN 资源。"""
+def _exec_modify_will(data: dict, context: BattleContext, owner: Mecha) -> None:  """修改目标机体的气力值。"""
+def _exec_apply_effect(data: dict, context: BattleContext, owner: Mecha) -> None:  """为目标机体施加新的状态效果 (Buff/Debuff)。"""
+_EXECUTORS = {'consume_en': _exec_consume_en, 'modify_will': _exec_modify_will, 'apply_effect': _exec_apply_effect}
+
+--- src\skill_system\_utils.py ---
+def get_target(target_type: str, context, owner):  """获取目标机体。"""
+
+--- src\skill_system\__init__.py ---
