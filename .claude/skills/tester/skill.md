@@ -61,6 +61,10 @@ python sim/sim_attack_table.py
 4. **重新测试**：运行对应的测试确认问题已解决
 5. **回归测试**：确保修复没有引入新的问题
 
+## 最后：打扫卫生
+
+删除`.coverage`、`.pytest_cache/`等临时和缓存文件及文件夹
+
 ## 其他注意事项
 
 - pyright 配置文件：`pyrightconfig.json`（只检查 src/，排除 test_*.py）

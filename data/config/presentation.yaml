@@ -1,0 +1,187 @@
+# ==========================================
+# 战斗演出配置文件 (Presentation Config)
+# ==========================================
+# 该配置文件驱动战斗演出系统的文本生成和视觉资源映射
+# 修改此文件即可调整战斗叙事风格和动画特效，无需修改代码
+
+# ==========================================
+# 1. 文本模板库 (Text Templates)
+# ==========================================
+templates:
+  # 上下文描述 (L1 - 环境段落)
+  context:
+    performance_advantage:  # 机体性能优势先手
+      - "{winner}的机体传感器首先捕捉到敌踪，在 {distance}m {range_tag} 区间抢得先机。"
+      - "性能差距显现！{winner}在 {distance}m {range_tag} 率先发起攻击。"
+    pilot_intuition:       # 驾驶员感知优势
+      - "驾驶员的直觉在千钧一发间爆发！{winner}在 {distance}m {range_tag} 抢先出手。"
+      - "惊人的战斗直觉！{winner}在 {distance}m {range_tag} 领先行动。"
+    advantage_continuation:  # 气力优势延续
+      - "{winner}凭借高昂的气力在 {distance}m {range_tag} 抢得主动权。"
+      - "气势如虹！{winner}在 {distance}m {range_tag} 继续保持攻势。"
+    counter_tactics:        # 战术反击
+      - "{winner}看准对手的空隙，在 {distance}m {range_tag} 完成战术反转！"
+    forced_switch:          # 强制换手
+      - "连续攻势被打破！{winner}在 {distance}m {range_tag} 夺回先手权。"
+
+  # 攻击描述 (L2/L3 - 攻击段落)
+  # 按 [武器类型][攻击结果] 索引
+  attack:
+    # 射击武器 (RIFLE)
+    RIFLE:
+      HIT:
+        - "{attacker}操控 {weapon} 稳健开火，光束准确击中 {defender} 的 {location}。（命中！伤害 {damage}）"
+        - "{attacker}的 {weapon} 发射！光束贯穿 {defender} 的 {location}。（命中！伤害 {damage}）"
+      CRIT:
+        - "致命一击！{attacker}的 {weapon} 以刁钻角度贯入 {defender} 的 {location}，引发连锁爆炸！（暴击！伤害 {damage}）"
+        - "精准狙击！{attacker}的 {weapon} 击中 {defender} 的 {location} 要害！（暴击！伤害 {damage}）"
+      DODGE:
+        - "{weapon} 的光束划过，但 {defender} 推进器全开，在千钧一发之际灵巧避开。（躲闪！）"
+        - "{attacker} 开火，但 {defender} 以微小的机动动作躲开了所有光束。（躲闪！）"
+      PARRY:
+        - "{attacker} 的射击被 {defender} 用手持武器精准击偏！（招架！）"
+      BLOCK:
+        - "{attacker} 的光束击中 {defender} 的装甲，被厚重的装甲层格挡。（格挡！）"
+      MISS:
+        - "{attacker} 的 {weapon} 开火，但距离判断失误，光束从 {defender} 身边划过。（未命中！）"
+
+    # 格斗武器 (MELEE)
+    MELEE:
+      HIT:
+        - "{attacker} 的 {weapon} 从腰间拔出的刹那，机体已化作白色闪光！刀刃精准刺向 {defender} 的 {location}。（命中！伤害 {damage}）"
+        - "{attacker} 高举 {weapon} 突进！刀刃撕裂 {defender} 的 {location} 装甲。（命中！伤害 {damage}）"
+      CRIT:
+        - "要害暴击！{attacker} 的 {weapon} 以惊人的力量劈开 {defender} 的 {location}，火花四溅！（暴击！伤害 {damage}）"
+        - "完美一击！{attacker} 的 {weapon} 直接贯穿 {defender} 的 {location}！（暴击！伤害 {damage}）"
+      DODGE:
+        - "{weapon} 挥下的瞬间，{defender} 突然改变姿态，刀刃只差毫厘。（躲闪！）"
+        - "{attacker} 突刺发动，但 {defender} 以极限反应闪开这一击。（躲闪！）"
+      PARRY:
+        - "精彩！{defender} 用手持武器精准架住 {weapon} 的攻击，火花在两件武器碰撞处迸发！（招架！）"
+        - "金属撞击的尖锐声响！{defender} 成功招架 {attacker} 的 {weapon} 攻势。（招架！）"
+      BLOCK:
+        - "{attacker} 的 {weapon} 砍在 {defender} 的装甲上，被厚重的装甲层硬扛下来。（格挡！）"
+      MISS:
+        - "{attacker} 挥舞 {weapon} 冲刺，但 {defender} 以毫厘之差避开了。（未命中！）"
+
+    # 觉醒武器 (AWAKENING)
+    AWAKENING:
+      HIT:
+        - "{attacker} 解放出 {weapon} 的全部出力！毁灭性的能量波冲击 {defender} 的 {location}。（命中！伤害 {damage}）"
+      CRIT:
+        - "终极爆发！{attacker} 的 {weapon} 全功率轰击，{defender} 的 {location} 承受毁灭性打击！（暴击！伤害 {damage}）"
+      DODGE:
+        - "{attacker} 释放 {weapon}，但 {defender} 推进器超负荷运作，勉强避开冲击范围。（躲闪！）"
+      PARRY:
+        - "{defender} 用武装强行分散 {attacker} 的能量波，勉强招架住这记攻击。（招架！）"
+      BLOCK:
+        - "{weapon} 的能量波被 {defender} 的装甲吸收，虽然震动剧烈但成功格挡。（格挡！）"
+      MISS:
+        - "{attacker} 的 {weapon} 能量波过于分散，未能命中 {defender}。（未命中！）"
+
+    # 重型武器 (HEAVY)
+    HEAVY:
+      HIT:
+        - "{attacker} 的 {weapon} 咆哮开火，巨大弹丸重击 {defender} 的 {location}。（命中！伤害 {damage}）"
+      CRIT:
+        - "重击贯穿！{attacker} 的 {weapon} 炮弹直接撕裂 {defender} 的 {location}，造成毁灭性打击！（暴击！伤害 {damage}）"
+      DODGE:
+        - "{attacker} 的重炮开火，但 {defender} 以推进器爆发勉强避开弹道。（躲闪！）"
+      PARRY:
+        - "{defender} 精准判断弹道，用特殊装备击偏来袭炮弹。（招架！）"
+      BLOCK:
+        - "{weapon} 的炮弹被 {defender} 的厚重装甲层硬扛下来。（格挡！）"
+      MISS:
+        - "{attacker} 的 {weapon} 开火，但射击角度偏差过大。（未命中！）"
+
+    # 保底武器 (FALLBACK)
+    FALLBACK:
+      HIT:
+        - "{attacker} 以高速突击直接撞击 {defender}！机体猛烈碰撞。（命中！伤害 {damage}）"
+      CRIT:
+        - "{attacker} 全速突击，以惊人的动能撞击 {defender} 的 {location}！（暴击！伤害 {damage}）"
+      DODGE:
+        - "{attacker} 试图撞击，但 {defender} 灵巧地闪开这一记冲撞。（躲闪！）"
+      MISS:
+        - "{attacker} 的撞击被 {defender} 躲避开来。（未命中！）"
+
+  # 回合总结 (L4 - 总结段落)
+  summary:
+    normal:
+      - "金属撞击的震荡波在通讯频段中回响，两台机体错身而过，留下螺旋状的尾迹。"
+      - "推进器的喷射流在虚空中交织，双方重新拉开距离准备下一轮交锋。"
+      - "机体各处的损伤指示灯在驾驶舱中闪烁，但战斗还要继续。"
+    damage_dealt:
+      - "这一击造成了严重损伤！{defender} 的机体冒出电火花，姿态开始不稳。"
+      - "装甲板在高温下扭曲变形，{defender} 的机体受损明显。"
+    will_change:
+      - "{attacker} 的气力在这一击后飙升！战斗意志愈发高涨。"
+      - "双方的气力都在交锋中提升，战斗进入白热化阶段。"
+
+# ==========================================
+# 2. 视觉映射 (Visual Mappings)
+# ==========================================
+mappings:
+  # 武器类型 -> 动画资源ID
+  animations:
+    # 射击武器
+    rifle:
+      default: "anim_rifle_shoot_01"
+      crit: "anim_rifle_snipe_strong"
+      parry: "anim_rifle_beam_clash"
+
+    # 格斗武器
+    saber:
+      default: "anim_saber_slash_01"
+      crit: "anim_saber_critical_slash"
+      parry: "anim_saber_clash"
+    melee:
+      default: "anim_melee_slash_01"
+      crit: "anim_melee_critical_hit"
+
+    # 觉醒武器
+    awakening:
+      default: "anim_awakening_burst_01"
+      crit: "anim_awakening_map_burst"
+
+    # 重型武器
+    heavy:
+      default: "anim_heavy_cannon_01"
+      crit: "anim_heavy_critical"
+
+    # 保底武器
+    fallback:
+      default: "anim_ram_attack_01"
+
+  # 判定结果 -> 屏幕特效ID列表
+  effects:
+    CRIT: ["vfx_screen_shake_heavy", "vfx_flash_red", "vfx_critical_hit"]
+    HIT: ["vfx_screen_shake_light"]
+    DODGE: ["vfx_speed_lines", "vfx_dodge_trail"]
+    PARRY: ["vfx_spark_burst", "vfx_metal_clash"]
+    BLOCK: ["vfx_armor_impact", "vfx_shockwave"]
+    MISS: []
+
+  # 武器类型 -> 运镜方式
+  camera:
+    melee:
+      default: "close_up_dynamic"
+      crit: "dramatic_zoom"
+    rifle:
+      default: "medium_follow"
+      crit: "sniper_zoom"
+    awakening:
+      default: "wide_angle_burst"
+      crit: "cinematic_dolly"
+    heavy:
+      default: "heavy_recoil"
+      crit: "explosion_zoom"
+
+  # 武器类型 -> 音效ID列表
+  sfx:
+    rifle: ["sfx_beam_rifle_fire", "sfx_beam_hit"]
+    saber: ["sfx_saber_ignition", "sfx_saber_clash"]
+    melee: ["sfx_melee_swing", "sfx_melee_impact"]
+    awakening: ["sfx_map_charge", "sfx_map_release"]
+    heavy: ["sfx_cannon_fire", "sfx_explosion"]
+    fallback: ["sfx_ram_impact"]

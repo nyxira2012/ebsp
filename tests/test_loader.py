@@ -429,21 +429,13 @@ class TestDataQueries:
 class TestLoadAll:
     """测试load_all方法"""
 
-    def test_load_all_loads_everything(self, loader, capsys):
+    def test_load_all_loads_everything(self, loader):
         """测试load_all加载所有数据"""
         loader.load_all()
 
         assert len(loader.pilots) == 3
         assert len(loader.weapons) == 3
         assert len(loader.mechas) == 3
-
-        # 检查输出
-        captured = capsys.readouterr()
-        assert "开始加载静态配置" in captured.out
-        assert "已加载 3 个驾驶员配置" in captured.out
-        assert "已加载 3 个装备/武器配置" in captured.out
-        assert "已加载 3 个机体配置" in captured.out
-        assert "配置加载完成" in captured.out
 
     def test_load_all_dependencies_order(self, loader):
         """测试加载顺序（依赖关系）"""

@@ -104,7 +104,10 @@ class StubVisitor(ast.NodeVisitor):
             self.indent_level += 1
             for item in node.body:
                 if isinstance(item, ast.Return):
-                    self._log(f"return {ast.unparse(item.value)}")
+                    if item.value is not None:
+                        self._log(f"return {ast.unparse(item.value)}")
+                    else:
+                        self._log("return")
                 elif isinstance(item, (ast.Assign, ast.AnnAssign)) and len(node.body) < 8:
                     # 如果函数很短，显示赋值语句（可能是中间公式）
                     self._log(ast.unparse(item))

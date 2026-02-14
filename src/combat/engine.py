@@ -8,8 +8,9 @@ from ..config import Config
 from ..models import Mecha, Weapon, WeaponType, BattleContext, InitiativeReason, AttackResult
 from ..skills import SkillRegistry, EffectManager
 from .resolver import AttackTableResolver
-from typing import Callable, Any, List
+from typing import Callable, Any, List, Optional
 from ..models import TriggerEvent
+from ..presentation import EventMapper, TextRenderer, PresentationRoundEvent
 
 
 class InitiativeCalculator:
@@ -241,18 +242,29 @@ class WeaponSelector:
 class BattleSimulator:
     """战斗模拟器主控"""
 
-    def __init__(self, mecha_a: Mecha, mecha_b: Mecha) -> None:
+    def __init__(self, mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool = True) -> None:
         """初始化战斗模拟器。
 
         Args:
             mecha_a: A 方机体
             mecha_b: B 方机体
+            enable_presentation: 是否启用演出系统（默认True）
         """
         self.mecha_a: Mecha = mecha_a
         self.mecha_b: Mecha = mecha_b
         self.initiative_calc: InitiativeCalculator = InitiativeCalculator()
         self.round_number: int = 0
         self.battle_log: list[str] = []
+
+        # 演出系统组件
+        self.enable_presentation: bool = enable_presentation
+        self.mapper: Optional[EventMapper] = None
+        self.text_renderer: Optional[TextRenderer] = None
+
+        if self.enable_presentation:
+            self.mapper = EventMapper()
+            self.text_renderer = TextRenderer()
+            self.presentation_timeline: list[PresentationRoundEvent] = []
 
     def run_battle(self) -> None:
         """运行完整的战斗流程。
@@ -523,6 +535,35 @@ class BattleSimulator:
 
         # HOOK: 攻击结束 (常用于清理 ATTACK_BASED 状态，或触发再动等)
         SkillRegistry.process_hook("HOOK_ON_ATTACK_END", None, ctx)
+
+        # 10. 生成演出事件（如果启用）
+        if self.enable_presentation and self.mapper:
+            from ..presentation.models import RawAttackEvent
+            # 构建原始事件
+            raw_event = RawAttackEvent(
+                round_number=self.round_number,
+                attacker_id=attacker.id,
+                defender_id=defender.id,
+                attacker_name=attacker.name,
+                defender_name=defender.name,
+                weapon_id=weapon.id,
+                weapon_name=weapon.name,
+                weapon_type=weapon.type.value,
+                attack_result=result.value,
+                damage=damage,
+                distance=distance,
+                attacker_will_delta=ctx.current_attacker_will_delta,
+                defender_will_delta=ctx.current_defender_will_delta,
+                initiative_holder="",  # 将在回合级别填充
+                initiative_reason="",  # 将在回合级别填充
+                triggered_skills=[],  # 可从事件管理器获取
+                is_first_attack=is_first
+            )
+
+            # 转换为演出事件并渲染
+            pres_event = self.mapper.map_attack(raw_event)
+            if self.text_renderer:
+                print(self.text_renderer.render_attack(pres_event))
 
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。
