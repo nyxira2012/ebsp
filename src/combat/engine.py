@@ -14,16 +14,16 @@ from ..models import TriggerEvent
 
 class InitiativeCalculator:
     """先手判定系统"""
-    
+
+    # 连续先攻阈值
+    _WIN_THRESHOLD = 2
+
     def __init__(self) -> None:
         """初始化先手判定系统。
 
         创建连续先攻计数器,用于强制换手机制。
         """
-        self.consecutive_wins: dict[str, int] = {
-            'A': 0,  # A方连先次数
-            'B': 0   # B方连先次数
-        }
+        self.consecutive_wins: dict[str, int] = {'A': 0, 'B': 0}
         self.last_winner: str | None = None
     
     def calculate_initiative(
@@ -51,60 +51,52 @@ class InitiativeCalculator:
             round_number: 当前回合数 (未使用,保留用于扩展)
 
         Returns:
-            tuple[Mecha, Mecha, InitiativeReason]: (先手方, 后手方, 先手原因)
+            (先手方, 后手方, 先手原因)
         """
-        
         # === 第一层: 绝对优先权 ===
-        
+
         # 检查强制换手机制
         if self.consecutive_wins['A'] >= Config.CONSECUTIVE_WINS_THRESHOLD:
             self._update_winner('B')
             return (mecha_b, mecha_a, InitiativeReason.FORCED_SWITCH)
-        
+
         if self.consecutive_wins['B'] >= Config.CONSECUTIVE_WINS_THRESHOLD:
             self._update_winner('A')
             return (mecha_a, mecha_b, InitiativeReason.FORCED_SWITCH)
-        
+
         # 检查技能: 强制先攻 (HOOK_INITIATIVE_CHECK)
-        # 这里的钩子如果返回 True，表示强制该机体先手
-        # 构建简单上下文
         ctx_a = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_a, mecha_b=None)
         ctx_b = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_b, mecha_b=None)
-        
+
         force_a = SkillRegistry.process_hook("HOOK_INITIATIVE_CHECK", False, ctx_a)
         if force_a:
             self._update_winner('A')
             return (mecha_a, mecha_b, InitiativeReason.PERFORMANCE)
-            
+
         force_b = SkillRegistry.process_hook("HOOK_INITIATIVE_CHECK", False, ctx_b)
         if force_b:
             self._update_winner('B')
             return (mecha_b, mecha_a, InitiativeReason.PERFORMANCE)
-        
+
         # === 第二层: 综合优势判定 ===
-        
-        score_a: float = self._calculate_initiative_score(mecha_a)
-        score_b: float = self._calculate_initiative_score(mecha_b)
-        
-        # 判断理由
+
+        score_a = self._calculate_initiative_score(mecha_a)
+        score_b = self._calculate_initiative_score(mecha_b)
+
         if score_a > score_b:
-            winner: Mecha = mecha_a
-            reason: InitiativeReason = self._determine_reason(mecha_a, mecha_b)
             self._update_winner('A')
-            return (winner, mecha_b, reason)
-        elif score_b > score_a:
-            winner: Mecha = mecha_b
-            reason: InitiativeReason = self._determine_reason(mecha_b, mecha_a)
+            return (mecha_a, mecha_b, self._determine_reason(mecha_a, mecha_b))
+
+        if score_b > score_a:
             self._update_winner('B')
-            return (winner, mecha_a, reason)
-        else:
-            # 平局: 上回合后手方获得先手
-            if self.last_winner == 'A':
-                self._update_winner('B')
-                return (mecha_b, mecha_a, InitiativeReason.COUNTER)
-            else:
-                self._update_winner('A')
-                return (mecha_a, mecha_b, InitiativeReason.COUNTER)
+            return (mecha_b, mecha_a, self._determine_reason(mecha_b, mecha_a))
+
+        # 平局: 上回合后手方获得先手
+        winner_id = 'B' if self.last_winner == 'A' else 'A'
+        self._update_winner(winner_id)
+        return (mecha_a if winner_id == 'A' else mecha_b,
+                mecha_b if winner_id == 'A' else mecha_a,
+                InitiativeReason.COUNTER)
     
     def _calculate_initiative_score(self, mecha: Mecha) -> float:
         """计算机体的先手判定得分。
@@ -156,22 +148,23 @@ class InitiativeCalculator:
             loser: 失去先手的机体
 
         Returns:
-            InitiativeReason: 先手原因枚举值
+            先手原因枚举值
         """
-        # 简化逻辑
-        mobility_diff: int = abs(winner.final_mobility - loser.final_mobility)
-        reaction_diff: int = abs(winner.pilot_stats_backup.get('stat_reaction', 0) - loser.pilot_stats_backup.get('stat_reaction', 0))
-        will_diff: int = abs(winner.current_will - loser.current_will)
+        mobility_diff = abs(winner.final_mobility - loser.final_mobility)
+        reaction_diff = abs(
+            winner.pilot_stats_backup.get('stat_reaction', 0) -
+            loser.pilot_stats_backup.get('stat_reaction', 0)
+        )
+        will_diff = abs(winner.current_will - loser.current_will)
 
         if mobility_diff > 20:
             return InitiativeReason.PERFORMANCE
-        elif reaction_diff > 15:
+        if reaction_diff > 15:
             return InitiativeReason.PILOT
-        elif will_diff > 20:
+        if will_diff > 20:
             return InitiativeReason.ADVANTAGE
-        else:
-            return InitiativeReason.PERFORMANCE
-    
+        return InitiativeReason.PERFORMANCE
+
     def _update_winner(self, winner_id: str) -> None:
         """更新连续先攻记录。
 
@@ -181,13 +174,10 @@ class InitiativeCalculator:
         Args:
             winner_id: 获胜方标识 ('A' 或 'B')
         """
-        if self.last_winner == winner_id:
-            self.consecutive_wins[winner_id] += 1
-        else:
-            # 换手了,重置所有计数
+        if self.last_winner != winner_id:
             self.consecutive_wins = {'A': 0, 'B': 0}
-            self.consecutive_wins[winner_id] = 1
 
+        self.consecutive_wins[winner_id] += 1
         self.last_winner = winner_id
 
 

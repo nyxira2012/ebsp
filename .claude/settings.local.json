@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Bash(pytest:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(dir nul)"
     ]
   }
 }

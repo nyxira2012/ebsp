@@ -116,48 +116,26 @@ class AttackTableResolver:
         segments = {}
         current = 0.0
 
-        miss_rate = data['miss_rate']
-        dodge_rate = data['dodge_rate']
-        parry_rate = data['parry_rate']
-        block_rate = data['block_rate']
-        crit_rate = data['crit_rate']
+        # Segment types in priority order (highest to lowest)
+        segment_types = [
+            ('MISS', data['miss_rate']),
+            ('DODGE', data['dodge_rate']),
+            ('PARRY', data['parry_rate']),
+            ('BLOCK', data['block_rate']),
+            ('CRIT', data['crit_rate']),
+        ]
 
-        # MISS - highest priority, never squeezed
-        if miss_rate > 0:
-            segments['MISS'] = {'rate': miss_rate, 'start': current, 'end': current + miss_rate}
-            current += miss_rate
-
-        # DODGE - may be squeezed by MISS
-        if dodge_rate > 0:
-            available_space = max(0, 100 - current)
-            actual_dodge_rate = min(dodge_rate, available_space)
-            if actual_dodge_rate > 0:
-                segments['DODGE'] = {'rate': actual_dodge_rate, 'start': current, 'end': current + actual_dodge_rate}
-                current += actual_dodge_rate
-
-        # PARRY - may be squeezed by MISS and DODGE
-        if parry_rate > 0:
-            available_space = max(0, 100 - current)
-            actual_parry_rate = min(parry_rate, available_space)
-            if actual_parry_rate > 0:
-                segments['PARRY'] = {'rate': actual_parry_rate, 'start': current, 'end': current + actual_parry_rate}
-                current += actual_parry_rate
-
-        # BLOCK - may be squeezed by previous segments
-        if block_rate > 0:
-            available_space = max(0, 100 - current)
-            actual_block_rate = min(block_rate, available_space)
-            if actual_block_rate > 0:
-                segments['BLOCK'] = {'rate': actual_block_rate, 'start': current, 'end': current + actual_block_rate}
-                current += actual_block_rate
-
-        # CRIT - may be squeezed by previous segments
-        if crit_rate > 0:
-            available_space = max(0, 100 - current)
-            actual_crit_rate = min(crit_rate, available_space)
-            if actual_crit_rate > 0:
-                segments['CRIT'] = {'rate': actual_crit_rate, 'start': current, 'end': current + actual_crit_rate}
-                current += actual_crit_rate
+        for name, rate in segment_types:
+            if rate > 0:
+                available_space = max(0, 100 - current)
+                actual_rate = min(rate, available_space)
+                if actual_rate > 0:
+                    segments[name] = {
+                        'rate': actual_rate,
+                        'start': current,
+                        'end': current + actual_rate
+                    }
+                    current += actual_rate
 
         # HIT (remaining space)
         hit_space = max(0, 100 - current)
@@ -166,7 +144,6 @@ class AttackTableResolver:
             current += hit_space
 
         segments['total'] = current
-
         return segments
 
     @staticmethod

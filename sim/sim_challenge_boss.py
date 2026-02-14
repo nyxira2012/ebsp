@@ -30,7 +30,6 @@ if sys.platform.startswith('win'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from src.models import Mecha, Pilot, Weapon, WeaponType, BattleContext, Effect, AttackResult
-from src.loader import DataLoader
 from src.skills import SkillRegistry, EffectManager, TraitManager
 from src.combat.engine import BattleSimulator
 
@@ -499,9 +498,9 @@ class BossChallenger:
     """Boss 木桩测试器"""
 
     def __init__(self, verbose: bool = False):
-        self.loader = DataLoader()
-        self.loader.load_all()
-
+        # Boss 模拟器不需要加载配置文件（直接在代码中创建实体）
+        # self.loader = DataLoader()
+        # self.loader.load_all()
         self.verbose = verbose
 
         # 加载所有技能数据
@@ -884,12 +883,14 @@ def print_statistics(all_stats: List[BattleStatistics]):
                 damage_ranges["8000+"] += 1
 
         print(f"\n  伤害区间分布:")
-        for range_name, count in damage_ranges.items():
-            if count > 0:
-                percentage = count / total_hits_count * 100
-                bar_length = int(percentage / 2)  # 每2%一个字符
-                bar = "█" * bar_length
-                print(f"    {range_name:<10} {count:>4} 次 ({percentage:>5.1f}%) {bar}")
+        # 总是显示所有区间，即使次数为0，便于验证数据一致性
+        for range_name in ["0-1000", "1000-2000", "2000-3000", "3000-4000",
+                           "4000-5000", "5000-6000", "6000-7000", "7000-8000", "8000+"]:
+            count = damage_ranges.get(range_name, 0)
+            percentage = count / total_hits_count * 100
+            bar_length = int(percentage / 2)  # 每2%一个字符
+            bar = "█" * bar_length
+            print(f"    {range_name:<10} {count:>4} 次 ({percentage:>5.1f}%) {bar}")
 
     # 伤害效率分析
     if challenger_attacks > 0:
@@ -917,8 +918,8 @@ def print_statistics(all_stats: List[BattleStatistics]):
         "HIT": "普通命中"
     }
 
-    # 挑战者判定结果
-    print(f"\n  【{CHALLENGER_CONFIG['name']}】判定结果 (总计 {challenger_attacks} 次攻击)")
+    # 挑战者攻击判定结果（挑战者打出去的攻击被Boss如何防御）
+    print(f"\n  【{CHALLENGER_CONFIG['name']}攻击判定】(总计 {challenger_attacks} 次攻击)")
     print(f"  {'判定类型':<10} | {'次数':<8} | {'百分比':<8} | {'说明'}")
     print(f"  {'-'*60}")
 
@@ -926,10 +927,13 @@ def print_statistics(all_stats: List[BattleStatistics]):
         count = challenger_results.get(result_name, 0)
         percentage = count / challenger_attacks * 100 if challenger_attacks > 0 else 0
         description = result_descriptions.get(result_name, "")
+        # 对于防御类判定，说明这是被Boss如何防御
+        if result_name in ["DODGE", "PARRY", "BLOCK"]:
+            description = f"被{description}"
         print(f"  {result_name:<10} | {count:<8} | {percentage:>6.2f}% | {description}")
 
-    # Boss判定结果
-    print(f"\n  【{BOSS_CONFIG['name']}】判定结果 (总计 {boss_attacks} 次攻击)")
+    # Boss攻击判定结果（Boss打出去的攻击被挑战者如何防御）
+    print(f"\n  【{BOSS_CONFIG['name']}攻击判定】(总计 {boss_attacks} 次攻击)")
     print(f"  {'判定类型':<10} | {'次数':<8} | {'百分比':<8} | {'说明'}")
     print(f"  {'-'*60}")
 
@@ -937,6 +941,9 @@ def print_statistics(all_stats: List[BattleStatistics]):
         count = boss_results.get(result_name, 0)
         percentage = count / boss_attacks * 100 if boss_attacks > 0 else 0
         description = result_descriptions.get(result_name, "")
+        # 对于防御类判定，说明这是被挑战者如何防御
+        if result_name in ["DODGE", "PARRY", "BLOCK"]:
+            description = f"被{description}"
         print(f"  {result_name:<10} | {count:<8} | {percentage:>6.2f}% | {description}")
 
     # Boss防御效率分析

@@ -3,20 +3,20 @@
 负责管理所有战斗技能、精神指令和状态效果的注册与执行
 """
 
-from typing import Callable, Any, TypeAlias, List
-from .models import Mecha, BattleContext, Effect, Modifier, AttackResult, WeaponType, TriggerEvent
+from typing import Any, TypeAlias, Callable
+from .models import Mecha, BattleContext, AttackResult, WeaponType, TriggerEvent
 from .skill_system.processor import EffectProcessor
 from .skill_system.effect_factory import EffectFactory
 from .skill_system.event_manager import EventManager
 
 # Hook 回调函数签名: (当前值, 上下文) -> 修改后的值
-HookCallback: TypeAlias = Callable[[Any, BattleContext], Any]
+HookCallback: TypeAlias = Any
+
 
 class SkillRegistry:
     """技能注册表"""
-    _hooks: dict[str, list[HookCallback]] = {}
-    _skills: dict[str, Callable] = {}
-    _callbacks: dict[str, Callable] = {} # 注册的回调函数 (op=callback)
+    _hooks: dict[str, list] = {}
+    _callbacks: dict[str, Callable] = {}
 
     @classmethod
     def register_hook(cls, hook_point: str) -> Callable:
@@ -26,7 +26,7 @@ class SkillRegistry:
             hook_point: 钩子点名称。
 
         Returns:
-            Callable: 装饰器函数。
+            装饰器函数。
         """
         def decorator(func: HookCallback) -> HookCallback:
             if hook_point not in cls._hooks:
@@ -43,7 +43,7 @@ class SkillRegistry:
             callback_id: 回调函数的唯一标识符 (对应 JSON 中的 value)。
 
         Returns:
-            Callable: 装饰器函数。
+            装饰器函数。
         """
         def decorator(func: Callable) -> Callable:
             cls._callbacks[callback_id] = func
@@ -69,11 +69,11 @@ class SkillRegistry:
             context: 战斗上下文快照。
 
         Returns:
-            Any: 经过流水线处理后的最终数值。
+            经过流水线处理后的最终数值。
         """
-        
-        # 1. 遍历全局/被动钩子 (Global/Passive hooks)
         value = initial_value
+
+        # 1. 遍历全局/被动钩子 (Global/Passive hooks)
         if hook_point in cls._hooks:
             for callback in cls._hooks[hook_point]:
                 try:
@@ -82,33 +82,28 @@ class SkillRegistry:
                     print(f"Error in legacy hook {hook_point}: {e}")
 
         # 2. 调用通用的 EffectProcessor
-        value = EffectProcessor.process(hook_point, value, context)
-        
-        return value
+        return EffectProcessor.process(hook_point, value, context)
+
+
+# ============================================================================
+# 回调函数定义
+# ============================================================================
 
 @SkillRegistry.register_callback("cb_potential")
 def cb_potential(val: Any, ctx: BattleContext, owner: Mecha) -> Any:
     """底力回调：根据当前 HP 百分比提升数值 (减伤等)。
 
     公式: bonus = 0.5 * ((1 - HP_ratio) ^ 2)
-
-    Args:
-        val: 原始数值。
-        ctx: 战斗上下文。
-        owner: 效果持有人。
-
-    Returns:
-        Any: 修正后的数值。
     """
     ratio = 1.0 - (owner.current_hp / owner.final_max_hp)
-    bonus = 0.5 * (ratio ** 2)
-    return val + bonus
+    return val + 0.5 * (ratio ** 2)
+
 
 @SkillRegistry.register_callback("cb_learning")
 def cb_learning(val, ctx, owner):
     """学习电脑: 随回合数提升命中"""
-    bonus = ctx.round_number * 5.0
-    return val + bonus
+    return val + ctx.round_number * 5.0
+
 
 @SkillRegistry.register_callback("cb_gn_recover")
 def cb_gn_recover(val, ctx, owner):
@@ -116,29 +111,24 @@ def cb_gn_recover(val, ctx, owner):
     owner.current_en = min(owner.final_max_en, owner.current_en + 10)
     return val
 
-# ============================================================================
-# 补充回调函数
-# ============================================================================
 
 @SkillRegistry.register_callback("cb_miracle_hit")
 def cb_miracle_hit(val, ctx, owner):
     """奇迹: 强制命中 (将 HOOK_OVERRIDE_RESULT 设为 HIT)"""
-    # 只在未命中时强制命中
     if val is None or val == AttackResult.MISS:
         return AttackResult.HIT
     return val
+
 
 @SkillRegistry.register_callback("cb_instinct_dodge")
 def cb_instinct_dodge(val, ctx, owner):
     """本能: 30%概率将 HIT 扭转为 DODGE"""
     import random
-    if val == AttackResult.HIT:
-        roll = random.random()
-        triggered = (roll < 0.3)
 
-        # 发布事件（使用正确的skill_id: spirit_instinct）
+    if val == AttackResult.HIT:
+        triggered = random.random() < 0.3
         EventManager.publish_event(TriggerEvent(
-            skill_id="spirit_instinct",  # 修正：使用技能配置中的ID
+            skill_id="spirit_instinct",
             owner=owner,
             hook_name="OVERRIDE_RESULT",
             effect_text="本能闪避" if triggered else "本能未触发",
@@ -147,31 +137,32 @@ def cb_instinct_dodge(val, ctx, owner):
             probability=0.3,
             triggered=triggered
         ))
-
-        if triggered:
-            return AttackResult.DODGE
+        return AttackResult.DODGE if triggered else val
     return val
+
 
 @SkillRegistry.register_callback("cb_auto_repair")
 def cb_auto_repair(damage, ctx, owner):
     """自动修复: 受到伤害后回复 HP（永久特性，不产生事件）"""
-    heal = int(damage * 0.2)  # 回复受到伤害的20%
+    heal = int(damage * 0.2)
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     return damage
+
 
 @SkillRegistry.register_callback("cb_ablat")
 def cb_ablat(damage, ctx, owner):
     """烧蚀装甲: 对光束伤害减少200点（永久特性，不产生事件）"""
-    # TODO: 确认武器类型区分方式，光束武器目前归为 SHOOTING 类型
-    if ctx.weapon and ctx.weapon.weapon_type in [WeaponType.SHOOTING, WeaponType.MELEE]:
+    if ctx.weapon and ctx.weapon.weapon_type in (WeaponType.SHOOTING, WeaponType.MELEE):
         damage = max(0, damage - 200)
     return damage
+
 
 @SkillRegistry.register_callback("cb_rage_will")
 def cb_rage_will(damage, ctx, owner):
     """气魄: 造成伤害时气力+3（永久特性，不产生事件）"""
     owner.modify_will(3)
     return damage
+
 
 @SkillRegistry.register_callback("cb_vampirism")
 def cb_vampirism(damage, ctx, owner):
@@ -180,10 +171,12 @@ def cb_vampirism(damage, ctx, owner):
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     return damage
 
+
 @SkillRegistry.register_callback("cb_effort_exp")
 def cb_effort_exp(val, ctx, owner):
     """努力: 击坠时获得双倍经验（纯日志，不产生事件）"""
     return val
+
 
 @SkillRegistry.register_callback("cb_mercy_will")
 def cb_mercy_will(val, ctx, owner):
@@ -191,22 +184,31 @@ def cb_mercy_will(val, ctx, owner):
     owner.modify_will(20)
     return val
 
+
 @SkillRegistry.register_callback("cb_reunion")
 def cb_reunion(val, ctx, owner):
     """再动: 概率获得额外行动机会（纯日志，不产生事件）"""
     return val
 
+
+def _restore_en(owner: Mecha, amount: int) -> None:
+    """辅助函数：回复 EN"""
+    owner.current_en = min(owner.max_en, owner.current_en + amount)
+
+
 @SkillRegistry.register_callback("cb_quick_reload_en")
 def cb_quick_reload_en(val, ctx, owner):
     """快速装填: 攻击结束回复15 EN（永久特性，不产生事件）"""
-    owner.current_en = min(owner.max_en, owner.current_en + 15)
+    _restore_en(owner, 15)
     return val
+
 
 @SkillRegistry.register_callback("cb_energy_save")
 def cb_energy_save(val, ctx, owner):
     """省能源: 每回合回复5 EN（永久特性，不产生事件）"""
-    owner.current_en = min(owner.max_en, owner.current_en + 5)
+    _restore_en(owner, 5)
     return val
+
 
 @SkillRegistry.register_callback("cb_regen_hp")
 def cb_regen_hp(val, ctx, owner):
@@ -215,15 +217,17 @@ def cb_regen_hp(val, ctx, owner):
     owner.current_hp = min(owner.final_max_hp, owner.current_hp + heal)
     return val
 
+
 @SkillRegistry.register_callback("cb_spirit_boost")
 def cb_spirit_boost(val, ctx, owner):
     """精神增幅: 战斗结束回复50% SP（纯日志，不产生事件）"""
     return val
 
+
 @SkillRegistry.register_callback("cb_morale_en")
 def cb_morale_en(val, ctx, owner):
     """士气: 战斗结束回复30 EN（永久特性，不产生事件）"""
-    owner.current_en = min(owner.max_en, owner.current_en + 30)
+    _restore_en(owner, 30)
     return val
 
 
