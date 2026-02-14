@@ -4,8 +4,8 @@
         "name": "光束步枪",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
-        "power": 800,
-        "en_cost": 20,
+        "power": 2000,
+        "en_cost": 5,
         "range": {
             "min": 1000,
             "max": 6000
@@ -17,8 +17,8 @@
         "name": "光束军刀",
         "type": "WEAPON",
         "weapon_type": "MELEE",
-        "power": 1200,
-        "en_cost": 15,
+        "power": 1500,
+        "en_cost": 4,
         "range": {
             "min": 0,
             "max": 2000
@@ -30,8 +30,8 @@
         "name": "120mm机炮",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
-        "power": 700,
-        "en_cost": 18,
+        "power": 1500,
+        "en_cost": 3,
         "range": {
             "min": 1000,
             "max": 6000
@@ -43,8 +43,8 @@
         "name": "热能斧",
         "type": "WEAPON",
         "weapon_type": "MELEE",
-        "power": 1100,
-        "en_cost": 20,
+        "power": 1800,
+        "en_cost": 5,
         "range": {
             "min": 0,
             "max": 2000
@@ -56,8 +56,8 @@
         "name": "光束火箭炮",
         "type": "WEAPON",
         "weapon_type": "HEAVY",
-        "power": 1400,
-        "en_cost": 35,
+        "power": 4000,
+        "en_cost": 8,
         "range": {
             "min": 3000,
             "max": 8000

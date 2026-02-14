@@ -50,8 +50,10 @@ class MechaFactory:
         base_hit: float,
         base_hp: int = 0,
         base_en: int = 0,
-        base_armor: int = 0
-    ) -> tuple[int, int, int, int, float, float, float, float, float, float, float, List[WeaponSnapshot]]:
+        base_armor: int = 0,
+        base_en_regen_rate: float = 0.0,
+        base_en_regen_fixed: int = 0
+    ) -> tuple[int, int, int, float, float, float, float, float, float, float, float, int, List[WeaponSnapshot]]:
         """Apply equipment stat modifiers and collect weapons.
 
         Args:
@@ -61,24 +63,28 @@ class MechaFactory:
             base_hp: Base HP value.
             base_en: Base EN value.
             base_armor: Base armor value.
+            base_en_regen_rate: Base EN regeneration rate (percentage).
+            base_en_regen_fixed: Base EN regeneration fixed value.
 
         Returns:
-            Tuple of (hp, en, armor, mobility, hit, dodge, parry, block, precision, crit, weapons).
+            Tuple of (hp, en, armor, mobility, hit, dodge, parry, block, precision, crit, en_regen_rate, en_regen_fixed, weapons).
         """
         weapons = []
         final_hp = base_hp
         final_en = base_en
         final_armor = base_armor
-        final_mobility = base_mobility
+        final_mobility = float(base_mobility)
         final_hit = base_hit
         final_dodge = 0.0
         final_parry = 0.0
         final_block = 0.0
         final_precision = 0.0
         final_crit = 0.0
+        final_en_regen_rate = base_en_regen_rate
+        final_en_regen_fixed = base_en_regen_fixed
 
         if not equipments:
-            return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, weapons
+            return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
 
         for equip in equipments:
             # Collect weapons
@@ -94,7 +100,7 @@ class MechaFactory:
                 elif stat_name == "final_armor":
                     final_armor += int(value)
                 elif stat_name == "final_mobility":
-                    final_mobility += int(value)
+                    final_mobility += float(value)
                 elif stat_name == "final_hit":
                     final_hit += value
                 elif stat_name == "final_dodge":
@@ -107,8 +113,12 @@ class MechaFactory:
                     final_precision += value
                 elif stat_name == "final_crit":
                     final_crit += value
+                elif stat_name == "final_en_regen_rate":
+                    final_en_regen_rate += value
+                elif stat_name == "final_en_regen_fixed":
+                    final_en_regen_fixed += int(value)
 
-        return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, weapons
+        return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
 
     @staticmethod
     def create_mecha_snapshot(
@@ -142,12 +152,16 @@ class MechaFactory:
         base_armor = mecha_conf.init_armor + armor_bonus
         base_mobility = mecha_conf.init_mobility
         base_hit = mecha_conf.init_hit
+        base_en_regen_rate = mecha_conf.init_en_regen_rate
+        base_en_regen_fixed = mecha_conf.init_en_regen_fixed
 
         # Apply equipment modifiers (returns all modified stats)
         (final_hp, final_en, final_armor, final_mobility, final_hit,
-         final_dodge, final_parry, final_block, final_precision, final_crit, weapons) = (
+         final_dodge, final_parry, final_block, final_precision, final_crit,
+         final_en_regen_rate, final_en_regen_fixed, weapons) = (
             MechaFactory._apply_equipment_modifiers(
-                equipments, base_mobility, base_hit, base_hp, base_en, base_armor
+                equipments, base_mobility, base_hit, base_hp, base_en, base_armor,
+                base_en_regen_rate, base_en_regen_fixed
             )
         )
 
@@ -176,6 +190,8 @@ class MechaFactory:
             final_parry=mecha_conf.init_parry + final_parry,
             final_block=mecha_conf.init_block + final_block,
             block_reduction=mecha_conf.init_block_red,
+            final_en_regen_rate=final_en_regen_rate,
+            final_en_regen_fixed=final_en_regen_fixed,
             pilot_stats_backup=pilot_stats_backup,
             weapons=weapons,
             skills=[],

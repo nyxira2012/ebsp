@@ -62,7 +62,8 @@
         "name": "动力发电机",
         "type": "EQUIP",
         "stat_modifiers": {
-            "final_max_en": 50
+            "final_max_en": 50,
+            "final_en_regen_rate": 1.0
         }
     },
     {
@@ -72,7 +73,8 @@
         "stat_modifiers": {
             "final_max_hp": 500,
             "final_max_en": 100,
-            "final_mobility": 5.0
+            "final_mobility": 5.0,
+            "final_en_regen_rate": 1.0
         }
     }
 ]

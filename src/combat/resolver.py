@@ -292,7 +292,14 @@ class AttackTableResolver:
         # Hook: Stat bonus modification
         stat_bonus = SkillRegistry.process_hook("HOOK_PRE_STAT_BONUS", stat_bonus, ctx)
 
-        base_damage: float = weapon_power + (stat_bonus * 2)
+        # 驾驶员能力与武器威力同等权重（14倍系数）
+        # 公式：基础伤害 = 武器威力 + (驾驶员能力 × 14)
+        # 设计目标：
+        #   - 武器威力范围：1000-4000
+        #   - 驾驶员能力范围：50-180
+        #   - 中间值对应：(1000+4000)/2 = 2500 ≈ (50+180)/2 × 14 = 115 × 14 ≈ 1610
+        #   - 驾驶员贡献占比：约40-50%
+        base_damage: float = weapon_power + (stat_bonus * 14)
 
         # Will modifier
         will_modifier: float = CombatCalculator.calculate_will_damage_modifier(

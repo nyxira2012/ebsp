@@ -229,7 +229,7 @@ class WeaponSelector:
             definition_id="wpn_fallback",
             name="撞击",
             type=WeaponType.FALLBACK,
-            final_power=50,  # 低威力
+            final_power=600,  # 低威力
             en_cost=0,  # 0消耗
             range_min=0,
             range_max=10000,
@@ -360,6 +360,17 @@ class BattleSimulator:
         self.mecha_a.modify_will(1)
         self.mecha_b.modify_will(1)
 
+        # 6. EN 回能 (每回合自动回复)
+        self._apply_en_regeneration(self.mecha_a)
+        self._apply_en_regeneration(self.mecha_b)
+
+        # HOOK: 回合结束 (HOOK_ON_TURN_END)
+        # 用于清理 TURN_BASED 状态，或触发每回合结束的效果 (如 EN回复)
+        ctx = BattleContext(round_number=self.round_number, distance=distance, mecha_a=self.mecha_a, mecha_b=self.mecha_b)
+        SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
+
+        # 7. 效果结算 (Tick)
+
         # HOOK: 回合结束 (HOOK_ON_TURN_END)
         # 用于清理 TURN_BASED 状态，或触发每回合结束的效果 (如 EN回复)
         ctx = BattleContext(round_number=self.round_number, distance=distance, mecha_a=self.mecha_a, mecha_b=self.mecha_b)
@@ -376,6 +387,30 @@ class BattleSimulator:
         print(f"{self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
               f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
               f"气力={self.mecha_b.current_will}")
+
+    def _apply_en_regeneration(self, mecha: Mecha) -> None:
+        """应用机体的 EN 回能 (每回合自动回复)
+
+        回能公式:
+        - 百分比部分: max_en * (en_regen_rate / 100)
+        - 固定值部分: en_regen_fixed
+        - 总回复 = 百分比部分 + 固定值部分
+        - 不超过最大 EN 上限
+
+        Args:
+            mecha: 要回复 EN 的机体
+        """
+        # 计算百分比回能
+        percentage_regen = mecha.final_max_en * (mecha.final_en_regen_rate / 100.0)
+
+        # 计算总回能
+        total_regen = int(percentage_regen) + mecha.final_en_regen_fixed
+
+        # 应用回能 (不超过最大 EN)
+        if total_regen > 0:
+            mecha.current_en = min(mecha.final_max_en, mecha.current_en + total_regen)
+            # EN回复是常规操作，不再打印（减少噪音）
+            # 如需查看EN值变化，在verbose模式下会显示机体状态
 
     def _generate_distance(self) -> int:
         """生成当前回合的交战距离。

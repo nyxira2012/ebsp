@@ -87,6 +87,10 @@ class MechaConfig(BaseModel):
     slots: List[str] = []         # ["WEAPON", "EQUIP", "WEAPON"...]
     fixed_weapons: List[str] = [] # 内置武器 ID 列表
 
+    # EN 回能属性 (每回合自动回复)
+    init_en_regen_rate: float = 0.0    # 百分比回能 (例如 2.0 表示 2%)
+    init_en_regen_fixed: int = 0         # 固定值回能
+
 class EquipmentConfig(BaseModel):
     """装备/部件配置表"""
     id: str
@@ -238,6 +242,10 @@ class MechaSnapshot(BaseModel):
     # 战斗属性
     final_armor: int = 1000
     final_mobility: int = 100
+
+    # EN 回能属性 (每回合自动回复)
+    final_en_regen_rate: float = 0.0   # 百分比回能 (例如 2.0 表示 2%)
+    final_en_regen_fixed: int = 0        # 固定值回能
     
     # 判定倾向 (0-100)
     final_hit: float = 0.0

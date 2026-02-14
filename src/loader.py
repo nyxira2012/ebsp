@@ -40,11 +40,8 @@ class DataLoader:
     
     def load_all(self) -> None:
         """加载所有游戏静态配置。"""
-        print("开始加载静态配置...")
-
         # 1. 加载驾驶员
         self._load_from_json("pilots.json", PilotConfig, self.pilots)
-        print(f"[OK] 已加载 {len(self.pilots)} 个驾驶员配置")
 
         # 2. 加载装备与武器 (统一为 EquipmentConfig)
         self._load_from_json("equipments.json", EquipmentConfig, self.equipments)
@@ -52,14 +49,9 @@ class DataLoader:
         weapons_path = self.data_dir / "weapons.json"
         if weapons_path.exists():
             self._load_from_json("weapons.json", EquipmentConfig, self.equipments)
-            
-        print(f"[OK] 已加载 {len(self.equipments)} 个装备/武器配置")
 
         # 3. 加载机体配置
         self._load_from_json("mechas.json", MechaConfig, self.mechas)
-        print(f"[OK] 已加载 {len(self.mechas)} 个机体配置")
-
-        print("配置加载完成!")
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
         """通用的 JSON 加载方法"""

@@ -41,7 +41,6 @@ class EffectFactory:
             with open(skill_file, 'r', encoding='utf-8') as f:
                 cls._skill_data = json.load(f)
             cls._data_loaded = True
-            print(f"✓ 已加载 {len(cls._skill_data)} 个技能定义 (从 {skill_file})")
         except Exception as e:
             print(f"❌ 加载技能数据失败: {e}")
 

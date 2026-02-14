@@ -15,6 +15,8 @@
         "init_parry": 15.0,
         "init_block": 25.0,
         "init_block_red": 100,
+        "init_en_regen_rate": 2.0,
+        "init_en_regen_fixed": 3,
         "slots": [
             "WEAPON",
             "WEAPON",
@@ -42,6 +44,8 @@
         "init_parry": 12.0,
         "init_block": 28.0,
         "init_block_red": 120,
+        "init_en_regen_rate": 2.0,
+        "init_en_regen_fixed": 3,
         "slots": [
             "WEAPON",
             "EQUIP",
