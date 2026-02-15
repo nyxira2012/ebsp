@@ -43,12 +43,12 @@ pytest --cov=src --cov-report=term-missing
 
 ### 3.1 Boss 挑战模拟器
 ```bash
-python sim/sim_challenge_boss.py
+python scripts/sim/sim_challenge_boss.py
 ```
 
 ### 3.2 攻击表模拟器
 ```bash
-python sim/sim_attack_table.py
+python scripts/sim/sim_attack_table.py
 ```
 
 ## 第四步：问题修复原则
