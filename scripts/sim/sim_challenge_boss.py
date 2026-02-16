@@ -23,7 +23,9 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 # 确保导入路径
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(script_dir))
+sys.path.insert(0, project_root)
 
 # Windows UTF-8 支持
 if sys.platform.startswith('win'):
@@ -429,7 +431,9 @@ class BossChallenger:
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         import os
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        # 获取项目根目录（scripts/sim 的上两级）
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        data_dir = os.path.join(project_root, 'data')
         self.loader = DataLoader(data_dir=data_dir)
         self.loader.load_all()
 

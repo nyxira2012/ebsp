@@ -8,6 +8,10 @@ if sys.platform.startswith('win'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
+# Add necessary import path
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from src import DataLoader, Mecha
 from src.skills import TraitManager
 from src.combat import BattleSimulator

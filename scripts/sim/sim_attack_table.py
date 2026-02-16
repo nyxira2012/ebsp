@@ -25,7 +25,7 @@ from collections import Counter
 from typing import Tuple, List
 
 # 确保导入路径
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 # Windows UTF-8 支持
 if sys.platform.startswith('win'):

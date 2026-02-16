@@ -41,13 +41,13 @@ HOOK_PRE_WEAPON_POWER = 'HOOK_PRE_WEAPON_POWER'
 HOOK_PRE_WILL_MODIFIER = 'HOOK_PRE_WILL_MODIFIER'
 
 
---- main.py ---
-def main() -> int:  """主函数"""
-
---- script\generate_probabilistic_skills.py ---
+--- scripts\generate_probabilistic_skills.py ---
 PROBABILISTIC_SKILLS = {'spirit_critical_burst': [{'id': 'spirit_critical_burst', 'name': '暴击爆发', 'description': '30%概率本次攻击必定暴击', 'hook': 'HOOK_PRE_CRIT_RATE', 'operation': 'set', 'value': 100.0, 'duration': 1, 'trigger_chance': 0.3, 'priority': 95}], 'spirit_lucky_dodge': [{'id': 'spirit_lucky_dodge', 'name': '幸运闪避', 'description': '25%概率将HIT转为DODGE', 'hook': 'HOOK_POST_ROLL_RESULT', 'operation': 'callback', 'value': 'cb_lucky_dodge', 'duration': 1, 'trigger_chance': 0.25, 'priority': 95}], 'spirit_desperate_strike':...(truncated)
 CONDITIONAL_SKILLS = {'spirit_execute': [{'id': 'spirit_execute', 'name': '处决', 'description': '对HP<50%的敌人，造成1.5倍伤害', 'hook': 'HOOK_PRE_DAMAGE_MULT', 'operation': 'mul', 'value': 1.5, 'duration': 1, 'priority': 90, 'conditions': [{'type': 'target_hp_below', 'threshold': 0.5}]}], 'spirit_guard_break': [{'id': 'spirit_guard_break', 'name': '破防', 'description': '对防御率>50%的敌人，无视50%防御', 'hook': 'HOOK_PRE_DEFENSE_PENETRATION', 'operation': 'add', 'value': 50.0, 'duration': 1, 'priority': 85, 'conditions': [{'type': 'target...(truncated)
 def generate_extended_skills():  """生成扩展技能配置"""
+
+--- scripts\main.py ---
+def main() -> int:  """主函数"""
 
 --- src\config.py ---
 class Config:
@@ -387,7 +387,7 @@ class WeaponSelector:
   def select_best_weapon(mecha: Mecha, distance: int) -> Weapon:  """选择当前距离下期望伤害最高的武器。"""
 class BattleSimulator:
   """战斗模拟器主控"""
-  def __init__(mecha_a: Mecha, mecha_b: Mecha) -> None:  """初始化战斗模拟器。"""
+  def __init__(mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool=True) -> None:  """初始化战斗模拟器。"""
   def run_battle() -> None:  """运行完整的战斗流程。"""
   def set_event_callback(callback: Callable[[TriggerEvent], None]) -> None:  """设置前端事件回调（用于接收技能触发事件）"""
   def get_trigger_events() -> list[TriggerEvent]:  """获取本回合的所有触发事件（用于前端演出）"""
@@ -402,6 +402,100 @@ class AttackTableResolver:
     return (result, damage)
 
 --- src\combat\__init__.py ---
+
+--- src\presentation\constants.py ---
+class VisualIntent(str, Enum):
+  """标准物理意图 - 描述攻击的物理本质"""
+  SLASH_LIGHT = 'INTENT_SLASH_LIGHT'
+  SLASH_HEAVY = 'INTENT_SLASH_HEAVY'
+  STRIKE_BLUNT = 'INTENT_STRIKE_BLUNT'
+  BEAM_INSTANT = 'INTENT_BEAM_INSTANT'
+  BEAM_MASSIVE = 'INTENT_BEAM_MASSIVE'
+  PROJECTILE_SINGLE = 'INTENT_PROJECTILE_SINGLE'
+  PROJECTILE_RAIN = 'INTENT_PROJECTILE_RAIN'
+  IMPACT_MASSIVE = 'INTENT_IMPACT_MASSIVE'
+  PSYCHO_WAVE = 'INTENT_PSYCHO_WAVE'
+  AOE_BURST = 'INTENT_AOE_BURST'
+class PresentationTag(str, Enum):
+  """通用演示标签 - 用于触发特殊演出逻辑"""
+  LOC_HEAD = 'TAG_LOC_HEAD'
+  LOC_ARM = 'TAG_LOC_ARM'
+  LOC_LEG = 'TAG_LOC_LEG'
+  LOC_BACKPACK = 'TAG_LOC_BACKPACK'
+  SKILL_NT = 'TAG_SKILL_NEWTYPE'
+  SKILL_POTENTIAL = 'TAG_SKILL_POTENTIAL'
+  SKILL_VALOR = 'TAG_SKILL_VALOR'
+  RANGE_POINT_BLANK = 'TAG_RANGE_ZERO'
+  RANGE_LONG = 'TAG_RANGE_LONG'
+
+--- src\presentation\mapper.py ---
+class EventMapper:
+  """事件转换器 - 核心映射逻辑"""
+  def __init__(config_path: Optional[str]=None):  """初始化事件转换器"""
+  def map_attack(raw_event: RawAttackEvent) -> PresentationAttackEvent:  """将原始攻击事件映射为演出攻击事件"""
+
+--- src\presentation\models.py ---
+class RawAttackEvent:
+  """原始攻击事件 - 战斗引擎生成的纯数据事件"""
+  round_number: int
+  attacker_id: str
+  defender_id: str
+  attacker_name: str
+  defender_name: str
+  weapon_id: str
+  weapon_name: str
+  weapon_type: str
+  attack_result: str
+  damage: int
+  distance: int
+  attacker_will_delta: int
+  defender_will_delta: int
+  initiative_holder: str
+  initiative_reason: str
+  triggered_skills: list[str]
+  is_first_attack: bool
+class PresentationAttackEvent:
+  """演出攻击事件 - 包含文本、视觉效果的完整演出数据"""
+  event_type: str
+  timestamp: float
+  round_number: int
+  is_first_attack: bool
+  text: str
+  display_tags: list[str]
+  section_type: str
+  anim_id: str
+  camera_cam: str
+  vfx_ids: list[str]
+  sfx_ids: list[str]
+  damage_display: int
+  hit_location: str
+  attacker_name: str
+  defender_name: str
+  weapon_name: str
+  attack_result: str
+  range_tag: str
+  raw_event: RawAttackEvent | None
+class PresentationRoundEvent:
+  """演出回合事件 - 包含一个完整回合的所有演出信息"""
+  round_number: int
+  context_event: PresentationAttackEvent | None
+  first_attack_event: PresentationAttackEvent | None
+  second_attack_event: PresentationAttackEvent | None
+  summary_event: PresentationAttackEvent | None
+  def get_all_events() -> list[PresentationAttackEvent]:  """获取本回合的所有演出事件（按顺序）"""
+
+--- src\presentation\renderer.py ---
+class TextRenderer:
+  """文本渲染器 - 生成控制台友好的文本输出"""
+  def render_attack(event: PresentationAttackEvent, use_color: bool=True) -> str:  """渲染单个攻击事件为文本"""
+  def render_round(round_event: PresentationRoundEvent, use_color: bool=True) -> str:  """渲染完整的回合事件为文本"""
+class JSONRenderer:
+  """JSON渲染器 - 生成前端可用的JSON格式数据"""
+  def render_attack(event: PresentationAttackEvent) -> dict:  """渲染单个攻击事件为字典格式"""
+  def render_round(round_event: PresentationRoundEvent) -> dict:  """渲染完整回合事件为JSON字典"""
+  def render_round_json(round_event: PresentationRoundEvent, indent: Optional[int]=None) -> str:  """渲染完整回合事件为JSON字符串"""
+
+--- src\presentation\__init__.py ---
 
 --- src\skill_system\conditions.py ---
 def _get_target(condition: dict, context: BattleContext, owner: Mecha) -> Mecha | None:  """根据条件配置获取检查的目标对象。"""

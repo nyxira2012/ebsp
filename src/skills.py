@@ -320,7 +320,7 @@ class TraitManager:
             new_effects = EffectFactory.create_trait_effects(trait_id)
             
             if not new_effects:
-                print(f"      ⚠️  警告: 特性 [{trait_id}] 未定义或无动态效果")
+                print(f"      [WARNING] 特性 [{trait_id}] 未定义或无动态效果")
                 continue
 
             for eff in new_effects:

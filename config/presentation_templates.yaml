@@ -1,0 +1,259 @@
+templates:
+  # === T3: 兜底模板 (通用保底) ===
+  - id: "t3_fallback_generic"
+    tier: "T3_FALLBACK"
+    conditions: {}
+    content:
+      action_text: "{attacker}向{defender}发动攻击！"
+      reaction_text: "{defender}承受了攻击。"
+    visuals:
+      anim_id: "default_attack"
+      sfx_ids: ["sfx_impact"]
+
+  # === T2: 战术模板 - 近战 (轻斩) ===
+  - id: "t2_melee_slash_light_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "HIT" }
+    content:
+      action_text: "{attacker}身形一闪，挥动{weapon}斩向敌机！"
+      reaction_text: "利刃深深切入{defender}的装甲，留下灼热的伤痕！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_slash_light", "sfx_hit_metal"] }
+
+  - id: "t2_melee_slash_light_miss"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "MISS" }
+    content:
+      action_text: "{attacker}挥舞{weapon}发起突袭！"
+      reaction_text: "刀刃划破虚空，未能触及{defender}分毫！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_slash_miss"] }
+
+  - id: "t2_melee_slash_light_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "DODGE" }
+    content:
+      action_text: "{attacker}以{weapon}发起迅猛突刺！"
+      reaction_text: "{defender}千钧一发之际后撤，刀刃在毫厘间划过！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_slash_miss"] }
+
+  - id: "t2_melee_slash_light_parry"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "PARRY" }
+    content:
+      action_text: "{attacker}以{weapon}发动疾风般的连击！"
+      reaction_text: "火花四溅！{defender}以武器精准招架，化解了这波攻势！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_clash_light"] }
+
+  - id: "t2_melee_slash_light_block"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "BLOCK" }
+    content:
+      action_text: "{attacker}挥刀斩向{defender}！"
+      reaction_text: "{defender}举起盾牌格挡，刀刃撞击处爆出耀眼的火光！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_shield_metal"] }
+
+  - id: "t2_melee_slash_light_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "CRIT" }
+    content:
+      action_text: "{attacker}抓住破绽，{weapon}化作一道闪电！"
+      reaction_text: "{weapon}贯穿了{defender}的关节要害！机体在剧痛中剧烈震颤！"
+    visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_crit_slash", "sfx_heavy_impact"] }
+
+  # === T2: 战术模板 - 近战 (重斩) ===
+  - id: "t2_melee_slash_heavy_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "HIT" }
+    content:
+      action_text: "{attacker}全身发力，{weapon}横扫而出！"
+      reaction_text: "{defender}的装甲板在恐怖的巨力下被生生撕裂！"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_slash", "sfx_explosion_small"] }
+
+  - id: "t2_melee_slash_heavy_block"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "BLOCK" }
+    content:
+      action_text: "{attacker}挥舞{weapon}从天而降！"
+      reaction_text: "{defender}举盾迎击，但巨大的冲击力让机体不由单膝跪地！"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_impact", "sfx_metal_strain"] }
+
+  - id: "t2_melee_slash_heavy_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "DODGE" }
+    content:
+      action_text: "{attacker}抡起{weapon}，发动范围巨大的横斩！"
+      reaction_text: "{defender}推进器全开，险之又险地避开了这毁灭性的一击！"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_swing_miss"] }
+
+  # === T2: 战术模板 - 近战 (重击) ===
+  - id: "t2_melee_strike_blunt_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "HIT" }
+    content:
+      action_text: "{attacker}以{weapon}发动雷霆一击！"
+      reaction_text: "{defender}驾驶舱剧烈震颤，内部骨架在冲击下扭曲变形！"
+    visuals: { anim_id: "melee_strike_blunt", sfx_ids: ["sfx_blunt_impact", "sfx_metal_crunch"] }
+
+  # === T2: 战术模板 - 射击 (光束即时) ===
+  - id: "t2_shoot_beam_instant_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "HIT" }
+    content:
+      action_text: "{attacker}以{weapon}发动精准射击！"
+      reaction_text: "高能光束融穿了{defender}的装甲，留下冒烟的熔孔！"
+    visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_hit_beam"] }
+
+  - id: "t2_shoot_beam_instant_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "DODGE" }
+    content:
+      action_text: "{attacker}扣下{weapon}的扳机！"
+      reaction_text: "{defender}预判了弹道轨迹，以爆发性的速度闪避开来！"
+    visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_miss"] }
+
+  - id: "t2_shoot_beam_instant_block"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "BLOCK" }
+    content:
+      action_text: "{attacker}射出一发光束攻击！"
+      reaction_text: "{defender}的抗光束盾牌红热发光，将能量尽数驱散！"
+    visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_shield_absorb"] }
+
+  # === T2: 战术模板 - 射击 (巨型光束) ===
+  - id: "t2_shoot_beam_massive_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_MASSIVE", result: "HIT" }
+    content:
+      action_text: "{attacker}释放{weapon}！能量洪流喷涌而出！"
+      reaction_text: "{defender}被光柱吞没，装甲在瞬间蒸发殆尽！"
+    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_long_exposure"] }
+
+  - id: "t2_shoot_beam_massive_block"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_MASSIVE", result: "BLOCK" }
+    content:
+      action_text: "{attacker}从{weapon}中释放毁灭性的光束！"
+      reaction_text: "{defender}将所有功率注入力场，但仍无法完全阻挡溢出的能量！"
+    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_barrier_strain"] }
+
+  # === T2: 战术模板 - 射击 (单发实弹) ===
+  - id: "t2_shoot_proj_single_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "HIT" }
+    content:
+      action_text: "{attacker}以{weapon}发射高速炮弹！"
+      reaction_text: "炮弹命中{defender}，引发剧烈的爆炸！"
+    visuals: { anim_id: "shoot_bazooka", sfx_ids: ["sfx_shell_launch", "sfx_explosion_solid"] }
+
+  - id: "t2_shoot_proj_single_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "CRIT" }
+    content:
+      action_text: "{attacker}瞄准弱点，{weapon}致命一击！"
+      reaction_text: "炮弹贯穿了动力核心！{defender}在连锁爆炸中剧烈摇晃！"
+    visuals: { anim_id: "shoot_sniper", sfx_ids: ["sfx_sniper_launch", "sfx_crit_boom"] }
+
+  # === T2: 战术模板 - 射击 (弹幕) ===
+  - id: "t2_proj_rain_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "HIT" }
+    content:
+      action_text: "{attacker}从{weapon}倾泻出弹幕！"
+      reaction_text: "连绵的爆炸吞没{defender}，机体剧烈震颤！"
+    visuals: { anim_id: "shoot_vulcan_barrage", sfx_ids: ["sfx_vulcan_loop", "sfx_impact_rapid"] }
+
+  - id: "t2_proj_rain_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "DODGE" }
+    content:
+      action_text: "{attacker}以{weapon}进行火力压制！"
+      reaction_text: "{defender}以惊人的机动性穿梭于弹雨之中！"
+    visuals: { anim_id: "shoot_vulcan_barrage", sfx_ids: ["sfx_vulcan_loop", "sfx_miss_rapid"] }
+
+  # === T2: 战术模板 - 特殊 (巨型冲撞) ===
+  - id: "t2_impact_massive_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_IMPACT_MASSIVE", result: "HIT" }
+    content:
+      action_text: "{attacker}全速冲向{defender}！"
+      reaction_text: "金属尖叫！两机在火花四溅中剧烈碰撞！"
+    visuals: { anim_id: "impact_ram", sfx_ids: ["sfx_collision_heavy", "sfx_metal_screech"] }
+
+  - id: "t2_impact_massive_parry"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_IMPACT_MASSIVE", result: "PARRY" }
+    content:
+      action_text: "{attacker}以雷霆之势冲撞而来！"
+      reaction_text: "{defender}在千钧一发之际以兵器架住，双方角力僵持！"
+    visuals: { anim_id: "impact_ram", sfx_ids: ["sfx_collision_heavy", "sfx_metal_screech"] }
+
+  # === T2: 战术模板 - 特殊 (精神感应波) ===
+  - id: "t2_psycho_wave_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PSYCHO_WAVE", result: "HIT" }
+    content:
+      action_text: "{attacker}通过{weapon}释放精神感应波！"
+      reaction_text: "{defender}的操作系统在感知冲击下紊乱停滞！"
+    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse", "sfx_glitch_noise"] }
+
+  - id: "t2_psycho_wave_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PSYCHO_WAVE", result: "DODGE" }
+    content:
+      action_text: "{attacker}释放出强大的精神波动！"
+      reaction_text: "{defender}凭借直觉察觉危险，在波及前紧急机动！"
+    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse"] }
+
+  # === T1: 剧情模板 - 精神与技能 ===
+  - id: "t1_skill_flash_dodge"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 100
+    conditions: { result: "DODGE", skill_id: "spirit_flash" }
+    content:
+      action_text: "{attacker}以必中的信念发动攻击！"
+      reaction_text: "但是{defender}发动了【闪光】！攻击穿过了一道残影！"
+    visuals: { anim_id: "skill_flash_dodge", sfx_ids: ["sfx_newtype_flash"] }
+
+  - id: "t1_skill_surehit_hit"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 100
+    conditions: { result: "HIT", skill_id: "spirit_sure_hit" }
+    content:
+      action_text: "{attacker}发动【必中】！这一击，无处可逃！"
+      reaction_text: "{defender}试图闪避，但{weapon}如附随形，紧咬不放！"
+    visuals: { anim_id: "skill_surehit_action", sfx_ids: ["sfx_spirit_activate"] }
+
+  - id: "t1_skill_iron_wall_block"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 80
+    conditions: { result: "BLOCK", skill_id: "spirit_iron_wall" }
+    content:
+      action_text: "{attacker}发动猛烈一击！"
+      reaction_text: "{defender}如铁壁般岿然不动！【铁壁】将伤害尽数化解！"
+    visuals: { anim_id: "skill_iron_wall_block", sfx_ids: ["sfx_heavy_impact"] }
+
+  - id: "t1_skill_valor_hit"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 90
+    conditions: { result: "HIT", skill_id: "spirit_valor" }
+    content:
+      action_text: "{attacker}燃烧着【热血】！就是现在——决胜负的一击！"
+      reaction_text: "{defender}被这股压倒性的气势彻底压倒！"
+    visuals: { anim_id: "skill_valor_attack", sfx_ids: ["sfx_spirit_activate", "sfx_crit_impact"] }
+
+  - id: "t1_skill_potential_block"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 70
+    conditions: { result: "BLOCK", skill_id: "skill_potential" }
+    content:
+      action_text: "{attacker}试图一击必杀！"
+      reaction_text: "{defender}的【潜力】觉醒了！机体拒绝倒下，硬抗住这致命一击！"
+    visuals: { anim_id: "skill_potential_glow", sfx_ids: ["sfx_potential_spark"] }
+
+  - id: "t1_skill_awakening_hit"
+    tier: "T1_HIGHLIGHT"
+    priority_score: 110
+    conditions: { result: "HIT", skill_id: "skill_awakening" }
+    content:
+      action_text: "{attacker}的意识在不断扩张……世界仿佛变慢了……"
+      reaction_text: "{defender}遭到了来自无法预测角度的攻击——这就是【觉醒】的力量！"
+    visuals: { anim_id: "skill_awakening_pulse", sfx_ids: ["sfx_awakening_activate"] }

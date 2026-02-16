@@ -7,6 +7,7 @@ import random
 from ..config import Config
 from ..models import Mecha, Weapon, WeaponType, BattleContext, InitiativeReason, AttackResult
 from ..skills import SkillRegistry, EffectManager
+from ..skill_system.event_manager import EventManager
 from .resolver import AttackTableResolver
 from typing import Callable, Any, List, Optional
 from ..models import TriggerEvent
@@ -263,6 +264,15 @@ class BattleSimulator:
 
         if self.enable_presentation:
             self.mapper = EventMapper()
+            # Try loading templates from config
+            try:
+                import os
+                config_path = os.path.join("config", "presentation_templates.yaml")
+                if os.path.exists(config_path):
+                    self.mapper.registry.load_from_config(config_path)
+            except Exception as e:
+                print(f"Warning: Failed to load presentation templates: {e}")
+                
             self.text_renderer = TextRenderer()
             self.presentation_timeline: list[PresentationRoundEvent] = []
 
@@ -382,15 +392,12 @@ class BattleSimulator:
         SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
 
         # 7. 效果结算 (Tick)
-
-        # HOOK: 回合结束 (HOOK_ON_TURN_END)
-        # 用于清理 TURN_BASED 状态，或触发每回合结束的效果 (如 EN回复)
-        ctx = BattleContext(round_number=self.round_number, distance=distance, mecha_a=self.mecha_a, mecha_b=self.mecha_b)
-        SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
-
-        # 6. 效果结算 (Tick)
         EffectManager.tick_effects(self.mecha_a)
         EffectManager.tick_effects(self.mecha_b)
+
+        # 8. 推进演出系统的状态 (Cooldowns等)
+        if self.enable_presentation and self.mapper:
+            self.mapper.advance_turn()
 
         print()
         print(f"{self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
@@ -539,6 +546,14 @@ class BattleSimulator:
         # 10. 生成演出事件（如果启用）
         if self.enable_presentation and self.mapper:
             from ..presentation.models import RawAttackEvent
+            
+            # 获取本回合实际触发的技能
+            # 注意：这里获取的是 CombatEngine 内部执行期间产生的所有事件
+            # 对于更精确的 Action/Reaction 归属，可能需要改进 EventManager 在 Engine 中的调用点
+            # 目前是将一整个 Attack 过程中的所有技能都传给 Presentation
+            round_events = EventManager.get_current_round_events()
+            triggered_skill_ids = [e.skill_id for e in round_events if getattr(e, 'triggered', False)]
+
             # 构建原始事件
             raw_event = RawAttackEvent(
                 round_number=self.round_number,
@@ -549,21 +564,41 @@ class BattleSimulator:
                 weapon_id=weapon.id,
                 weapon_name=weapon.name,
                 weapon_type=weapon.type.value,
+                weapon_tags=getattr(weapon, 'tags', []),
                 attack_result=result.value,
                 damage=damage,
                 distance=distance,
                 attacker_will_delta=ctx.current_attacker_will_delta,
                 defender_will_delta=ctx.current_defender_will_delta,
-                initiative_holder="",  # 将在回合级别填充
-                initiative_reason="",  # 将在回合级别填充
-                triggered_skills=[],  # 可从事件管理器获取
-                is_first_attack=is_first
+                triggered_skills=triggered_skill_ids,  # 填入实际触发的技能
+                is_first_attack=is_first,
+                initiative_holder=""
             )
 
             # 转换为演出事件并渲染
-            pres_event = self.mapper.map_attack(raw_event)
+            pres_events_list = self.mapper.map_attack(raw_event)
+            
+            # 存储到当前回合的时间线中
+            if self.presentation_timeline is not None:
+                from ..presentation.models import PresentationAttackSequence
+                
+                # 找到或创建当前 PresentationRoundEvent
+                if not self.presentation_timeline or self.presentation_timeline[-1].round_number != self.round_number:
+                    round_evt = PresentationRoundEvent(round_number=self.round_number)
+                    self.presentation_timeline.append(round_evt)
+                
+                current_round_evt = self.presentation_timeline[-1]
+                
+                # 创建攻击序列
+                seq = PresentationAttackSequence(
+                    attacker_id=attacker.id,
+                    defender_id=defender.id,
+                    events=pres_events_list
+                )
+                current_round_evt.attack_sequences.append(seq)
+
             if self.text_renderer:
-                print(self.text_renderer.render_attack(pres_event))
+                print(self.text_renderer.render_attack(pres_events_list))
 
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。

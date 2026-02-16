@@ -4,6 +4,7 @@
         "name": "光束步枪",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
+        "weapon_tags": ["beam", "long_range"],
         "power": 2000,
         "en_cost": 5,
         "range": {
@@ -17,6 +18,7 @@
         "name": "光束军刀",
         "type": "WEAPON",
         "weapon_type": "MELEE",
+        "weapon_tags": ["beam", "slash_light"],
         "power": 1500,
         "en_cost": 4,
         "range": {
@@ -30,6 +32,7 @@
         "name": "120mm机炮",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
+        "weapon_tags": ["rapid", "projectile_single"],
         "power": 1500,
         "en_cost": 3,
         "range": {
@@ -43,6 +46,7 @@
         "name": "热能斧",
         "type": "WEAPON",
         "weapon_type": "MELEE",
+        "weapon_tags": ["heavy", "slash_heavy"],
         "power": 1800,
         "en_cost": 5,
         "range": {
@@ -56,6 +60,7 @@
         "name": "光束火箭炮",
         "type": "WEAPON",
         "weapon_type": "HEAVY",
+        "weapon_tags": ["beam", "massive", "impact_massive"],
         "power": 4000,
         "en_cost": 8,
         "range": {
@@ -69,6 +74,7 @@
         "name": "木桩撞击",
         "type": "WEAPON",
         "weapon_type": "FALLBACK",
+        "weapon_tags": [],
         "power": 1,
         "en_cost": 0,
         "range": {

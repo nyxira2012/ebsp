@@ -110,7 +110,7 @@ class EquipmentConfig(BaseModel):
     weapon_en_cost: Optional[int] = Field(default=None, alias="en_cost")
     weapon_type: Optional[WeaponType] = None  # 具体武器类型 (MELEE/RIFLE等)
     weapon_will_req: int = 0  # 气力需求
-    weapon_tags: List[str] = []
+    weapon_tags: List[str] = Field(default=[], alias="tags")
     weapon_anim_id: str = "default_anim"
 
     # 用于接收嵌套的 range 对象 (from weapons.json)
