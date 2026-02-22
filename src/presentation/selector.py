@@ -15,45 +15,50 @@ class TemplateSelector:
         self._cooldowns: dict[str, int] = {} # template_id -> rounds remaining
         self._demotion_weights: dict[str, int] = {} # template_id -> transient score penalty
 
-    def select_template(self, 
-                        intent: VisualIntent, 
+    def select_template(self,
+                        intent: VisualIntent,
                         raw_event: RawAttackEvent) -> Optional[PresentationTemplate]:
         """
         Main selection logic.
+        Note: T0 (Scripted) is handled exclusively by ScriptedPresentationManager
+        in EventMapper before this selector is called. This method only handles T1->T2->T3.
         """
-        # 1. Gather candidates from all tiers
+        # 1. Gather candidates from T1/T2/T3 only (T0 is handled upstream)
         candidates = self._gather_candidates(intent, raw_event)
-        
-        # 2. Hierarchy Check (T0 -> T1 -> T2 -> T3)
-        
-        # T0: Scripted (Not fully implemented yet, but placeholder)
-        if candidates[TemplateTier.T0_SCRIPTED]:
-            return self._pick_t0(candidates[TemplateTier.T0_SCRIPTED])
-            
+
+        # 2. Hierarchy Check (T1 -> T2 -> T3)
+        # T0 is intentionally skipped here; it is handled by ScriptedPresentationManager.
+
         # T1: Highlight (Weighted Bidding)
         if candidates[TemplateTier.T1_HIGHLIGHT]:
             return self._pick_t1(candidates[TemplateTier.T1_HIGHLIGHT])
-            
+
         # T2: Tactical (First Match/Random)
         if candidates[TemplateTier.T2_TACTICAL]:
             return self._pick_t2(candidates[TemplateTier.T2_TACTICAL])
-            
+
         # T3: Fallback
         if candidates[TemplateTier.T3_FALLBACK]:
             return self._pick_t3(candidates[TemplateTier.T3_FALLBACK])
-            
+
         return None
 
     def _gather_candidates(self, intent: VisualIntent, event: RawAttackEvent) -> dict[TemplateTier, List[PresentationTemplate]]:
+        # Bug Fix #4: Skip T0_SCRIPTED tier here.
+        # T0 is exclusively managed by ScriptedPresentationManager in EventMapper.
+        # Allowing T0 templates through the registry would create two competing T0 systems
+        # with undefined priority between them.
+        HANDLED_TIERS = (TemplateTier.T1_HIGHLIGHT, TemplateTier.T2_TACTICAL, TemplateTier.T3_FALLBACK)
+
         candidates = {tier: [] for tier in TemplateTier}
-        
-        for tier in TemplateTier:
+
+        for tier in HANDLED_TIERS:
             tier_templates = self.registry.get_templates_by_tier(tier)
             for tmpl in tier_templates:
                 # Check cooldown
                 if self._cooldowns.get(tmpl.id, 0) > 0:
                     continue
-                    
+
                 if tmpl.conditions.matches(
                     intent=intent,
                     result=event.attack_result,

@@ -13,7 +13,7 @@ templates:
   # === T2: 战术模板 - 近战 (轻斩) ===
   - id: "t2_melee_slash_light_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "HIT" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "HIT", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}身形一闪，挥动{weapon}斩向敌机！"
       reaction_text: "利刃深深切入{defender}的装甲，留下灼热的伤痕！"
@@ -21,7 +21,7 @@ templates:
 
   - id: "t2_melee_slash_light_miss"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "MISS" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "MISS", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}挥舞{weapon}发起突袭！"
       reaction_text: "刀刃划破虚空，未能触及{defender}分毫！"
@@ -29,7 +29,7 @@ templates:
 
   - id: "t2_melee_slash_light_dodge"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "DODGE" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "DODGE", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}以{weapon}发起迅猛突刺！"
       reaction_text: "{defender}千钧一发之际后撤，刀刃在毫厘间划过！"
@@ -37,7 +37,7 @@ templates:
 
   - id: "t2_melee_slash_light_parry"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "PARRY" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "PARRY", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}以{weapon}发动疾风般的连击！"
       reaction_text: "火花四溅！{defender}以武器精准招架，化解了这波攻势！"
@@ -45,7 +45,7 @@ templates:
 
   - id: "t2_melee_slash_light_block"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "BLOCK" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "BLOCK", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}挥刀斩向{defender}！"
       reaction_text: "{defender}举起盾牌格挡，刀刃撞击处爆出耀眼的火光！"
@@ -53,155 +53,252 @@ templates:
 
   - id: "t2_melee_slash_light_crit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_LIGHT", result: "CRIT" }
+    conditions: { intent: "INTENT_SLASH_LIGHT", result: "CRIT", weapon_type: "MELEE" }
     content:
       action_text: "{attacker}抓住破绽，{weapon}化作一道闪电！"
       reaction_text: "{weapon}贯穿了{defender}的关节要害！机体在剧痛中剧烈震颤！"
     visuals: { anim_id: "melee_slash_fast", sfx_ids: ["sfx_crit_slash", "sfx_heavy_impact"] }
 
-  # === T2: 战术模板 - 近战 (重斩) ===
+  # === T2: 战术模板 - 近战 (重斩/SLASH_HEAVY) ===
   - id: "t2_melee_slash_heavy_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_HEAVY", result: "HIT" }
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "HIT", weapon_type: "MELEE" }
     content:
-      action_text: "{attacker}全身发力，{weapon}横扫而出！"
-      reaction_text: "{defender}的装甲板在恐怖的巨力下被生生撕裂！"
-    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_slash", "sfx_explosion_small"] }
+      action_text: "{attacker}将推进器出力推至极限，{weapon}划出一道足以撕裂大气层的弧光！"
+      reaction_text: "伴随着震耳欲聋的金属扭曲声，{defender}的一侧装甲被整块削掉，电火花在断裂处疯狂溅射！"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_slash", "sfx_explosion_submerged"] }
 
   - id: "t2_melee_slash_heavy_block"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_HEAVY", result: "BLOCK" }
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "BLOCK", weapon_type: "MELEE" }
     content:
-      action_text: "{attacker}挥舞{weapon}从天而降！"
-      reaction_text: "{defender}举盾迎击，但巨大的冲击力让机体不由单膝跪地！"
+      action_text: "{attacker}抡起沉重的{weapon}，以泰山压顶之势猛然砸下！"
+      reaction_text: "{defender}的驾驶舱瞬间被刺耳的警报声占据！即使有着盾牌的阻隔，巨大的动能仍让机体液压连杆发出了痛苦的呻吟。"
     visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_impact", "sfx_metal_strain"] }
 
   - id: "t2_melee_slash_heavy_dodge"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_SLASH_HEAVY", result: "DODGE" }
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "DODGE", weapon_type: "MELEE" }
     content:
-      action_text: "{attacker}抡起{weapon}，发动范围巨大的横斩！"
-      reaction_text: "{defender}推进器全开，险之又险地避开了这毁灭性的一击！"
+      action_text: "{attacker}的挥击带起了狂暴的上升气流，{weapon}誓要将目标一分为二！"
+      reaction_text: "{defender}的传感器捕捉到了死亡的残光，在刀锋切入的毫秒瞬间，姿态控制喷嘴急促喷发，险之又险地完成了一次侧滑！"
     visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_swing_miss"] }
 
-  # === T2: 战术模板 - 近战 (重击) ===
+  - id: "t2_melee_slash_heavy_parry"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "PARRY", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}发出了愤怒的咆哮，{weapon}带着破空声斩向目标！"
+      reaction_text: "两台宿命的机体在战场中心剧烈碰撞！{defender}以武器死死抵住刀锋，双方的传感器在极近距离下因强烈的碰撞而产生严重的杂讯干扰。"
+    visuals: { anim_id: "melee_clash", sfx_ids: ["sfx_heavy_clash", "sfx_electricity"] }
+
+  - id: "t2_melee_slash_heavy_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "CRIT", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}看穿了对手的动作盲区，{weapon}在空中留下一道完美的、象征终焉的轨迹！"
+      reaction_text: "“这就是……最后的结局吗？”{weapon}甚至连同骨架一同切断！{defender}的系统显示大面积离线，机体在爆炸中逐渐支离破碎。"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_crit_slash", "sfx_heavy_explosion"] }
+
+  - id: "t2_melee_slash_heavy_miss"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_SLASH_HEAVY", result: "MISS", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}因用力过猛而导致重心偏离，{weapon}在空中挥出了一次毫无意义的斩切。"
+      reaction_text: "{defender}早已洞察了这拙劣的攻击，机体只是随性地一个侧移，任由那庞大的惯性将对手带向前方。"
+    visuals: { anim_id: "melee_slash_heavy", sfx_ids: ["sfx_heavy_swing_miss"] }
+
+  # === T2: 战术模板 - 近战 (钝击/STRIKE_BLUNT) ===
   - id: "t2_melee_strike_blunt_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "HIT" }
+    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "HIT", weapon_type: "MELEE" }
     content:
-      action_text: "{attacker}以{weapon}发动雷霆一击！"
-      reaction_text: "{defender}驾驶舱剧烈震颤，内部骨架在冲击下扭曲变形！"
+      action_text: "{attacker}加速重拳挥出，空气在高速移动的拳头前部形成了肉眼可见的激波！"
+      reaction_text: "沉重的闷响传来，{defender}的主显示器瞬间布满了裂痕，巨大的冲击力透过装甲将内部零件震得四散飞起。"
     visuals: { anim_id: "melee_strike_blunt", sfx_ids: ["sfx_blunt_impact", "sfx_metal_crunch"] }
 
-  # === T2: 战术模板 - 射击 (光束即时) ===
+  - id: "t2_melee_strike_blunt_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "DODGE", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}踏步出击，试图以雷霆万钧的重击击碎对方的防御！"
+      reaction_text: "{defender}的驾驶员在瞬间推下油门，机体仿佛在空中完成了一次不可思议的舞步，巧妙地避开了这致命的拳锋。"
+    visuals: { anim_id: "melee_strike_blunt_miss", sfx_ids: ["sfx_whoosh"] }
+
+  - id: "t2_melee_strike_blunt_block"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "BLOCK", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}咆哮着挥动拳头，将全身的愤怒灌注在这一击之中！"
+      reaction_text: "金属碰撞的沉闷回响传遍战场！{defender}将盾牌死死顶在前方，虽然支撑结构因剧烈的撞击而产生了永久变形，但至少这一击被挡下了。"
+    visuals: { anim_id: "melee_strike_blunt_block", sfx_ids: ["sfx_heavy_block", "sfx_metal_groan"] }
+
+  - id: "t2_melee_strike_blunt_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_STRIKE_BLUNT", result: "CRIT", weapon_type: "MELEE" }
+    content:
+      action_text: "{attacker}的重击精准击中了机体结构的结合点，这是足以改变局势的重锤！"
+      reaction_text: "毫无还手之力！{defender}的头部监视器在重击下彻底粉碎，机体在一片黑暗中摇摇欲坠，内部系统陷入了无尽的报错循环。"
+    visuals: { anim_id: "melee_strike_blunt", sfx_ids: ["sfx_crit_impact", "sfx_glass_shatter"] }
+
+  # === T2: 战术模板 - 射击 (光束即时/BEAM_INSTANT) ===
   - id: "t2_shoot_beam_instant_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_BEAM_INSTANT", result: "HIT" }
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "HIT", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}以{weapon}发动精准射击！"
-      reaction_text: "高能光束融穿了{defender}的装甲，留下冒烟的熔孔！"
+      action_text: "{attacker}将准星锁定在对方的轮廓上，{weapon}喷薄出高度压缩的粒子流！"
+      reaction_text: "由于避雷涂层在高温中瞬间升华，极高热的光束轻易贯穿了{defender}的肩部，熔融的残骸在空中拖出焦黑的轨迹。"
     visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_hit_beam"] }
 
   - id: "t2_shoot_beam_instant_dodge"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_BEAM_INSTANT", result: "DODGE" }
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "DODGE", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}扣下{weapon}的扳机！"
-      reaction_text: "{defender}预判了弹道轨迹，以爆发性的速度闪避开来！"
+      action_text: "{attacker}毫不迟疑地连射，试图像蛛网一样封锁对手的退路！"
+      reaction_text: "“这种弹道……”{defender}的驾驶员发出了不屑的冷哼，机体在光束擦过的瞬间完成了一个精妙的侧滚，光学引擎只捕捉到了虚幻的残光。"
     visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_miss"] }
 
   - id: "t2_shoot_beam_instant_block"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_BEAM_INSTANT", result: "BLOCK" }
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "BLOCK", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}射出一发光束攻击！"
-      reaction_text: "{defender}的抗光束盾牌红热发光，将能量尽数驱散！"
+      action_text: "{attacker}释放出足以熔毁战舰推进器的能量，目标近在咫尺！"
+      reaction_text: "{defender}的抗光束盾牌表面亮起了刺眼的红光，由于能量过度集中，盾牌甚至开始产生剧烈的震动，但防御阵线依然稳固。"
     visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_shield_absorb"] }
 
-  # === T2: 战术模板 - 射击 (巨型光束) ===
+  - id: "t2_shoot_beam_instant_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_INSTANT", result: "CRIT", weapon_type: "SHOOTING" }
+    content:
+      action_text: "{attacker}摒息凝神，在对方姿态调整的间隙，捕捉到了那一瞬间的绝对死角！"
+      reaction_text: "光束精准地击碎了{defender}的主监视器并深入内部！驾驶舱内的电路在一片火花中短路爆炸，死神的阴影已然笼罩。"
+    visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_crit_hit"] }
+
+  # === T2: 战术模板 - 射击 (高能照射/BEAM_MASSIVE) ===
   - id: "t2_shoot_beam_massive_hit"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_BEAM_MASSIVE", result: "HIT" }
     content:
-      action_text: "{attacker}释放{weapon}！能量洪流喷涌而出！"
-      reaction_text: "{defender}被光柱吞没，装甲在瞬间蒸发殆尽！"
-    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_long_exposure"] }
+      action_text: "{attacker}的机身四周因能量聚集而扭曲，{weapon}喷薄出毁灭世界的纯白光柱！"
+      reaction_text: "大气在咆哮！被照射覆盖的{defender}连同周围的残骸一同被熔为液态，机体由于承受过载的能量反馈而产生了剧烈的诱爆。"
+    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_energy_storm"] }
 
   - id: "t2_shoot_beam_massive_block"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_BEAM_MASSIVE", result: "BLOCK" }
     content:
-      action_text: "{attacker}从{weapon}中释放毁灭性的光束！"
-      reaction_text: "{defender}将所有功率注入力场，但仍无法完全阻挡溢出的能量！"
+      action_text: "{attacker}释放出积蓄已久的狂暴能量，要将前方的一切化为尘埃！"
+      reaction_text: "“给我……挡住啊！！！”{defender}将推进器全力反推，用全身的装甲和盾牌抗击这股洪流。虽然机体被推行了数百米，但总算保住了核心部位。"
     visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_barrier_strain"] }
 
-  # === T2: 战术模板 - 射击 (单发实弹) ===
+  - id: "t2_shoot_beam_massive_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_MASSIVE", result: "DODGE" }
+    content:
+      action_text: "空间在{weapon}的咆哮中颤抖，粗壮的能量柱犁开了战场上的焦土。"
+      reaction_text: "在光柱扫过的刹那间，{defender}化作一道白色闪光向上方跃起，驾驶员甚至能感觉到机体外表面被热浪烤焦的刺鼻气味。"
+    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_miss"] }
+
+  - id: "t2_shoot_beam_massive_crit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_BEAM_MASSIVE", result: "CRIT" }
+    content:
+      action_text: "{attacker}将所有能量汇聚于一点，{weapon}释放出足以撕裂维度的绝对破坏力！"
+      reaction_text: "毫无悬念的终结！光束贯穿了{defender}的核心动力炉，机体在连绵的爆炸声中化为燃烧的残骸坠落！"
+    visuals: { anim_id: "shoot_mega_cannon", sfx_ids: ["sfx_massive_beam", "sfx_crit_explosion"] }
+
+  # === T2: 战术模板 - 实弹 (单发重型/PROJECTILE_SINGLE) ===
   - id: "t2_shoot_proj_single_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "HIT" }
+    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "HIT", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}以{weapon}发射高速炮弹！"
-      reaction_text: "炮弹命中{defender}，引发剧烈的爆炸！"
+      action_text: "战术显示器捕捉到了完美的弹道路径，{attacker}扣动扳机，{weapon}的退壳机排出一缕青烟。"
+      reaction_text: "沉重的特制弹头狠狠撞入{defender}的胸腔，物理性的撕裂比能量武器更加残暴，破碎的机件在大气中飞散。"
     visuals: { anim_id: "shoot_bazooka", sfx_ids: ["sfx_shell_launch", "sfx_explosion_solid"] }
 
   - id: "t2_shoot_proj_single_crit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "CRIT" }
+    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "CRIT", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}瞄准弱点，{weapon}致命一击！"
-      reaction_text: "炮弹贯穿了动力核心！{defender}在连锁爆炸中剧烈摇晃！"
+      action_text: "为了这一刻，{attacker}甚至彻底接管了火控计算机的权限，发射出最极致的致命贯穿。"
+      reaction_text: "“怎么会……在这种地方……”弹头直接从{defender}的动力核穿透而过。在一阵死寂的闪光后，机体在空中化为了破碎的流星。"
     visuals: { anim_id: "shoot_sniper", sfx_ids: ["sfx_sniper_launch", "sfx_crit_boom"] }
 
-  # === T2: 战术模板 - 射击 (弹幕) ===
+  - id: "t2_shoot_proj_single_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "DODGE", weapon_type: "SHOOTING" }
+    content:
+      action_text: "{attacker}发射出一枚高速破甲弹，弹丸撕裂空气的声音在战场上空回荡。"
+      reaction_text: "驾驶舱内警报声大作！{defender}凭借绝佳的反应力，在被锁定的最后一秒完成了紧急升空，弹头几乎是贴着其推进系统飞向远方。"
+    visuals: { anim_id: "shoot_bazooka_miss", sfx_ids: ["sfx_shell_launch", "sfx_miss"] }
+
+  # === T2: 战术模板 - 实弹 (弹幕扫射/PROJECTILE_RAIN) ===
   - id: "t2_proj_rain_hit"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "HIT" }
+    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "HIT", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}从{weapon}倾泻出弹幕！"
-      reaction_text: "连绵的爆炸吞没{defender}，机体剧烈震颤！"
+      action_text: "“覆盖前方区域！别放过他！”{attacker}的武器站全力运转，{weapon}向前方喷吐出密集的火蛇。"
+      reaction_text: "{defender}的机身布满了金属被反复敲击引起的凹陷。雨点般的弹药在装甲表面连续炸裂，将战场染成了一片白茫茫的烟尘。"
     visuals: { anim_id: "shoot_vulcan_barrage", sfx_ids: ["sfx_vulcan_loop", "sfx_impact_rapid"] }
 
   - id: "t2_proj_rain_dodge"
     tier: "T2_TACTICAL"
-    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "DODGE" }
+    conditions: { intent: "INTENT_PROJECTILE_RAIN", result: "DODGE", weapon_type: "SHOOTING" }
     content:
-      action_text: "{attacker}以{weapon}进行火力压制！"
-      reaction_text: "{defender}以惊人的机动性穿梭于弹雨之中！"
+      action_text: "{attacker}试图用压倒性的钢铁暴雨封锁目标的所有活动空间。"
+      reaction_text: "在密密麻麻的曳光弹轨道中，{defender}如惊鸿一瞥般穿梭着。那种如同在刀尖上起舞的机动性，让指挥机构的观察员们屏住了呼吸。"
     visuals: { anim_id: "shoot_vulcan_barrage", sfx_ids: ["sfx_vulcan_loop", "sfx_miss_rapid"] }
 
-  # === T2: 战术模板 - 特殊 (巨型冲撞) ===
+  # === T2: 战术模板 - 特殊 (质量撞击/IMPACT_MASSIVE) ===
   - id: "t2_impact_massive_hit"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_IMPACT_MASSIVE", result: "HIT" }
     content:
-      action_text: "{attacker}全速冲向{defender}！"
-      reaction_text: "金属尖叫！两机在火花四溅中剧烈碰撞！"
+      action_text: "{attacker}完全放弃了射击，将辅助推进器全部开启，机体化作一枚钢铁陨石撞向前方！"
+      reaction_text: "这是灵魂与灵魂的撞击！{defender}被巨大的惯性直接撞飞数千米，机体框架发出了令人牙酸的金属断裂声。"
     visuals: { anim_id: "impact_ram", sfx_ids: ["sfx_collision_heavy", "sfx_metal_screech"] }
 
   - id: "t2_impact_massive_parry"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_IMPACT_MASSIVE", result: "PARRY" }
     content:
-      action_text: "{attacker}以雷霆之势冲撞而来！"
-      reaction_text: "{defender}在千钧一发之际以兵器架住，双方角力僵持！"
-    visuals: { anim_id: "impact_ram", sfx_ids: ["sfx_collision_heavy", "sfx_metal_screech"] }
+      action_text: "{attacker}发出了如野兽般的低吼，不顾机体损伤地强行发起冲撞！"
+      reaction_text: "{defender}双臂交叉，死死抵住了这股蛮力。两台机体在宇宙的虚无中角力，炽热的摩擦火花照亮了彼此的驾驶舱。"
+    visuals: { anim_id: "impact_ram", sfx_ids: ["sfx_collision_heavy", "sfx_clash"] }
 
-  # === T2: 战术模板 - 特殊 (精神感应波) ===
+  # === T2: 战术模板 - 特殊 (范围毁灭/AOE_BURST) ===
+  - id: "t2_aoe_burst_hit"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_AOE_BURST", result: "HIT" }
+    content:
+      action_text: "{attacker}启动了禁忌的武器序列，地平线上仿佛升起了第二颗太阳。"
+      reaction_text: "这不是战斗，这是纯粹的抹杀。{defender}在无法直视的闪光中被强行推离战场，其结构在极高压下产生了不可挽回的扭曲。"
+    visuals: { anim_id: "aoe_catastrophe", sfx_ids: ["sfx_map_weapon", "sfx_massive_explosion"] }
+
+  - id: "t2_aoe_burst_dodge"
+    tier: "T2_TACTICAL"
+    conditions: { intent: "INTENT_AOE_BURST", result: "DODGE" }
+    content:
+      action_text: "{attacker}将所有的能量倾注于这一次全域打击。这股波动的覆盖范围已经超越了目视距离。"
+      reaction_text: "{defender}在毁灭降临的前一刻，将机能过载至300%以换取瞬时的闪回。当火球消散时，那台机影奇迹般地屹立于火海的边缘。"
+    visuals: { anim_id: "aoe_catastrophe_miss", sfx_ids: ["sfx_map_weapon", "sfx_miss_distant"] }
+
+  # === T2: 战术模板 - 特殊 (精神感应/PSYCHO_WAVE) ===
   - id: "t2_psycho_wave_hit"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_PSYCHO_WAVE", result: "HIT" }
     content:
-      action_text: "{attacker}通过{weapon}释放精神感应波！"
-      reaction_text: "{defender}的操作系统在感知冲击下紊乱停滞！"
-    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse", "sfx_glitch_noise"] }
+      action_text: "“去吧！按照我的意志！”{attacker}的意识通过感应系统无限扩张，无数极光般的弧线封锁了空间。"
+      reaction_text: "躲不开，甚至无法思考。{defender}的驾驶员感觉大脑被针刺入一般剧痛，机体在无形波动的蹂躏下多处核心组件同时发生诱爆。"
+    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse", "sfx_newtype_sound"] }
 
   - id: "t2_psycho_wave_dodge"
     tier: "T2_TACTICAL"
     conditions: { intent: "INTENT_PSYCHO_WAVE", result: "DODGE" }
     content:
-      action_text: "{attacker}释放出强大的精神波动！"
-      reaction_text: "{defender}凭借直觉察觉危险，在波及前紧急机动！"
-    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse"] }
+      action_text: "{attacker}释放出无差别的灵魂波动。那种名为“压力”的屏障试图冻结战场。"
+      reaction_text: "“就在那里！”{defender}的脑内一闪而过某种直觉。在波场闭合的刹那，机体以非人类所能承受的过载机动逃出了那片杀戮领域。"
+    visuals: { anim_id: "psycho_wave_pulse", sfx_ids: ["sfx_psycho_pulse", "sfx_dodge_newtype"] }
 
   # === T1: 剧情模板 - 精神与技能 ===
   - id: "t1_skill_flash_dodge"

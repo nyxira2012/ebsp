@@ -4,7 +4,8 @@
       "Bash(python:*)",
       "Bash(pytest:*)",
       "Bash(ls:*)",
-      "Bash(dir nul)"
+      "Bash(dir nul)",
+      "Bash(npx skills add:*)"
     ]
   }
 }

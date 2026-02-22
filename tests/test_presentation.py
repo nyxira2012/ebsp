@@ -142,7 +142,7 @@ def test_integration_scenarios():
     mapper = EventMapper(registry)
     renderer = TextRenderer()
 
-    print(f"✓ 已加载 {len(registry._templates)} 个演出模板")
+    print(f"[OK] 已加载 {len(registry._templates)} 个演出模板")
     print()
 
     # 测试场景1：T1 精彩闪避
@@ -306,11 +306,11 @@ def test_comprehensive_scenarios():
             rendered = renderer.render_attack(pres_events)
 
             print(rendered)
-            print(f"✓ 通过 - Tier: {pres_events[0].tier.value if pres_events else 'N/A'}")
+            print(f"[OK] 通过 - Tier: {pres_events[0].tier.value if pres_events else 'N/A'}")
             passed += 1
 
         except Exception as e:
-            print(f"✗ 失败 - {str(e)}")
+            print(f"[FAIL] 失败 - {str(e)}")
             failed += 1
             import traceback
             traceback.print_exc()
@@ -349,10 +349,10 @@ def test_comprehensive_scenarios():
             pres_events = mapper.map_attack(case['event'])
             rendered = renderer.render_attack(pres_events)
             print(rendered)
-            print(f"✓ 通过 - Tier: {pres_events[0].tier.value if pres_events else 'N/A'}")
+            print(f"[OK] 通过 - Tier: {pres_events[0].tier.value if pres_events else 'N/A'}")
             passed += 1
         except Exception as e:
-            print(f"✗ 失败 - {str(e)}")
+            print(f"[FAIL] 失败 - {str(e)}")
             failed += 1
 
         print()
@@ -362,8 +362,8 @@ def test_comprehensive_scenarios():
     print("测试汇总")
     print("=" * 80)
     print(f"总计: {passed + failed} 个测试")
-    print(f"✓ 通过: {passed}")
-    print(f"✗ 失败: {failed}")
+    print(f"[OK] 通过: {passed}")
+    print(f"[FAIL] 失败: {failed}")
     if passed + failed > 0:
         print(f"成功率: {passed / (passed + failed) * 100:.1f}%")
     print("=" * 80)

@@ -16,7 +16,7 @@ from .config import Config
 class WeaponType(str, Enum):
     """武器类型"""
     MELEE = "MELEE"      # < 2000m
-    SHOOTING = "RIFLE"   # 1000m - 6000m
+    SHOOTING = "SHOOTING"   # 1000m - 6000m (Was "RIFLE")
     AWAKENING = "AWAKENING"  # 浮游炮等
     SPECIAL = "SPECIAL"    # 地图炮或其他
     FALLBACK = "FALLBACK"   # 保底武器
@@ -141,12 +141,13 @@ class EquipmentConfig(BaseModel):
         if 'weapon_type' in data:
             weapon_type_map = {
                 "格斗": "MELEE",
-                "射击": "RIFLE",
+                "射击": "SHOOTING",
                 "觉醒": "AWAKENING",
                 "特殊": "SPECIAL",
                 "撞击": "FALLBACK",
                 "MELEE": "MELEE",
-                "RIFLE": "RIFLE",
+                "RIFLE": "SHOOTING",     # Backward compatibility
+                "SHOOTING": "SHOOTING",
                 "AWAKENING": "AWAKENING",
                 "SPECIAL": "SPECIAL",
                 "FALLBACK": "FALLBACK",

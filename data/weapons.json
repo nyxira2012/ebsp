@@ -4,7 +4,10 @@
         "name": "光束步枪",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
-        "weapon_tags": ["beam", "long_range"],
+        "weapon_tags": [
+            "beam",
+            "long_range"
+        ],
         "power": 2000,
         "en_cost": 5,
         "range": {
@@ -18,7 +21,10 @@
         "name": "光束军刀",
         "type": "WEAPON",
         "weapon_type": "MELEE",
-        "weapon_tags": ["beam", "slash_light"],
+        "weapon_tags": [
+            "beam",
+            "slash_light"
+        ],
         "power": 1500,
         "en_cost": 4,
         "range": {
@@ -32,7 +38,10 @@
         "name": "120mm机炮",
         "type": "WEAPON",
         "weapon_type": "RIFLE",
-        "weapon_tags": ["rapid", "projectile_single"],
+        "weapon_tags": [
+            "rapid",
+            "projectile_single"
+        ],
         "power": 1500,
         "en_cost": 3,
         "range": {
@@ -46,7 +55,10 @@
         "name": "热能斧",
         "type": "WEAPON",
         "weapon_type": "MELEE",
-        "weapon_tags": ["heavy", "slash_heavy"],
+        "weapon_tags": [
+            "heavy",
+            "slash_heavy"
+        ],
         "power": 1800,
         "en_cost": 5,
         "range": {
@@ -60,7 +72,10 @@
         "name": "光束火箭炮",
         "type": "WEAPON",
         "weapon_type": "HEAVY",
-        "weapon_tags": ["beam", "massive", "impact_massive"],
+        "weapon_tags": [
+            "beam",
+            "massive"
+        ],
         "power": 4000,
         "en_cost": 8,
         "range": {
@@ -68,6 +83,78 @@
             "max": 8000
         },
         "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_heavy_hammer",
+        "name": "重型强袭锤",
+        "type": "WEAPON",
+        "weapon_type": "MELEE",
+        "weapon_tags": [
+            "blunt",
+            "hammer",
+            "heavy"
+        ],
+        "power": 3500,
+        "en_cost": 15,
+        "range": {
+            "min": 0,
+            "max": 1200
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_funnel_system",
+        "name": "精神感应浮游炮",
+        "type": "WEAPON",
+        "weapon_type": "AWAKENING",
+        "weapon_tags": [
+            "psycho",
+            "funnel",
+            "beam"
+        ],
+        "power": 2500,
+        "en_cost": 25,
+        "range": {
+            "min": 2000,
+            "max": 10000
+        },
+        "hit_penalty": 0.0
+    },
+    {
+        "id": "wpn_map_cannon",
+        "name": "扩散型高频粒子炮",
+        "type": "WEAPON",
+        "weapon_type": "SPECIAL",
+        "weapon_tags": [
+            "map",
+            "aoe",
+            "massive",
+            "beam"
+        ],
+        "power": 6000,
+        "en_cost": 100,
+        "range": {
+            "min": 0,
+            "max": 12000
+        },
+        "hit_penalty": -50.0
+    },
+    {
+        "id": "wpn_railgun",
+        "name": "线性轨道炮",
+        "type": "WEAPON",
+        "weapon_type": "RIFLE",
+        "weapon_tags": [
+            "projectile_single",
+            "long_range"
+        ],
+        "power": 3800,
+        "en_cost": 12,
+        "range": {
+            "min": 3000,
+            "max": 9000
+        },
+        "hit_penalty": 10.0
     },
     {
         "id": "wpn_dummy",

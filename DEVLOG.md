@@ -2,6 +2,80 @@
 
 ---
 
+## 2026-02-19 演出系统落地与事件追踪优化：从架构设计到实战完善
+
+> **项目快照**：代码文件 29 个（4250 行）| 设计文档 7 个（2557 行）
+
+### 逻辑变化与核心思路
+
+1. **演出模板系统的精细化匹配机制**
+   - **逻辑变化**：在 `config/presentation_templates.yaml` 中为所有演出模板新增 `weapon_type` 条件字段（如 `MELEE`、`RIFLE`），实现了基于武器类型的精确匹配。大幅扩展 T2 战术模板库，新增近战轻斩/重斩的多种命中结果演出（HIT/MISS/DODGE/PARRY/BLOCK/CRIT），从基础模板扩展到 225+ 行的完整配置。
+   - **设计思路**：之前的模板系统只区分"攻击意图"（INTENT_SLASH_LIGHT）和"判定结果"（HIT/MISS），但忽略了"武器类型"这一关键维度。光束军刀（MELEE）和光束步枪（RIFLE）即使都是"轻斩"意图，其物理表现截然不同——格斗武器强调接触、碰撞、烧蚀，射击武器强调弹道、爆炸、穿透。新增 `weapon_type` 条件后，演出系统可以：
+     - **物理真实性**：光束被盾牌格挡时显示"光束在盾牌表面炸裂，电火花四溅"，而实弹被弹开时显示"弹头在装甲表面擦出一道火花后弹飞"
+     - **武器差异化**：玩家能直观感受到"格斗机体"和"射击机体"的战斗风格差异，提升战斗的视觉多样性
+   - **模板扩展**：新增大量近战演出模板，包括：
+     - 轻斩（SLASH_LIGHT）：快速突刺、连击、招架
+     - 重斩（SLASH_HEAVY）：破甲、巨冲击、双方武器碰撞
+     - 每种意图都覆盖了 HIT/MISS/DODGE/PARRY/BLOCK/CRIT 六种判定结果
+
+2. **武器标签系统的全面落地**
+   - **逻辑变化**：在 `data/weapons.json` 中为所有武器新增 `weapon_tags` 字段（+99 行），定义了丰富的标签体系：
+     - **能量武器**：`beam`（光束属性）
+     - **格斗武器**：`slash_light`（轻型斩击）、`slash_heavy`（重型斩击）
+     - **射击武器**：`rapid`（连射）、`projectile_single`（单发实弹）、`long_range`（远程）
+   - **设计思路**：标签是连接"武器配置"与"演出匹配"的桥梁。相比传统的"武器类型枚举"（如 MELEE/RIFLE/SPECIAL），标签系统的优势在于：
+     - **多态性**：同一武器可以拥有多个标签（如光束火箭炮 = `beam + massive + impact_massive`），支持复杂匹配（如"光束 + 重型"专属演出）
+     - **可组合性**：未来可以通过标签组合实现"连锁攻击"演出（如先 `slash_light` 接 `slash_heavy`）
+     - **向后兼容**：旧武器只需补充标签字段即可接入新系统，无需重构武器类型定义
+   - **实际应用**：光束军刀（`beam + slash_light`）会触发"光束接触烧蚀"演出，而热能斧（`slash_heavy`）会触发"装甲撕裂、电火花飞溅"的重武器演出。
+
+3. **事件管理器的单次攻击边界追踪（Bug Fix #1）**
+   - **逻辑变化**：在 `src/skill_system/event_manager.py` 中新增 `begin_attack()` 和 `end_attack()` 配对方法，实现了单次攻击的事件边界追踪。在 `src/combat/engine.py` 的 `_execute_attack()` 中调用这两个方法，精确捕获本次攻击期间触发的技能事件。
+   - **设计思路**：之前的事件系统使用 `get_current_round_events()` 获取整个回合的事件，这导致先攻方和后攻方的技能事件混在一起。例如先攻方触发"吸血鬼"技能，后攻方反击时也会看到这个事件，破坏了"每次攻击独立演出"的设计预期。
+   - **新机制**：
+     - `begin_attack()` 在攻击开始时调用，清空本次攻击的事件缓存
+     - `end_attack()` 在攻击结束时调用，返回本次攻击期间触发的所有技能（过滤 `triggered=False` 的失败事件）
+     - 事件同时存入"回合级缓存"（兼容旧接口）和"攻击级缓存"（新接口）
+   - **解决的问题**：彻底避免先攻方与后攻方的事件混用，确保每次攻击的演出只包含本次攻击触发的技能。
+
+4. **武器类型命名的统一化修正（Bug Fix #2-3）**
+   - **逻辑变化**：在 `src/models.py` 中将 `WeaponType.RIFLE` 重命名为 `SHOOTING`，并在 `EquipmentConfig` 的类型映射中同步更新。保留 `"RIFLE": "SHOOTING"` 的向后兼容映射。
+   - **设计思路**：`RIFLE`（步枪）这个词过于具体，无法涵盖所有射击武器（机枪、火箭炮、轨道炮等）。`SHOOTING` 更符合"射击类武器"的语义，与 `MELEE`（格斗）、`AWAKENING`（觉醒）形成清晰的三分类。
+   - **影响范围**：`data/weapons.json` 中的 `weapon_type` 字段已全部使用 `"SHOOTING"`，旧配置文件中的 `"RIFLE"` 会被自动映射到 `"SHOOTING"`，确保向后兼容。
+
+5. **演出选择器的 T0 层级职责明确（Bug Fix #4）**
+   - **逻辑变化**：在 `src/presentation/selector.py` 中重构 `_gather_candidates()` 方法，明确 T0（剧情强制）层级由 `ScriptedPresentationManager` 独占处理，`TemplateSelector` 只处理 T1/T2/T3 层级。
+   - **设计思路**：之前的设计中，T0 模板可以通过 `TemplateRegistry` 注册，也可以通过 `ScriptedPresentationManager` 注入，这导致"两个 T0 系统"的职责边界模糊，可能出现优先级冲突。
+   - **新架构**：
+     - **T0（剧情强制）**：完全由 `ScriptedPresentationManager` 在 `EventMapper.map_attack()` 之前处理，用于 Boss 战开场白、特定 HP 阈值触发等剧情节点
+     - **T1/T2/T3**：由 `TemplateSelector` 在 `EventMapper.map_attack()` 中处理，遵循优先级竞标机制
+   - **解决的问题**：避免两个 T0 系统竞争导致的优先级混乱，确保剧情演出拥有最高优先级且不会被通用模版覆盖。
+
+6. **战斗引擎的健壮性改进（Bug Fix #5）**
+   - **逻辑变化**：在 `src/combat/engine.py` 中无条件初始化 `self.presentation_timeline: list[PresentationRoundEvent] = []`，即使 `enable_presentation=False` 也会创建空列表。
+   - **设计思路**：之前的设计中，`presentation_timeline` 只在 `enable_presentation=True` 时初始化，导致当演出系统禁用时，外部代码访问 `engine.presentation_timeline` 会抛出 `AttributeError`。这破坏了"引擎 API 的一致性"——外部代码需要判断 `if engine.enable_presentation and engine.presentation_timeline` 才能安全访问。
+   - **新机制**：无条件初始化空列表，确保 `engine.presentation_timeline` 始终可用（即使为空）。这样外部代码可以安全地遍历 `timeline` 而无需判断演出是否启用。
+
+7. **演出事件存储的时机优化**
+   - **逻辑变化**：在 `src/combat/engine.py` 中将演出事件的存储逻辑从"仅在演出启用时执行"改为"始终创建 `PresentationRoundEvent` 和 `PresentationAttackSequence`"。
+   - **设计思路**：即使 `enable_presentation=False`，时间线数据仍然有收集价值——用于战后回放、AI 训练数据、统计分析等。将"数据收集"与"文本渲染"解耦，确保时间线数据的完整性。
+   - **实际应用**：未来可以基于 `presentation_timeline` 实现"战斗录像回放"功能，重播整场战斗的演出序列，即使演出系统在战斗时是禁用的。
+
+**技术要点**
+- 事件追踪使用类变量 `_in_attack: bool` 标记当前是否处于攻击追踪中，避免嵌套调用导致的时序错误
+- `end_attack()` 返回的 `List[Any]` 是触发成功的技能事件列表（已过滤 `triggered=False`），可以直接传递给演出系统
+- 武器类型重命名采用"双轨制"：新代码使用 `WeaponType.SHOOTING`，旧配置文件中的 `"RIFLE"` 会被映射到 `"SHOOTING"`，确保平滑迁移
+- 演出选择器的 `HANDLED_TIERS = (T1, T2, T3)` 元组明确排除了 T0，通过注释说明"T0 由 ScriptedPresentationManager 独占"
+- `presentation_timeline` 的无条件初始化符合"最小惊讶原则"（Principle of Least Astonishment），用户预期引擎始终有时间线，无论演出是否启用
+
+**后续计划**
+1. 扩展 T2 战术模板库，覆盖射击武器的多种命中结果演出（如"实弹被装甲弹开"、"光束被I力场格挡"等）
+2. 实现基于"武器标签组合"的复合演出（如 `beam + massive` 触发"巨型光束炮"专属演出）
+3. 编写演出系统的性能测试，验证 100 回合战斗的事件收集耗时（目标：<10ms）
+4. 基于 `presentation_timeline` 实现"战斗录像回放"功能，支持导出为 JSON/视频
+
+---
+
 ## 2026-02-17 演出系统彻底重构：从实现指南到优先级分层
 
 > **项目快照**：代码文件 29 个（4200 行）| 设计文档 7 个（2557 行）

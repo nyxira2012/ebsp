@@ -58,7 +58,7 @@ class Config:
     CONSECUTIVE_WINS_THRESHOLD = 2          # 连续先攻次数阈值
     
     # ========== 武器距离惩罚 ==========
-    RIFLE_RANGE_PENALTY = -30.0             # 射击类武器距离外惩罚 %
+    SHOOTING_RANGE_PENALTY = -30.0          # 射击类武器距离外惩罚 %
     
     # ========== 精准削减上限 ==========
     PRECISION_REDUCTION_CAP = 0.8           # 精准最多削减 80% 防御概率

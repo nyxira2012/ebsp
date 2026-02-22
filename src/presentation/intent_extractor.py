@@ -27,7 +27,7 @@ class IntentExtractor:
             return VisualIntent.AOE_BURST
 
         # 2. WeaponType specific logic
-        # Handle both enum values (e.g., "RIFLE") and common strings (e.g., "SHOOTING")
+        # Handle both enum values (e.g., "SHOOTING") and common strings (e.g., "RIFLE")
         weapon_type_upper = weapon_type.upper() if weapon_type else ""
 
         if weapon_type_upper in ["MELEE", WeaponType.MELEE.value]:

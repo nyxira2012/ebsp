@@ -37,19 +37,19 @@ class EventMapper:
         else:
             # 2. Extract Intent
             intent = IntentExtractor.extract_intent(raw_event.weapon_type, raw_event.weapon_tags)
-            
+
             # 3. Select Template via Selector (T1 -> T2 -> T3)
             template = self.selector.select_template(intent, raw_event)
-        
+
         if not template:
             # Should not happen if T3 fallback exists
             # Create a dummy emergency fallback
             return self._create_emergency_fallback(raw_event)
-            
-        # 3. Construct Presentation Events (Action + Reaction)
+
+        # 4. Construct Presentation Events (Action + Reaction)
         action_event = self._create_action_event(raw_event, template)
         reaction_event = self._create_reaction_event(raw_event, template)
-        
+
         return [action_event, reaction_event]
 
     def advance_turn(self):
