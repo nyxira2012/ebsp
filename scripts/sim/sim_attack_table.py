@@ -83,9 +83,17 @@ def create_test_mechas(
     attacker_stats: dict,
     defender_stats: dict
 ) -> Tuple[Mecha, Mecha]:
-    """创建测试用的攻防机体
+    """创建测试用的攻防机体。
 
-    注意：stats中的值是加成值（bonus），会在基础值上增加
+    该函数根据给定的统计数据创建攻击方和防御方的机体实例，
+    用于圆桌判定测试。注意：stats中的值是加成值（bonus），会在基础值上增加。
+
+    Args:
+        attacker_stats (dict): 攻击方的额外统计数据，包括命中加成、暴击加成等
+        defender_stats (dict): 防御方的额外统计数据，包括闪避、招架、格挡加成等
+
+    Returns:
+        Tuple[Mecha, Mecha]: 返回一个元组，包含攻击方机体和防御方机体
     """
 
     # 攻击方驾驶员属性
@@ -155,10 +163,21 @@ def run_simulation(
     scenario_id: int,
     iterations: int = 2000
 ) -> Tuple[Counter, Mecha, Mecha, Weapon]:
-    """运行指定场景的模拟
+    """运行指定场景的圆桌判定模拟。
+
+    该函数执行指定场景的多次模拟，统计不同攻击结果的分布情况，
+    用于验证圆桌判定机制的正确性。
+
+    Args:
+        scenario_id (int): 测试场景的ID，对应TEST_SCENARIOS中的键
+        iterations (int): 模拟迭代次数，默认为2000次
 
     Returns:
-        (统计结果, 攻击方机体, 防御方机体, 武器)
+        Tuple[Counter, Mecha, Mecha, Weapon]: 返回一个元组，包含：
+            - Counter: 统计结果，记录各种攻击结果的发生次数
+            - Mecha: 攻击方机体实例
+            - Mecha: 防御方机体实例
+            - Weapon: 用于测试的武器实例
     """
 
     scenario = TEST_SCENARIOS[scenario_id]
@@ -199,12 +218,15 @@ def run_simulation(
     return Counter(results), m_a, m_b, weapon
 
 def print_statistics(stats: Counter, iterations: int, segments: dict | None = None):
-    """打印统计结果
+    """打印圆桌判定统计结果。
+
+    该函数以表格形式输出攻击结果的统计信息，包括实际发生次数、百分比，
+    并可选择性地与理论值进行比较。
 
     Args:
-        stats: 统计结果
-        iterations: 迭代次数
-        segments: 圆桌判定表理论值（可选）
+        stats (Counter): 统计结果，记录各种攻击结果的发生次数
+        iterations (int): 模拟的迭代总次数
+        segments (dict | None): 圆桌判定表理论值，用于与实际结果比较，默认为None
     """
 
     print(f"\n{'─'*70}")
@@ -224,15 +246,16 @@ def analyze_attack_table(
     mecha_b: Mecha,
     weapon: Weapon
 ):
-    """分析圆桌判定表的理论分布
+    """分析圆桌判定表的理论分布。
 
-    使用项目提供的公共 API 获取圆桌判定表的理论值。
-    这样确保模拟器与实际游戏逻辑完全一致。
+    该函数使用项目提供的公共 API 获取圆桌判定表的理论值，
+    通过分析各种判定因素（如命中、闪避、招架等）来了解
+    攻击结果的概率分布，确保模拟器与实际游戏逻辑完全一致。
 
     Args:
-        mecha_a: 攻击方机体
-        mecha_b: 防御方机体
-        weapon: 攻击使用的武器
+        mecha_a (Mecha): 攻击方机体
+        mecha_b (Mecha): 防御方机体
+        weapon (Weapon): 攻击使用的武器
     """
 
     print(f"\n【理论分析】")
@@ -334,7 +357,14 @@ def analyze_attack_table(
         print(f"\n✓ 剩余空间: {100 - total:.1f}% 分配给HIT")
 
 def run_all_scenarios(iterations: int = 2000):
-    """运行所有测试场景"""
+    """运行所有预定义的测试场景。
+
+    该函数依次执行所有的测试场景，每个场景都会运行指定次数的模拟，
+    并输出统计结果和理论分析，用于全面验证圆桌判定机制。
+
+    Args:
+        iterations (int): 每个场景的模拟迭代次数，默认为2000次
+    """
 
     print("\n" + "="*70)
     print("圆桌判定统计测试 - 开始执行")
@@ -362,7 +392,15 @@ def run_all_scenarios(iterations: int = 2000):
     print("="*70)
 
 def run_single_scenario(scenario_id: int, iterations: int = 2000):
-    """运行单个测试场景"""
+    """运行单个指定的测试场景。
+
+    该函数执行指定ID的测试场景，运行指定次数的模拟，
+    并输出统计结果和理论分析。
+
+    Args:
+        scenario_id (int): 要运行的测试场景ID
+        iterations (int): 模拟迭代次数，默认为2000次
+    """
 
     if scenario_id not in TEST_SCENARIOS:
         print(f"错误: 场景 {scenario_id} 不存在")
@@ -394,6 +432,12 @@ def run_single_scenario(scenario_id: int, iterations: int = 2000):
 # ============================================================================
 
 def main():
+    """圆桌判定统计测试的主函数。
+
+    该函数解析命令行参数，根据参数决定是运行单个指定的测试场景
+    还是运行所有测试场景，然后执行相应的测试并输出结果。
+    支持通过命令行参数指定要运行的场景和迭代次数。
+    """
     parser = argparse.ArgumentParser(
         description="圆桌判定统计测试",
         formatter_class=argparse.RawDescriptionHelpFormatter,

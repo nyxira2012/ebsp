@@ -19,7 +19,20 @@ from src.factory import MechaFactory
 
 
 def main() -> int:
-    """主函数"""
+    """运行真实系机甲战斗模拟器的主要入口点。
+
+    该函数执行以下步骤：
+    1. 初始化数据加载器
+    2. 加载所有必要数据（飞行员、武器、机甲等）
+    3. 获取参战机体配置
+    4. 创建机体快照
+    5. 应用机体特性
+    6. 创建战斗模拟器
+    7. 运行战斗模拟
+
+    Returns:
+        int: 程序退出码，0表示成功，非0表示失败
+    """
     print("=" * 80)
     print("真实系机甲战斗模拟器 v2.0 (数据驱动版)")
     print("=" * 80)
@@ -44,29 +57,29 @@ def main() -> int:
         TraitManager.apply_traits(mecha_a)
         TraitManager.apply_traits(mecha_b)
         print()
-        
+
         # 6. 创建战斗模拟器
         simulator: BattleSimulator = BattleSimulator(mecha_a, mecha_b)
-        
+
         # 7. 运行战斗
         simulator.run_battle()
-        
+
         print()
         print("=" * 80)
         print("战斗模拟器运行完毕")
         print("=" * 80)
-        
+
     except FileNotFoundError as e:
         print(f"❌ 错误: {e}")
         print("请确保 data/ 目录下存在 pilots.json, weapons.json, mechas.json")
         return 1
-    
+
     except Exception as e:
         print(f"❌ 运行时错误: {e}")
         import traceback
         traceback.print_exc()
         return 1
-    
+
     return 0
 
 

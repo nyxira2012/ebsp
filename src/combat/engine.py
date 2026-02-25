@@ -243,19 +243,25 @@ class WeaponSelector:
 class BattleSimulator:
     """战斗模拟器主控"""
 
-    def __init__(self, mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool = True) -> None:
+    def __init__(self, mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool = True, verbose: bool = True, quiet: bool = False) -> None:
         """初始化战斗模拟器。
 
         Args:
             mecha_a: A 方机体
             mecha_b: B 方机体
             enable_presentation: 是否启用演出系统（默认True）
+            verbose: 是否输出详细战斗日志（默认True）
+            quiet: 是否完全静默模式（默认False，静默模式下强制 verbose=False）
         """
         self.mecha_a: Mecha = mecha_a
         self.mecha_b: Mecha = mecha_b
         self.initiative_calc: InitiativeCalculator = InitiativeCalculator()
         self.round_number: int = 0
         self.battle_log: list[str] = []
+
+        # 状态控制
+        self.verbose: bool = verbose if not quiet else False
+        self.quiet: bool = quiet
 
         # 演出系统组件
         self.enable_presentation: bool = enable_presentation
@@ -276,6 +282,12 @@ class BattleSimulator:
                 print(f"Warning: Failed to load presentation templates: {e}")
 
             self.text_renderer = TextRenderer()
+
+        # Statistics Integration: Event listener list for RawAttackEvent
+        # External systems (e.g., StatisticsCollector) can register callbacks here
+        self._attack_event_listeners: list[Callable] = []
+        self._round_start_listeners: list[Callable] = []
+        self._round_end_listeners: list[Callable] = []
 
     def run_battle(self) -> None:
         """运行完整的战斗流程。
@@ -344,13 +356,15 @@ class BattleSimulator:
 
         如果任一机体在回合中被击破,立即结束回合。
         """
-        print(f"{'=' * 80}")
-        print(f"ROUND {self.round_number}")
-        print(f"{'=' * 80}")
+        if self.verbose:
+            print(f"{'=' * 80}")
+            print(f"ROUND {self.round_number}")
+            print(f"{'=' * 80}")
 
         # 1. 生成距离
         distance: int = self._generate_distance()
-        print(f"交战距离: {distance}m")
+        if self.verbose:
+            print(f"交战距离: {distance}m")
 
         # 2. 先手判定
         first_mover, second_mover, reason = self.initiative_calc.calculate_initiative(
@@ -358,25 +372,33 @@ class BattleSimulator:
             self.mecha_b,
             self.round_number
         )
-        print(f"先手方: {first_mover.name} ({reason.value})")
-        print()
+        if self.verbose:
+            print(f"先手方: {first_mover.name} ({reason.value})")
+            print()
+
+        # HOOK: 回合开始监听器
+        for listener in self._round_start_listeners:
+            listener(self.round_number, distance, first_mover, second_mover, reason)
 
         # 3. 先攻方攻击
         self._execute_attack(first_mover, second_mover, distance, is_first=True)
 
         # 检查后攻方是否存活
         if not second_mover.is_alive():
-            print(f"{second_mover.name} 被击破!")
+            if self.verbose:
+                print(f"{second_mover.name} 被击破!")
             return
 
-        print()
+        if self.verbose:
+            print()
 
         # 4. 后攻方反击
         self._execute_attack(second_mover, first_mover, distance, is_first=False)
 
         # 检查先攻方是否存活
         if not first_mover.is_alive():
-            print(f"{first_mover.name} 被击破!")
+            if self.verbose:
+                print(f"{first_mover.name} 被击破!")
             return
 
         # 5. 回合结束 - 气力基础增长
@@ -396,17 +418,22 @@ class BattleSimulator:
         EffectManager.tick_effects(self.mecha_a)
         EffectManager.tick_effects(self.mecha_b)
 
+        # HOOK: 回合结束监听器
+        for listener in self._round_end_listeners:
+            listener(self.round_number, distance)
+
         # 8. 推进演出系统的状态 (Cooldowns等)
         if self.enable_presentation and self.mapper:
             self.mapper.advance_turn()
 
-        print()
-        print(f"{self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
-              f"EN={self.mecha_a.current_en}/{self.mecha_a.final_max_en} | "
-              f"气力={self.mecha_a.current_will}")
-        print(f"{self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
-              f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
-              f"气力={self.mecha_b.current_will}")
+        if self.verbose:
+            print()
+            print(f"{self.mecha_a.name}: HP={self.mecha_a.current_hp}/{self.mecha_a.final_max_hp} | "
+                  f"EN={self.mecha_a.current_en}/{self.mecha_a.final_max_en} | "
+                  f"气力={self.mecha_a.current_will}")
+            print(f"{self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
+                  f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
+                  f"气力={self.mecha_b.current_will}")
 
     def _apply_en_regeneration(self, mecha: Mecha) -> None:
         """应用机体的 EN 回能 (每回合自动回复)
@@ -486,8 +513,9 @@ class BattleSimulator:
         # 1. 选择武器
         weapon: Weapon = WeaponSelector.select_best_weapon(attacker, distance)
 
-        print(f"{'[先攻]' if is_first else '[反击]'} {attacker.name} 使用 【{weapon.name}】"
-              f" (威力:{weapon.power}, EN消耗:{weapon.en_cost})")
+        if self.verbose:
+            print(f"{'[先攻]' if is_first else '[反击]'} {attacker.name} 使用 【{weapon.name}】"
+                  f" (威力:{weapon.power}, EN消耗:{weapon.en_cost})")
 
         # 4. 创建战场上下文
         ctx: BattleContext = BattleContext(
@@ -505,7 +533,8 @@ class BattleSimulator:
 
         # 检查 EN (修正后的消耗)
         if attacker.current_en < int(weapon_cost):
-            print(f"   EN不足! 无法攻击 (当前EN: {attacker.current_en}, 需要: {int(weapon_cost)})")
+            if self.verbose:
+                print(f"   EN不足! 无法攻击 (当前EN: {attacker.current_en}, 需要: {int(weapon_cost)})")
             return
 
         attacker.consume_en(int(weapon_cost))
@@ -533,10 +562,11 @@ class BattleSimulator:
             AttackResult.CRIT: "CRIT"
         }
 
-        print(f"   {result_emoji.get(result, '?')} {result.value}! "
-              f"Roll点: {ctx.roll} | 伤害: {damage} | "
-              f"气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) "
-              f"{defender.name}({ctx.current_defender_will_delta:+d})")
+        if self.verbose:
+            print(f"   {result_emoji.get(result, '?')} {result.value}! "
+                  f"Roll点: {ctx.roll} | 伤害: {damage} | "
+                  f"气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) "
+                  f"{defender.name}({ctx.current_defender_will_delta:+d})")
 
         # 9. 结算钩子 (HOOK_ON_DAMAGE_DEALT, HOOK_ON_KILL, HOOK_ON_ATTACK_END)
 
@@ -560,7 +590,7 @@ class BattleSimulator:
             attack_events = _EM.end_attack()
             triggered_skill_ids = [e.skill_id for e in attack_events]
 
-            # 构建原始事件
+            # 构建原始事件（扩展版：包含统计所需的字段）
             raw_event = RawAttackEvent(
                 round_number=self.round_number,
                 attacker_id=attacker.id,
@@ -578,8 +608,22 @@ class BattleSimulator:
                 defender_will_delta=ctx.current_defender_will_delta,
                 triggered_skills=triggered_skill_ids,
                 is_first_attack=is_first,
-                initiative_holder=""
+                initiative_holder="",
+                # Statistics Extension
+                roll_value=ctx.roll,
+                en_cost=int(weapon_cost),
+                # Post-attack state snapshots
+                attacker_hp_after=attacker.current_hp,
+                attacker_en_after=attacker.current_en,
+                attacker_will_after=attacker.current_will,
+                defender_hp_after=defender.current_hp,
+                defender_en_after=defender.current_en,
+                defender_will_after=defender.current_will
             )
+
+            # Statistics Integration: Notify all event listeners
+            for listener in self._attack_event_listeners:
+                listener(raw_event)
 
             # 转换为演出事件并渲染
             pres_events_list = self.mapper.map_attack(raw_event)
@@ -602,11 +646,50 @@ class BattleSimulator:
             )
             current_round_evt.attack_sequences.append(seq)
 
-            if self.text_renderer:
+            if self.verbose and self.text_renderer:
                 print(self.text_renderer.render_attack(pres_events_list))
         else:
             # 演出未启用时，仍需调用 end_attack() 清空缓存，保持状态一致
-            _EM.end_attack()
+            attack_events = _EM.end_attack()
+
+            # Statistics Integration: Even when presentation is disabled,
+            # we still create RawAttackEvent and notify listeners
+            from ..presentation.models import RawAttackEvent
+
+            triggered_skill_ids = [e.skill_id for e in attack_events]
+            raw_event = RawAttackEvent(
+                round_number=self.round_number,
+                attacker_id=attacker.id,
+                defender_id=defender.id,
+                attacker_name=attacker.name,
+                defender_name=defender.name,
+                weapon_id=weapon.id,
+                weapon_name=weapon.name,
+                weapon_type=weapon.type.value,
+                weapon_tags=getattr(weapon, 'tags', []),
+                attack_result=result.value,
+                damage=damage,
+                distance=distance,
+                attacker_will_delta=ctx.current_attacker_will_delta,
+                defender_will_delta=ctx.current_defender_will_delta,
+                triggered_skills=triggered_skill_ids,
+                is_first_attack=is_first,
+                initiative_holder="",
+                # Statistics Extension
+                roll_value=ctx.roll,
+                en_cost=int(weapon_cost),
+                # Post-attack state snapshots
+                attacker_hp_after=attacker.current_hp,
+                attacker_en_after=attacker.current_en,
+                attacker_will_after=attacker.current_will,
+                defender_hp_after=defender.current_hp,
+                defender_en_after=defender.current_en,
+                defender_will_after=defender.current_will
+            )
+
+            # Notify all event listeners
+            for listener in self._attack_event_listeners:
+                listener(raw_event)
 
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。
@@ -616,31 +699,50 @@ class BattleSimulator:
         2. 判定胜: 回合数上限时,比较 HP 百分比
         3. 平局: HP 百分比完全相同
         """
-        print()
-        print("=" * 80)
-        print("战斗结束")
-        print("=" * 80)
+        if self.verbose:
+            print()
+            print("=" * 80)
+            print("战斗结束")
+            print("=" * 80)
 
         # 判断胜负
         if not self.mecha_a.is_alive():
-            print(f"胜者: {self.mecha_b.name} (击破)")
+            if self.verbose:
+                print(f"胜者: {self.mecha_b.name} (击破)")
         elif not self.mecha_b.is_alive():
-            print(f"胜者: {self.mecha_a.name} (击破)")
+            if self.verbose:
+                print(f"胜者: {self.mecha_a.name} (击破)")
         else:
             # 判定胜
             hp_a: float = self.mecha_a.get_hp_percentage()
             hp_b: float = self.mecha_b.get_hp_percentage()
 
-            print(f"回合数达到上限! 进入判定...")
-            print(f"{self.mecha_a.name} HP: {hp_a:.1f}%")
-            print(f"{self.mecha_b.name} HP: {hp_b:.1f}%")
+            if self.verbose:
+                print(f"回合数达到上限! 进入判定...")
+                print(f"{self.mecha_a.name} HP: {hp_a:.1f}%")
+                print(f"{self.mecha_b.name} HP: {hp_b:.1f}%")
 
             if hp_a > hp_b:
-                print(f"胜者: {self.mecha_a.name} (判定胜)")
+                if self.verbose:
+                    print(f"胜者: {self.mecha_a.name} (判定胜)")
             elif hp_b > hp_a:
-                print(f"胜者: {self.mecha_b.name} (判定胜)")
+                if self.verbose:
+                    print(f"胜者: {self.mecha_b.name} (判定胜)")
             else:
-                print(f"平局!")
+                if self.verbose:
+                    print(f"平局!")
+
+    def register_attack_event_listener(self, callback: Callable) -> None:
+        """注册 RawAttackEvent 监听器"""
+        self._attack_event_listeners.append(callback)
+
+    def register_round_start_listener(self, callback: Callable) -> None:
+        """注册回合开始监听器"""
+        self._round_start_listeners.append(callback)
+
+    def register_round_end_listener(self, callback: Callable) -> None:
+        """注册回合结束监听器"""
+        self._round_end_listeners.append(callback)
 
     def set_event_callback(self, callback: Callable[[TriggerEvent], None]) -> None:
         """设置前端事件回调（用于接收技能触发事件）
@@ -650,6 +752,20 @@ class BattleSimulator:
         """
         from ..skill_system.event_manager import EventManager
         EventManager.register_callback(callback)
+
+    def register_attack_event_listener(self, callback: Callable) -> None:
+        """注册攻击事件监听器（用于统计系统等）
+
+        允许外部系统订阅 RawAttackEvent 事件流，实现与战斗逻辑解耦的统计收集。
+
+        Args:
+            callback: 回调函数，接收 RawAttackEvent 参数
+
+        Example:
+            collector = StatisticsCollector(...)
+            simulator.register_attack_event_listener(collector.on_attack_event)
+        """
+        self._attack_event_listeners.append(callback)
 
     def get_trigger_events(self) -> List[TriggerEvent]:
         """获取本回合的所有触发事件（用于前端演出）

@@ -2,6 +2,58 @@
 
 ---
 
+## 2026-02-26 战斗统计系统与项目结构优化：从单体脚本到模块化架构
+
+> **项目快照**：代码文件 30 个（4350 行）| 设计文档 7 个（2557 行）
+
+### 逻辑变化与核心思路
+
+1. **战斗统计收集器的独立封装**
+   - **逻辑变化**：新增 `src/combat/statistics_collector.py`（282 行），将原本散落在 `sim_challenge_boss.py` 中的统计逻辑独立封装为 `StatisticsCollector` 类。实现了事件驱动的统计架构，通过 `on_attack_event()`、`on_en_consumed()`、`on_round_end()` 等接口接收战斗事件。
+   - **设计思路**：旧的统计逻辑与 Boss 挑战模拟器深度耦合，导致无法在其他场景复用（如 PvP 对战、战役模式）。新的统计收集器遵循以下设计原则：
+     - **事件驱动**：只订阅事件，不干预战斗流程，与 `BattleEngine` 完全解耦
+     - **数据完整性**：从 `RawAttackEvent` 中提取攻击判定、伤害分布、技能触发等多维度统计
+     - **可选详细记录**：通过 `enable_detailed_records` 参数控制是否记录完整的 `AttackRecord` 列表（内存敏感场景可关闭）
+   - **核心数据结构**：
+     - `AttackRecord`：单次攻击的完整记录，包含双方状态快照、Roll 值、触发技能等
+     - `RoundSnapshot`：回合结束时的状态快照，用于战后回放和趋势分析
+     - `BattleStatistics`：整场战斗的聚合统计，包含伤害极值、判定分布、技能触发率等
+
+2. **项目目录结构重组**
+   - **逻辑变化**：将 `main.py` 从根目录移至 `scripts/main.py`，删除废弃的 `scripts/battle_presentation_demo.py`。统一模拟器脚本入口到 `scripts/sim/` 目录。
+   - **设计思路**：
+     - **根目录清理**：根目录应该只保留项目级文件（README、配置、文档），可执行脚本统一归入 `scripts/`
+     - **语义化组织**：`scripts/sim/` 专门存放数值模拟和测试工具，`scripts/` 存放主程序入口
+     - **删除废弃代码**：`battle_presentation_demo.py` 的功能已被 `test_presentation_showcase.py` 和 `tests/test_presentation.py` 覆盖，保留只会增加维护负担
+
+3. **战斗引擎的 Roll 值传递优化**
+   - **逻辑变化**：在 `src/combat/engine.py` 的 `_execute_attack()` 方法中，将攻击判定的 `roll_value` 显式传递给统计收集器。新增 `set_roll_value()` 接口用于临时存储当前攻击的随机数。
+   - **设计思路**：`RawAttackEvent` 设计为轻量级事件对象，不包含 `roll_value` 这类内部计算细节。但为了数值验证（验证圆桌判定概率分布是否符合预期），统计系统需要知道每次攻击的实际 Roll 值。通过"显式传递"而非"事件携带"的方式，保持了事件对象的简洁性，同时满足了统计需求。
+
+4. **演出系统模型的兼容性调整**
+   - **逻辑变化**：在 `src/presentation/models.py` 中调整了字段命名和结构，确保与统计收集器的无缝对接。统一使用 `weapon_type` 字段表示武器类型（与 `WeaponType` 枚举保持一致）。
+   - **设计思路**：演出系统和统计系统都依赖 `RawAttackEvent`，但两者的关注维度不同——演出关心"如何描述这次攻击"，统计关心"这次攻击的结果数据"。通过统一字段命名和类型定义，避免数据转换层的重复代码。
+
+5. **模拟器脚本的配置更新**
+   - **逻辑变化**：更新 `scripts/sim/sim_challenge_boss.py` 和 `scripts/sim/sim_attack_table.py` 的导入路径，适配新的目录结构。优化了统计输出格式，与新的 `StatisticsCollector` 集成。
+   - **设计思路**：模拟器是数值策划的核心工具，需要：
+     - **一致的 API**：无论底层引擎如何变化，模拟器的命令行接口和输出格式保持稳定
+     - **可复用组件**：通过复用 `StatisticsCollector`，模拟器代码从 1000+ 行缩减到约 500 行，统计逻辑不再重复实现
+
+**技术要点**
+- `StatisticsCollector` 使用 `dataclass` 定义所有数据结构，通过 `frozen=True` 确保事件对象不可变
+- 伤害分布使用 `List[int]` 存储原始值，便于后续计算标准差、百分位数等统计指标
+- 技能触发统计采用 `Dict[str, Dict[str, int]]` 结构，记录 `{skill_id: {attempts: N, success: M}}`
+- 通过 `finalize()` 方法处理边界情况（如整场战斗未造成伤害时，`min_single_damage` 从 `inf` 归零）
+
+**后续计划**
+1. 基于 `StatisticsCollector` 实现"战斗录像回放"功能，支持从 `AttackRecord` 重建战斗过程
+2. 扩展统计维度，增加"武器使用频率"、"技能组合效果"等深度分析指标
+3. 编写 `sim_balance_analysis.py`，批量运行 1000+ 场战斗，验证数值平衡性
+4. 考虑将统计数据导出为 CSV/JSON，支持数值策划在 Excel 中进一步分析
+
+---
+
 ## 2026-02-19 演出系统落地与事件追踪优化：从架构设计到实战完善
 
 > **项目快照**：代码文件 29 个（4250 行）| 设计文档 7 个（2557 行）
