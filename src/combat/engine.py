@@ -304,10 +304,11 @@ class BattleSimulator:
         - 判定胜: 回合数上限时 HP 百分比更高
         - 平局: HP 百分比相同
         """
-        print("=" * 80)
-        print(f"战斗开始: {self.mecha_a.name} vs {self.mecha_b.name}")
-        print("=" * 80)
-        print()
+        if self.verbose:
+            print("=" * 80)
+            print(f"战斗开始: {self.mecha_a.name} vs {self.mecha_b.name}")
+            print("=" * 80)
+            print()
 
         # 2. 循环执行回合
         # HOOK: 初始回合上限判定 (HOOK_MAX_ROUNDS)
@@ -332,7 +333,8 @@ class BattleSimulator:
             # 执行回合
             self._execute_round()
 
-            print()
+            if self.verbose:
+                print()
 
         # HOOK: 战斗结束 (HOOK_ON_BATTLE_END)
         # 用于清理 BATTLE_BASED 状态 (如 学习电脑层数)
@@ -553,17 +555,18 @@ class BattleSimulator:
             defender.modify_will(ctx.current_defender_will_delta)
 
         # 8. 输出结果
-        result_emoji: dict[AttackResult, str] = {
-            AttackResult.MISS: "MISS",
-            AttackResult.DODGE: "DODGE",
-            AttackResult.PARRY: "PARRY",
-            AttackResult.BLOCK: "BLOCK",
-            AttackResult.HIT: "HIT",
-            AttackResult.CRIT: "CRIT"
+        # 中文显示映射
+        RESULT_DISPLAY = {
+            AttackResult.MISS: "✗ 未命中",
+            AttackResult.DODGE: "↘ 躲闪",
+            AttackResult.PARRY: "⚔ 招架",
+            AttackResult.BLOCK: "▌ 格挡",
+            AttackResult.HIT: "✓ 命中",
+            AttackResult.CRIT: "💥 暴击",
         }
 
         if self.verbose:
-            print(f"   {result_emoji.get(result, '?')} {result.value}! "
+            print(f"   {RESULT_DISPLAY.get(result, '?')}! "
                   f"Roll点: {ctx.roll} | 伤害: {damage} | "
                   f"气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) "
                   f"{defender.name}({ctx.current_defender_will_delta:+d})")
@@ -731,10 +734,6 @@ class BattleSimulator:
             else:
                 if self.verbose:
                     print(f"平局!")
-
-    def register_attack_event_listener(self, callback: Callable) -> None:
-        """注册 RawAttackEvent 监听器"""
-        self._attack_event_listeners.append(callback)
 
     def register_round_start_listener(self, callback: Callable) -> None:
         """注册回合开始监听器"""

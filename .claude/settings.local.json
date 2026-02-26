@@ -5,7 +5,15 @@
       "Bash(pytest:*)",
       "Bash(ls:*)",
       "Bash(dir nul)",
-      "Bash(npx skills add:*)"
+      "Bash(npx skills add:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(pytest3:*)",
+      "Bash(python3.12:*)",
+      "Bash(/Users/dupidupi/.local/bin/python3:*)",
+      "Bash(git:*)"
     ]
   }
 }

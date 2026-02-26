@@ -31,12 +31,12 @@ class SlotType(str, Enum):
 
 class AttackResult(str, Enum):
     """攻击判定结果"""
-    MISS = "未命中"
-    DODGE = "躲闪"
-    PARRY = "招架"
-    BLOCK = "格挡"
-    CRIT = "暴击"
-    HIT = "命中"
+    MISS = "MISS"
+    DODGE = "DODGE"
+    PARRY = "PARRY"
+    BLOCK = "BLOCK"
+    CRIT = "CRIT"
+    HIT = "HIT"
 
 class InitiativeReason(str, Enum):
     """先手原因"""
