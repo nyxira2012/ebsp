@@ -147,7 +147,7 @@ templates:
     conditions: { intent: "INTENT_BEAM_INSTANT", result: "HIT", weapon_type: "SHOOTING" }
     content:
       action_text: "{attacker}将准星锁定在对方的轮廓上，{weapon}喷薄出高度压缩的粒子流！"
-      reaction_text: "由于避雷涂层在高温中瞬间升华，极高热的光束轻易贯穿了{defender}的肩部，熔融的残骸在空中拖出焦黑的轨迹。"
+      reaction_text: "由于抗光束涂层在高温中瞬间升华，极高热的光束轻易贯穿了{defender}的肩部，熔融的残骸在空中拖出焦黑的轨迹。"
     visuals: { anim_id: "shoot_beam_rifle", sfx_ids: ["sfx_beam_shoot", "sfx_hit_beam"] }
 
   - id: "t2_shoot_beam_instant_dodge"
@@ -213,7 +213,7 @@ templates:
     conditions: { intent: "INTENT_PROJECTILE_SINGLE", result: "HIT", weapon_type: "SHOOTING" }
     content:
       action_text: "战术显示器捕捉到了完美的弹道路径，{attacker}扣动扳机，{weapon}的退壳机排出一缕青烟。"
-      reaction_text: "沉重的特制弹头狠狠撞入{defender}的胸腔，物理性的撕裂比能量武器更加残暴，破碎的机件在大气中飞散。"
+      reaction_text: "沉重的特制弹头狠狠撞入{defender}的中央躯干，物理性的撕裂比能量武器更加残暴，破碎的机件在大气中飞散。"
     visuals: { anim_id: "shoot_bazooka", sfx_ids: ["sfx_shell_launch", "sfx_explosion_solid"] }
 
   - id: "t2_shoot_proj_single_crit"
@@ -307,7 +307,7 @@ templates:
     conditions: { result: "DODGE", skill_id: "spirit_flash" }
     content:
       action_text: "{attacker}以必中的信念发动攻击！"
-      reaction_text: "但是{defender}发动了【闪光】！攻击穿过了一道残影！"
+      reaction_text: "但是{defender}的感应系统瞬间过载——随着一道清脆的闪光，攻击穿过了一道残影！"
     visuals: { anim_id: "skill_flash_dodge", sfx_ids: ["sfx_newtype_flash"] }
 
   - id: "t1_skill_surehit_hit"
@@ -315,8 +315,8 @@ templates:
     priority_score: 100
     conditions: { result: "HIT", skill_id: "spirit_sure_hit" }
     content:
-      action_text: "{attacker}发动【必中】！这一击，无处可逃！"
-      reaction_text: "{defender}试图闪避，但{weapon}如附随形，紧咬不放！"
+      action_text: "{attacker}锁定了命运的轨迹。这一击，无处可逃！"
+      reaction_text: "{defender}试图闪避，但{weapon}如附随形，死死咬住了机体的致命死角！"
     visuals: { anim_id: "skill_surehit_action", sfx_ids: ["sfx_spirit_activate"] }
 
   - id: "t1_skill_iron_wall_block"
@@ -325,7 +325,7 @@ templates:
     conditions: { result: "BLOCK", skill_id: "spirit_iron_wall" }
     content:
       action_text: "{attacker}发动猛烈一击！"
-      reaction_text: "{defender}如铁壁般岿然不动！【铁壁】将伤害尽数化解！"
+      reaction_text: "{defender}的装甲表面泛起一层金属质感的光泽，如铁壁般岿然不动！伤害被尽数化解！"
     visuals: { anim_id: "skill_iron_wall_block", sfx_ids: ["sfx_heavy_impact"] }
 
   - id: "t1_skill_valor_hit"
@@ -333,8 +333,8 @@ templates:
     priority_score: 90
     conditions: { result: "HIT", skill_id: "spirit_valor" }
     content:
-      action_text: "{attacker}燃烧着【热血】！就是现在——决胜负的一击！"
-      reaction_text: "{defender}被这股压倒性的气势彻底压倒！"
+      action_text: "{attacker}的座舱内回荡着咆哮，机能功率瞬间暴涨！就是现在——决胜负的一击！"
+      reaction_text: "{defender}被这股压倒性的气势与惊人的出力彻底压制！"
     visuals: { anim_id: "skill_valor_attack", sfx_ids: ["sfx_spirit_activate", "sfx_crit_impact"] }
 
   - id: "t1_skill_potential_block"
@@ -343,7 +343,7 @@ templates:
     conditions: { result: "BLOCK", skill_id: "skill_potential" }
     content:
       action_text: "{attacker}试图一击必杀！"
-      reaction_text: "{defender}的【潜力】觉醒了！机体拒绝倒下，硬抗住这致命一击！"
+      reaction_text: "{defender}的出力限制器在剧痛中被强制解除！机体拒绝倒下，死死顶住了这致命一击！"
     visuals: { anim_id: "skill_potential_glow", sfx_ids: ["sfx_potential_spark"] }
 
   - id: "t1_skill_awakening_hit"
@@ -351,8 +351,8 @@ templates:
     priority_score: 110
     conditions: { result: "HIT", skill_id: "skill_awakening" }
     content:
-      action_text: "{attacker}的意识在不断扩张……世界仿佛变慢了……"
-      reaction_text: "{defender}遭到了来自无法预测角度的攻击——这就是【觉醒】的力量！"
+      action_text: "{attacker}的意识正在突破物质的边界，世界仿佛凝固了……"
+      reaction_text: "{defender}遭到了来自视觉死角的连环重击——在纯粹的直觉面前，机动性毫无意义！"
     visuals: { anim_id: "skill_awakening_pulse", sfx_ids: ["sfx_awakening_activate"] }
 
   # =====================================================

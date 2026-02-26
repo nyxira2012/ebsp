@@ -267,6 +267,8 @@ class BattleSimulator:
         self.enable_presentation: bool = enable_presentation
         self.mapper: Optional[EventMapper] = None
         self.text_renderer: Optional[TextRenderer] = None
+        # Distance Provider (for scenarios)
+        self.distance_provider: Optional[Callable[[int], int]] = None
         # Bug Fix #2: 无条件初始化，避免 enable_presentation=False 时 API 访问 AttributeError
         self.presentation_timeline: list[PresentationRoundEvent] = []
 
@@ -286,6 +288,7 @@ class BattleSimulator:
         # Statistics Integration: Event listener list for RawAttackEvent
         # External systems (e.g., StatisticsCollector) can register callbacks here
         self._attack_event_listeners: list[Callable] = []
+        self._presentation_event_listeners: list[Callable] = []
         self._round_start_listeners: list[Callable] = []
         self._round_end_listeners: list[Callable] = []
 
@@ -364,7 +367,11 @@ class BattleSimulator:
             print(f"{'=' * 80}")
 
         # 1. 生成距离
-        distance: int = self._generate_distance()
+        if self.distance_provider:
+            distance: int = self.distance_provider(self.round_number)
+        else:
+            distance: int = self._generate_distance()
+            
         if self.verbose:
             print(f"交战距离: {distance}m")
 
@@ -651,6 +658,10 @@ class BattleSimulator:
 
             if self.verbose and self.text_renderer:
                 print(self.text_renderer.render_attack(pres_events_list))
+
+            # Presentation Statistics Integration
+            for listener in self._presentation_event_listeners:
+                listener(pres_events_list)
         else:
             # 演出未启用时，仍需调用 end_attack() 清空缓存，保持状态一致
             attack_events = _EM.end_attack()
@@ -765,6 +776,20 @@ class BattleSimulator:
             simulator.register_attack_event_listener(collector.on_attack_event)
         """
         self._attack_event_listeners.append(callback)
+
+    def register_presentation_event_listener(self, callback: Callable) -> None:
+        """注册演出事件监听器（用于统计系统等）
+        
+        允许外部系统订阅 List[PresentationAttackEvent] 事件流，获得最终选中的模板信息。
+
+        Args:
+            callback: 回调函数，接收 List[PresentationAttackEvent] 参数
+        """
+        self._presentation_event_listeners.append(callback)
+
+    def set_distance_provider(self, provider: Callable[[int], int]) -> None:
+        """设置自定义距离生成器（用于场景模拟）"""
+        self.distance_provider = provider
 
     def get_trigger_events(self) -> List[TriggerEvent]:
         """获取本回合的所有触发事件（用于前端演出）

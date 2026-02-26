@@ -87,6 +87,7 @@ class EventMapper:
             camera_cam=cam_id,
             vfx_ids=tmpl.visuals.vfx_ids or [],
             sfx_ids=tmpl.visuals.sfx_ids or [],
+            template_id=tmpl.id,
             raw_event=raw,
             attacker_name=raw.attacker_name,
             defender_name=raw.defender_name,
@@ -124,6 +125,7 @@ class EventMapper:
             sfx_ids=tmpl.visuals.sfx_ids or [],
             damage_display=raw.damage if raw.attack_result in ["HIT", "CRIT"] else 0,
             hit_location="body", # Placeholder
+            template_id=tmpl.id,
             raw_event=raw,
             attacker_name=raw.attacker_name,
             defender_name=raw.defender_name,

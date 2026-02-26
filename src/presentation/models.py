@@ -80,6 +80,7 @@ class PresentationAttackEvent:
     hit_location: str = "body"    # Visual hit location
     
     # References
+    template_id: str = ""         # The ID of the template used
     raw_event: Optional[RawAttackEvent] = None
     attacker_name: str = ""
     defender_name: str = ""
