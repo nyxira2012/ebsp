@@ -41,6 +41,40 @@ class AttackEventBuilder:
     """
 
     @staticmethod
+    def _classify_physics(weapon_tags: List[str], weapon_name: str = "") -> str:
+        """
+        根据武器标签判断物理类 (Physics Class)。
+        Energy: 光束/能量武器
+        Kinetic: 实弹/导弹武器
+        Blade: 斩击/格斗武器
+        Impact: 撞击/冲击武器
+        """
+        tags = [t.lower() for t in weapon_tags]
+        name = weapon_name.lower()
+
+        # 优先判断光束类（beam标签优先，避免被bazooka等词误判）
+        if any(tag in tags for tag in ["beam", "energy", "particle", "laser", "光束"]):
+            return "Energy"
+
+        # 斩击类
+        if any(tag in tags for tag in ["slash", "blade", "saber", "sword", "axe", "knife", "军刀", "斩"]):
+            return "Blade"
+
+        # 实弹类（排除光束类武器）
+        if any(tag in tags for tag in ["missile", "projectile", "shell", "bullet", "rocket", "导弹", "实弹"]):
+            return "Kinetic"
+
+        # 根据武器名称补充判断（针对没有标签的情况）
+        if "光束" in name or "粒子" in name or "激光" in name:
+            return "Energy"
+        if "火箭" in name and "光束" not in name:
+            return "Kinetic"
+        if "军刀" in name or "剑" in name or "斧" in name:
+            return "Blade"
+
+        return "Impact"
+
+    @staticmethod
     def build(
         attacker: "MechaSnapshot",
         defender: "MechaSnapshot",
@@ -49,6 +83,7 @@ class AttackEventBuilder:
         result: "AttackResult",
         damage: int,
         triggered_skill_ids: List[str],
+        spirit_commands: List[str],
         is_first: bool,
         round_number: int,
         en_cost: int,
@@ -64,6 +99,7 @@ class AttackEventBuilder:
             result:               判定结果（AttackResult 枚举）
             damage:               最终伤害数值
             triggered_skill_ids:  本次攻击期间触发的技能 ID 列表
+            spirit_commands:      本次攻击期间触发的精神指令 ID 列表
             is_first:             是否为本回合第一次攻击（先手方）
             round_number:         当前回合数
             en_cost:              本次武器消耗的 EN 量
@@ -113,4 +149,10 @@ class AttackEventBuilder:
             defender_en_after=defender.current_en,
             defender_will_after=defender.current_will,
             defender_max_hp=defender.final_max_hp,
+
+            # ── 演出系统数据契约 (Phase 0) ───────────────────────────
+            # is_lethal: 攻击后 HP <= 0 才是致死（注意：此时 defender 已经扣血）
+            is_lethal=(defender.current_hp <= 0),
+            physics_class=AttackEventBuilder._classify_physics(getattr(weapon, 'tags', [])),
+            spirit_commands=spirit_commands,
         )

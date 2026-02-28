@@ -1,93 +1,118 @@
 import yaml
 import os
-from typing import List, Dict, Any
-from .template import PresentationTemplate, TemplateConditions, TemplateContent, TemplateVisuals
-from .constants import TemplateTier, VisualIntent
+from typing import List, Dict, Any, Tuple
+from .template import ActionBone, ReactionBone
+from .constants import TemplateTier, VisualIntent, Channel
 
 class TemplateLoader:
     """
     Loads presentation templates from YAML configuration files.
+
+    v5.0 架构：
+    - 只加载 action_bones 和 reaction_bones
+    - T0 脚本模板通过代码直接创建，不从 YAML 加载
     """
-    
+
     @staticmethod
-    def load_from_file(file_path: str) -> List[PresentationTemplate]:
-        """Loads templates from a YAML file."""
+    def load_from_file(file_path: str) -> Tuple[List[ActionBone], List[ReactionBone]]:
+        """Loads action_bones and reaction_bones from a YAML file.
+
+        Returns:
+            (action_bones, reaction_bones) 元组
+        """
         if not os.path.exists(file_path):
             print(f"[WARN] Template config not found: {file_path}")
-            return []
-            
+            return [], []
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
-                
-            if not data or 'templates' not in data:
-                return []
-                
-            templates = []
-            for item in data['templates']:
-                try:
-                    tmpl = TemplateLoader._parse_template(item)
-                    templates.append(tmpl)
-                except Exception as e:
-                    print(f"[ERROR] Failed to parse template {item.get('id', 'unknown')}: {e}")
-                    
-            return templates
-            
+
+            if not data:
+                return [], []
+
+            # 加载 action_bones
+            action_bones = []
+            if 'action_bones' in data:
+                for item in data['action_bones']:
+                    try:
+                        bone = TemplateLoader._parse_action_bone(item)
+                        action_bones.append(bone)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to parse action_bone {item.get('bone_id', 'unknown')}: {e}")
+
+            # 加载 reaction_bones
+            reaction_bones = []
+            if 'reaction_bones' in data:
+                for item in data['reaction_bones']:
+                    try:
+                        bone = TemplateLoader._parse_reaction_bone(item)
+                        reaction_bones.append(bone)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to parse reaction_bone {item.get('bone_id', 'unknown')}: {e}")
+
+            return action_bones, reaction_bones
+
         except Exception as e:
             print(f"[ERROR] Failed to load template file {file_path}: {e}")
-            return []
+            return [], []
 
     @staticmethod
-    def _parse_template(data: Dict[str, Any]) -> PresentationTemplate:
-        # Parse Tier
-        tier_str = data.get('tier', 'T3_FALLBACK')
+    def _parse_action_bone(data: Dict[str, Any]) -> ActionBone:
+        """解析 ActionBone"""
+        # Parse intent
+        intent_str = data.get('intent', 'BEAM_INSTANT')
+        try:
+            intent = VisualIntent[intent_str] if intent_str in VisualIntent.__members__ else VisualIntent(intent_str)
+        except ValueError:
+            intent = VisualIntent.BEAM_INSTANT
+
+        # Parse tier
+        tier_str = data.get('tier', 'T2_TACTICAL')
         try:
             tier = TemplateTier[tier_str]
         except KeyError:
-            # Try matching by value if key fails, or default
-            tier = next((t for t in TemplateTier if t.value == tier_str), TemplateTier.T3_FALLBACK)
+            tier = TemplateTier.T2_TACTICAL
 
-        # Parse Conditions
-        cond_data = data.get('conditions', {})
-        intent_str = cond_data.get('intent')
-        intent = None
-        if intent_str:
-            try:
-                intent = VisualIntent[intent_str] if intent_str in VisualIntent.__members__ else VisualIntent(intent_str)
-            except ValueError:
-                pass
-
-        conditions = TemplateConditions(
+        return ActionBone(
+            bone_id=data['bone_id'],
             intent=intent,
-            result=cond_data.get('result'),
-            weapon_type=cond_data.get('weapon_type'),
-            required_tags=cond_data.get('tags', []),
-            skill_id=cond_data.get('skill_id'),
-            hp_status=cond_data.get('hp_status')
-        )
-
-        # Parse Content
-        cont_data = data.get('content', {})
-        content = TemplateContent(
-            action_text=cont_data.get('action_text', ""),
-            reaction_text=cont_data.get('reaction_text', "")
-        )
-
-        # Parse Visuals
-        vis_data = data.get('visuals', {})
-        visuals = TemplateVisuals(
-            anim_id=vis_data.get('anim_id'),
-            cam_id=vis_data.get('cam_id'),
-            vfx_ids=vis_data.get('vfx_ids', []),
-            sfx_ids=vis_data.get('sfx_ids', [])
-        )
-
-        return PresentationTemplate(
-            id=data['id'],
+            physics_class=data.get('physics_class', 'Energy'),
+            text_fragments=data.get('text_fragments', []),
+            anim_id=data.get('anim_id', 'anim_default'),
             tier=tier,
-            conditions=conditions,
-            content=content,
-            visuals=visuals,
             priority_score=data.get('priority_score', 0),
-            cooldown=data.get('cooldown', 0)
+            cooldown=data.get('cooldown', 0),
+            weight=data.get('weight', 1.0),
+            tags=data.get('tags', [])
+        )
+
+    @staticmethod
+    def _parse_reaction_bone(data: Dict[str, Any]) -> ReactionBone:
+        """解析 ReactionBone"""
+        # Parse channel
+        channel_str = data.get('channel', 'IMPACT')
+        try:
+            channel = Channel[channel_str] if channel_str in Channel.__members__ else Channel(channel_str)
+        except ValueError:
+            channel = Channel.IMPACT
+
+        # Parse tier
+        tier_str = data.get('tier', 'T2_TACTICAL')
+        try:
+            tier = TemplateTier[tier_str]
+        except KeyError:
+            tier = TemplateTier.T2_TACTICAL
+
+        return ReactionBone(
+            bone_id=data['bone_id'],
+            channel=channel,
+            physics_class=data.get('physics_class', 'Impact'),
+            text_fragments=data.get('text_fragments', []),
+            vfx_ids=data.get('vfx_ids', []),
+            sfx_ids=data.get('sfx_ids', []),
+            tier=tier,
+            weight=data.get('weight', 1.0),
+            tags=data.get('tags', []),
+            attack_result=data.get('attack_result')
         )

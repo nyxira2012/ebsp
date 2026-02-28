@@ -1,54 +1,102 @@
-from typing import List, Optional
-import random
-from .models import RawAttackEvent, PresentationAttackEvent
-from .constants import PresentationTag, TemplateTier
-from .intent_extractor import IntentExtractor
-from .registry import TemplateRegistry
-from .selector import TemplateSelector
-from .template import PresentationTemplate, TemplateContent, TemplateVisuals, TemplateConditions
-from .helpers import calculate_hp_status, HpStatus
+"""
+Event Mapper - 演出系统核心编排器 (CPS v5.0)
 
+架构：四层导演金字塔 (4-Layer Pipeline)
+    L1: ODR Router → Channel (结局前置路由)
+    L2: Dual Bidder → ActionBone + ReactionBone (双轨竞标)
+    L3: Assembler → final_text (原子拼装 + SVI + DHL)
+    L4: AV Dispatcher → PresentationAttackEvent (视听调度)
+
+入口：map_attack() - 将 RawAttackEvent 转换为 PresentationAttackEvent 序列
+"""
+
+from typing import List, Optional
+
+from .models import RawAttackEvent, PresentationAttackEvent
+from .constants import PresentationTag, TemplateTier, Channel
+from .template import ActionBone, ReactionBone
+from .router import OutcomeRouter
+from .bidder import DualBidder
+from .assembler import TextAssembler
+from .av_dispatcher import AVDispatcher
 from .scripted_manager import ScriptedPresentationManager
 
 
-# Lethal hit location configurations
-LETHAL_LOCATIONS = [
-    "驾驶舱",   # cockpit
-    "动力炉",   # reactor
-    "头部",     # head
-    "躯干",     # torso
-]
-
-LETHAL_ACTION_TEMPLATES = [
-    "{attacker}的{weapon}精准贯穿了{defender}的{location}！",
-    "{attacker}以{weapon}发动致命一击，直指{defender}的{location}！",
-    "终焉降临！{attacker}的{weapon}粉碎了{defender}的{location}！",
-]
-
-LETHAL_REACTION_TEMPLATES = [
-    "随着{location}被彻底贯穿，{defender}在烈焰中化为燃烧的残骸坠落！",
-    "{defender}的{location}发生剧烈爆炸，机体在连锁爆裂中支离破碎！",
-    "核心机能停止！{defender}的{location}被摧毁，机体化为虚空中燃烧的废铁！",
-]
-
 class EventMapper:
     """
-    Event Mapper - Orchestrates the conversion from RawAttackEvent to PresentationAttackEvent(s).
+    Event Mapper - 战斗事件的导演编排器
+
+    核心职责：
+    1. L1 ODR路由 - 根据战斗结局锁定演出频道
+    2. L2 双轨竞标 - 独立选择Action和Reaction骨架
+    3. L3 原子拼装 - 组装最终文本
+    4. L4 AV调度 - 生成视听演出事件
+
+    这是v5.0四层架构的唯一入口，所有旧路径逻辑已被移除。
     """
-    def __init__(self, registry: Optional[TemplateRegistry] = None):
+
+    def __init__(self, registry: Optional['TemplateRegistry'] = None):
+        """
+        初始化 EventMapper。
+
+        Args:
+            registry: 模板注册表，如果为None则创建默认实例
+        """
         if registry is None:
+            from .registry import TemplateRegistry
             self.registry = TemplateRegistry()
         else:
             self.registry = registry
-        self.selector = TemplateSelector(self.registry)
+
         self.scripted_manager = ScriptedPresentationManager()
+
+        # L2-L4 组件
+        self._bidder: Optional[DualBidder] = None
+        self._assembler = TextAssembler()
+        self._av_dispatcher = AVDispatcher()
+
+        # 初始化竞标器
+        self._initialize_bidder()
+
+    def _initialize_bidder(self):
+        """初始化或重新初始化 DualBidder（在配置加载后调用）"""
+        if hasattr(self.registry, 'action_bones') and hasattr(self.registry, 'reaction_bones'):
+            action_bones = self.registry.action_bones
+            reaction_bones = self.registry.reaction_bones
+
+            # 只有在有数据时才初始化 bidder
+            if action_bones or reaction_bones:
+                self._bidder = DualBidder(action_bones, reaction_bones)
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[EventMapper] DualBidder 初始化完成: "
+                           f"{len(action_bones)} action_bones, {len(reaction_bones)} reaction_bones")
+            else:
+                self._bidder = None
+                import logging
+                logging.getLogger(__name__).warning(
+                    "[EventMapper] 注册表中没有 ActionBone 或 ReactionBone，"
+                    "将使用默认生成逻辑"
+                )
 
     def map_attack(self, raw_event: RawAttackEvent) -> List[PresentationAttackEvent]:
         """
-        Main entry point: Converts a raw combat event into a sequence of presentation events.
-        Returns a list containing [Action, Reaction] events.
+        主入口：将原始战斗事件转换为演出事件序列
+
+        流程：
+        1. L1 ODR路由 - 确定演出频道 (FATAL/EVADE/IMPACT/SPECIAL)
+        2. T0拦截检查 - 是否有脚本强制模板
+        3. L2 双轨竞标 - 选择 ActionBone + ReactionBone
+        4. L3 原子拼装 - 组装最终文本
+        5. L4 AV调度 - 生成 PresentationAttackEvent 对
+
+        Returns:
+            List[PresentationAttackEvent]: 包含 [Action, Reaction] 的事件列表
         """
-        # 1. Check T0 (Scripted) first
+        # === L1: 绝对律令层 - 结局前置路由 ===
+        channel = OutcomeRouter.route(raw_event)
+
+        # T0 拦截（脚本优先，独立于流水线）
         forced_tmpl = self.scripted_manager.get_forced_template(
             raw_event.round_number,
             raw_event.attacker_id,
@@ -56,163 +104,86 @@ class EventMapper:
         )
 
         if forced_tmpl:
-            template = forced_tmpl
+            # T0 脚本事件 - 直接由AVDispatcher处理
+            return self._handle_scripted_event(raw_event, forced_tmpl, channel)
+
+        # === L2-L4: 四层架构处理 ===
+        return self._execute_pipeline(raw_event, channel)
+
+    def _execute_pipeline(self, raw_event: RawAttackEvent, channel: Channel) -> List[PresentationAttackEvent]:
+        """
+        执行 L2-L4 的四层架构流水线。
+
+        这是 v5.0 的核心逻辑，替代了旧版的 selector + template 方式。
+        """
+        # === L2: 双轨独立竞标 ===
+        if self._bidder:
+            action_bone, reaction_bone = self._bidder.bid(raw_event, channel)
         else:
-            # 1.5 Calculate HP status (used for matching, but no longer a hard override)
-            hp_status = calculate_hp_status(raw_event.defender_hp_after, raw_event.defender_max_hp, raw_event.damage)
-            
-            # 2. Extract Intent
-            intent = IntentExtractor.extract_intent(raw_event.weapon_type, raw_event.weapon_tags)
+            # 无竞标器时使用None（Assembler会处理）
+            action_bone, reaction_bone = None, None
 
-            # 3. Select Template via Selector (T1 -> T2 -> T3)
-            # This now allows T1/T2 to bid for LETHAL status if configured in YAML,
-            # supporting boss-specific death scenes or lethal skills.
-            template = self.selector.select_template(intent, raw_event, hp_status)
+        # === L3: 原子拼装 ===
+        action_text, reaction_text, hit_part = self._assembler.assemble(
+            action_bone, reaction_bone, raw_event, channel
+        )
 
-            # 4. Fallback Logic: If no template matched, and it's LETHAL, use dynamic destruction
-            if not template and hp_status == HpStatus.LETHAL:
-                template = self._get_lethal_template(raw_event)
+        # === L4: AV 调度 ===
+        action_event, reaction_event = self._av_dispatcher.dispatch(
+            raw_event,
+            action_text,
+            reaction_text,
+            channel,
+            action_anim_id=getattr(action_bone, 'anim_id', None) if action_bone else None,
+            reaction_anim_id=getattr(reaction_bone, 'anim_id', None) if reaction_bone else None,
+            vfx_ids=getattr(reaction_bone, 'vfx_ids', []) if reaction_bone else [],
+            sfx_ids=getattr(reaction_bone, 'sfx_ids', []) if reaction_bone else [],
+            hit_location=hit_part,
+            action_template_id=getattr(action_bone, 'bone_id', None) if action_bone else None,
+            reaction_template_id=getattr(reaction_bone, 'bone_id', None) if reaction_bone else None,
+        )
 
-        if not template:
-            # Should not happen if T3 fallback exists
-            # Create a dummy emergency fallback
-            return self._create_emergency_fallback(raw_event)
+        return [action_event, reaction_event]
 
-        # 4. Construct Presentation Events (Action + Reaction)
-        action_event = self._create_action_event(raw_event, template)
-        reaction_event = self._create_reaction_event(raw_event, template)
+    def _handle_scripted_event(self, raw_event: RawAttackEvent, tmpl: 'PresentationTemplate',
+                               channel: Channel) -> List[PresentationAttackEvent]:
+        """
+        处理T0脚本强制模板事件。
+
+        T0模板通常是特殊剧情事件，不遵循标准的竞标流程。
+        """
+        from .template import PresentationTemplate
+
+        # 使用模板中的文本和视觉效果
+        action_text = tmpl.content.action_text.format(
+            attacker=raw_event.attacker_name,
+            defender=raw_event.defender_name,
+            weapon=raw_event.weapon_name
+        )
+        reaction_text = tmpl.content.reaction_text.format(
+            attacker=raw_event.attacker_name,
+            defender=raw_event.defender_name,
+            weapon=raw_event.weapon_name
+        )
+
+        # 使用AVDispatcher生成事件，但优先使用模板中的视觉设置
+        action_event, reaction_event = self._av_dispatcher.dispatch(
+            raw_event,
+            action_text,
+            reaction_text,
+            channel,
+            action_anim_id=tmpl.visuals.anim_id,
+            reaction_anim_id=tmpl.visuals.anim_id,
+            vfx_ids=tmpl.visuals.vfx_ids,
+            sfx_ids=tmpl.visuals.sfx_ids,
+            hit_location=None,
+            action_template_id=tmpl.id,
+            reaction_template_id=tmpl.id,
+        )
 
         return [action_event, reaction_event]
 
     def advance_turn(self):
-        """
-        Advance the state of internal components (e.g. cooldowns) at the end of a turn/round.
-        """
-        self.selector.tick_cooldowns()
-
-    def _create_action_event(self, raw: RawAttackEvent, tmpl: PresentationTemplate) -> PresentationAttackEvent:
-        text = tmpl.content.action_text.format(
-            attacker=raw.attacker_name,
-            defender=raw.defender_name,
-            weapon=raw.weapon_name
-        )
-        
-        # Dynamic Camera Logic
-        cam_id = tmpl.visuals.cam_id or "cam_default"
-        if cam_id == "cam_default":
-            # Heuristics for better camera
-            if raw.distance > 800:
-                cam_id = "cam_long_shot"
-            elif raw.distance < 100:
-                cam_id = "cam_close_up"
-            
-            if raw.attack_result == "CRIT":
-                cam_id = "cam_dramatic_zoom"
-
-        return PresentationAttackEvent(
-            event_type="ACTION",
-            round_number=raw.round_number,
-            timestamp=0.0,
-            text=text,
-            tier=tmpl.tier,
-            anim_id=tmpl.visuals.anim_id or "default_attack",
-            camera_cam=cam_id,
-            vfx_ids=tmpl.visuals.vfx_ids or [],
-            sfx_ids=tmpl.visuals.sfx_ids or [],
-            template_id=tmpl.id,
-            raw_event=raw,
-            attacker_name=raw.attacker_name,
-            defender_name=raw.defender_name,
-            weapon_name=raw.weapon_name,
-            attack_result=raw.attack_result
-        )
-
-    def _create_reaction_event(self, raw: RawAttackEvent, tmpl: PresentationTemplate) -> PresentationAttackEvent:
-        text = tmpl.content.reaction_text.format(
-            attacker=raw.attacker_name,
-            defender=raw.defender_name,
-            weapon=raw.weapon_name
-        )
-        
-        # Dynamic Camera Logic for Reaction
-        cam_id = tmpl.visuals.cam_id or "cam_default"
-        if cam_id == "cam_default":
-            if raw.attack_result in ["HIT", "CRIT"]:
-                if raw.damage > 500: # Threshold for "big hit"
-                    cam_id = "cam_shake_heavy"
-                else:
-                    cam_id = "cam_shake_light"
-            elif raw.attack_result == "DODGE":
-                cam_id = "cam_tracking_evade"
-        
-        return PresentationAttackEvent(
-            event_type="REACTION",
-            round_number=raw.round_number,
-            timestamp=1.5, # Delayed start
-            text=text,
-            tier=tmpl.tier,
-            anim_id=tmpl.visuals.anim_id or "default_anim",
-            camera_cam=cam_id,
-            vfx_ids=tmpl.visuals.vfx_ids or [],
-            sfx_ids=tmpl.visuals.sfx_ids or [],
-            damage_display=raw.damage if raw.attack_result in ["HIT", "CRIT"] else 0,
-            hit_location="body", # Placeholder
-            template_id=tmpl.id,
-            raw_event=raw,
-            attacker_name=raw.attacker_name,
-            defender_name=raw.defender_name,
-            weapon_name=raw.weapon_name,
-            attack_result=raw.attack_result
-        )
-
-    def _get_lethal_template(self, raw: RawAttackEvent) -> PresentationTemplate:
-        """
-        Generate a lethal destruction template when the defender is destroyed.
-        Randomly selects a hit location and dramatic text.
-        """
-        location = random.choice(LETHAL_LOCATIONS)
-        action_text = random.choice(LETHAL_ACTION_TEMPLATES).format(
-            attacker=raw.attacker_name,
-            defender=raw.defender_name,
-            weapon=raw.weapon_name,
-            location=location
-        )
-        reaction_text = random.choice(LETHAL_REACTION_TEMPLATES).format(
-            attacker=raw.attacker_name,
-            defender=raw.defender_name,
-            weapon=raw.weapon_name,
-            location=location
-        )
-
-        return PresentationTemplate(
-            id="t0_lethal_dynamic",
-            tier=TemplateTier.T0_LETHAL,
-            conditions=TemplateConditions(),  # Empty conditions for dynamic templates
-            content=TemplateContent(
-                action_text=action_text,
-                reaction_text=reaction_text
-            ),
-            visuals=TemplateVisuals(
-                anim_id="lethal_explosion",
-                cam_id="cam_dramatic_zoom",
-                vfx_ids=["sfx_explosion_massive", "sfx_debris"],
-                sfx_ids=["sfx_explosion_cinematic", "sfx_explosion_far"]
-            )
-        )
-
-    def _create_emergency_fallback(self, raw: RawAttackEvent) -> List[PresentationAttackEvent]:
-        """Last resort fallback if no template matches"""
-        return [
-            PresentationAttackEvent(
-                event_type="ACTION",
-                round_number=raw.round_number,
-                text=f"{raw.attacker_name} attacks!",
-                raw_event=raw
-            ),
-            PresentationAttackEvent(
-                event_type="REACTION",
-                round_number=raw.round_number,
-                text=f"{raw.defender_name} takes {raw.damage} damage.",
-                raw_event=raw
-            )
-        ]
+        """回合推进 - 更新冷却等状态"""
+        if self._bidder:
+            self._bidder.tick_cooldowns()

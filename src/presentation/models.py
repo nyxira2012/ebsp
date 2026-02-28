@@ -62,6 +62,10 @@ class RawAttackEvent:
     defender_will_after: int = 0   # Defender's Will after attack
     defender_max_hp: int = 0       # Defender's Max HP (for damage grading)
 
+    # CPS v5.0 新增字段 - 用于四层导演金字塔架构
+    is_lethal: bool = False        # 预计算致死标志 (引擎层判定)
+    physics_class: str = ""        # 物理类: Energy/Kinetic/Blade/Impact
+
 @dataclass
 class PresentationAttackEvent:
     """

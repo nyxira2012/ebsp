@@ -303,6 +303,7 @@ class BattleSimulator:
         self.presentation_timeline: list[PresentationRoundEvent] = []
 
         if self.enable_presentation:
+            # v5.0: 新架构是唯一路径，不再需要 use_new_pipeline 参数
             self.mapper = EventMapper()
             # Try loading templates from config
             try:
@@ -310,6 +311,8 @@ class BattleSimulator:
                 config_path = os.path.join("config", "presentation_templates.yaml")
                 if os.path.exists(config_path):
                     self.mapper.registry.load_from_config(config_path)
+                    # Re-initialize bidder after loading templates
+                    self.mapper._initialize_bidder()
             except Exception as e:
                 print(f"Warning: Failed to load presentation templates: {e}")
 
@@ -426,7 +429,8 @@ class BattleSimulator:
         # 检查后攻方是否存活
         if not second_mover.is_alive():
             if self.verbose:
-                print(f"{second_mover.name} 被击破!")
+                print()
+                print(f"💀 {second_mover.name} 被击破！HP归零，战斗结束")
             return
 
         if self.verbose:
@@ -438,7 +442,8 @@ class BattleSimulator:
         # 检查先攻方是否存活
         if not first_mover.is_alive():
             if self.verbose:
-                print(f"{first_mover.name} 被击破!")
+                print()
+                print(f"💀 {first_mover.name} 被击破！HP归零，战斗结束")
             return
 
         # 5. 回合结束 - 气力基础增长
@@ -594,21 +599,25 @@ class BattleSimulator:
         if ctx.current_defender_will_delta != 0:
             defender.modify_will(ctx.current_defender_will_delta)
 
-        # 7. 输出结果
+        # 7. 输出结果 - 明确显示判定结果和死亡信息
         RESULT_DISPLAY = {
-            AttackResult.MISS: "✗ 未命中",
-            AttackResult.DODGE: "↘ 躲闪",
-            AttackResult.PARRY: "⚔ 招架",
-            AttackResult.BLOCK: "▌ 格挡",
-            AttackResult.HIT: "✓ 命中",
-            AttackResult.CRIT: "💥 暴击",
+            AttackResult.MISS: ("✗", "未命中"),
+            AttackResult.DODGE: ("✗", "躲闪"),
+            AttackResult.PARRY: ("▌", "招架"),
+            AttackResult.BLOCK: ("▌", "格挡"),
+            AttackResult.HIT: ("✓", "命中"),
+            AttackResult.CRIT: ("★", "暴击"),
         }
 
         if self.verbose:
-            print(f"   {RESULT_DISPLAY.get(result, '?')}! "
-                  f"Roll点: {ctx.roll} | 伤害: {damage} | "
-                  f"气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) "
-                  f"{defender.name}({ctx.current_defender_will_delta:+d})")
+            symbol, result_name = RESULT_DISPLAY.get(result, ("?", "未知"))
+            hp_info = ""
+            if result not in (AttackResult.MISS, AttackResult.DODGE):
+                hp_info = f" | 剩余: {defender.current_hp}/{defender.final_max_hp}"
+
+            print(f"   {symbol} {result_name}! Roll点: {ctx.roll:.2f} | 伤害: {damage}{hp_info}")
+            if ctx.current_attacker_will_delta != 0 or ctx.current_defender_will_delta != 0:
+                print(f"   气力变化: {attacker.name}({ctx.current_attacker_will_delta:+d}) {defender.name}({ctx.current_defender_will_delta:+d})")
 
         # 8. 结算钩子
         if damage > 0:
@@ -623,6 +632,10 @@ class BattleSimulator:
         attack_events = self._event_manager.end_attack()
         triggered_skill_ids = [e.skill_id for e in attack_events]
 
+        # 从 triggered_skill_ids 中提取精神指令
+        SPIRIT_COMMAND_IDS = {"hot_blood", "soul", "flash", "trust", "hope", "focus", "effort"}
+        spirit_commands = [sid for sid in triggered_skill_ids if sid in SPIRIT_COMMAND_IDS]
+
         raw_event = AttackEventBuilder.build(
             attacker=attacker,
             defender=defender,
@@ -631,6 +644,7 @@ class BattleSimulator:
             result=result,
             damage=damage,
             triggered_skill_ids=triggered_skill_ids,
+            spirit_commands=spirit_commands,
             is_first=is_first,
             round_number=self.round_number,
             en_cost=int(weapon_cost),

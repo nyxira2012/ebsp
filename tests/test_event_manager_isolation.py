@@ -377,6 +377,7 @@ class TestAttackEventBuilder:
             result=AttackResult.HIT,
             damage=1200,
             triggered_skill_ids=["skill_1", "skill_2"],
+            spirit_commands=[],
             is_first=True,
             round_number=5,
             en_cost=25
@@ -426,6 +427,7 @@ class TestAttackEventBuilder:
             result=AttackResult.CRIT,
             damage=2500,
             triggered_skill_ids=[],
+            spirit_commands=[],
             is_first=False,
             round_number=3,
             en_cost=10
@@ -474,6 +476,7 @@ class TestAttackEventBuilder:
             result=AttackResult.CRIT,
             damage=3000,
             triggered_skill_ids=["critical_mastery"],
+            spirit_commands=[],
             is_first=True,
             round_number=1,
             en_cost=30
@@ -524,6 +527,7 @@ class TestAttackEventBuilder:
             result=AttackResult.HIT,
             damage=800,
             triggered_skill_ids=[],
+            spirit_commands=[],
             is_first=False,
             round_number=2,
             en_cost=20
@@ -575,6 +579,7 @@ class TestAttackEventBuilder:
             result=AttackResult.HIT,
             damage=500,
             triggered_skill_ids=[],
+            spirit_commands=[],
             is_first=True,
             round_number=1,
             en_cost=10

@@ -69,14 +69,14 @@
     },
     {
         "id": "wpn_bazooka",
-        "name": "光束火箭炮",
+        "name": "光束炮",
         "type": "WEAPON",
         "weapon_type": "HEAVY",
         "weapon_tags": [
             "beam",
             "massive"
         ],
-        "power": 4000,
+        "power": 1750,
         "en_cost": 8,
         "range": {
             "min": 3000,
@@ -94,7 +94,7 @@
             "hammer",
             "heavy"
         ],
-        "power": 3500,
+        "power": 1900,
         "en_cost": 15,
         "range": {
             "min": 0,
@@ -112,7 +112,7 @@
             "funnel",
             "beam"
         ],
-        "power": 2500,
+        "power": 1700,
         "en_cost": 25,
         "range": {
             "min": 2000,
@@ -131,7 +131,7 @@
             "massive",
             "beam"
         ],
-        "power": 6000,
+        "power": 1950,
         "en_cost": 100,
         "range": {
             "min": 0,
@@ -148,7 +148,7 @@
             "projectile_single",
             "long_range"
         ],
-        "power": 3800,
+        "power": 1850,
         "en_cost": 12,
         "range": {
             "min": 3000,

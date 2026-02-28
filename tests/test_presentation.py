@@ -142,7 +142,7 @@ def test_integration_scenarios():
     mapper = EventMapper(registry)
     renderer = TextRenderer()
 
-    print(f"[OK] 已加载 {len(registry._templates)} 个演出模板")
+    print(f"[OK] 已加载 {len(registry.action_bones)} 个 ActionBone, {len(registry.reaction_bones)} 个 ReactionBone")
     print()
 
     # 测试场景1：T1 精彩闪避

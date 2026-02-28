@@ -1,25 +1,35 @@
 from enum import Enum
 
+class Channel(str, Enum):
+    """
+    演出频道 - 基于结局前置路由 (Outcome-First Routing)
+    这是 L1 绝对律令层的核心输出，决定后续所有层的检索范围。
+    """
+    FATAL = "FATAL"       # 致死
+    EVADE = "EVADE"       # 闪避/招架/未命中
+    IMPACT = "IMPACT"     # 命中/格挡/暴击
+    SPECIAL = "SPECIAL"   # 支援/反击
+
 class VisualIntent(str, Enum):
     """
     Standard Visual Intent - Describes the physical nature of the attack
     Used to select the appropriate reaction animation and text.
     """
     # Melee
-    SLASH_LIGHT = "INTENT_SLASH_LIGHT"      # Fast slash (Beam Saber, Knife)
-    SLASH_HEAVY = "INTENT_SLASH_HEAVY"      # Heavy slash (Giant Sword, Axe)
-    STRIKE_BLUNT = "INTENT_STRIKE_BLUNT"    # Blunt strike (Punch, Kick, Hammer)
-    
+    SLASH_LIGHT = "SLASH_LIGHT"      # Fast slash (Beam Saber, Knife)
+    SLASH_HEAVY = "SLASH_HEAVY"      # Heavy slash (Giant Sword, Axe)
+    STRIKE_BLUNT = "STRIKE_BLUNT"    # Blunt strike (Punch, Kick, Hammer)
+
     # Shooting
-    BEAM_INSTANT = "INTENT_BEAM_INSTANT"    # Instant beam (Beam Rifle)
-    BEAM_MASSIVE = "INTENT_BEAM_MASSIVE"    # Massive beam (Mega Particle Cannon)
-    PROJECTILE_SINGLE = "INTENT_PROJECTILE_SINGLE"  # Single projectile (Bazooka, Sniper)
-    PROJECTILE_RAIN = "INTENT_PROJECTILE_RAIN"      # Projectile rain (Missiles, Vulcan)
-    
+    BEAM_INSTANT = "BEAM_INSTANT"    # Instant beam (Beam Rifle)
+    BEAM_MASSIVE = "BEAM_MASSIVE"    # Massive beam (Mega Particle Cannon)
+    PROJECTILE_SINGLE = "PROJECTILE_SINGLE"  # Single projectile (Bazooka, Sniper)
+    PROJECTILE_RAIN = "PROJECTILE_RAIN"      # Projectile rain (Missiles, Vulcan)
+
     # Special
-    IMPACT_MASSIVE = "INTENT_IMPACT_MASSIVE"  # Massive impact (Collision)
-    PSYCHO_WAVE = "INTENT_PSYCHO_WAVE"        # Psycho wave (Funnel, Mind attack)
-    AOE_BURST = "INTENT_AOE_BURST"            # Area burst (Map weapon)
+    IMPACT_MASSIVE = "IMPACT_MASSIVE"  # Massive impact (Collision)
+    PSYCHO_WAVE = "PSYCHO_WAVE"        # Psycho wave (Funnel, Mind attack)
+    AOE_BURST = "AOE_BURST"            # Area burst (Map weapon)
 
 class PresentationTag(str, Enum):
     """
