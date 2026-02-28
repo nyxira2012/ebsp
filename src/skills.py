@@ -8,6 +8,7 @@ from .models import Mecha, BattleContext, AttackResult, WeaponType, TriggerEvent
 from .skill_system.processor import EffectProcessor
 from .skill_system.effect_factory import EffectFactory
 from .skill_system.event_manager import EventManager
+from .config import Config
 
 # Hook 回调函数签名: (当前值, 上下文) -> 修改后的值
 HookCallback: TypeAlias = Any
@@ -127,7 +128,7 @@ def cb_instinct_dodge(val, ctx, owner):
 
     if val == AttackResult.HIT:
         triggered = random.random() < 0.3
-        EventManager.publish_event(TriggerEvent(
+        ctx.publish_event(TriggerEvent(
             skill_id="spirit_instinct",
             owner=owner,
             hook_name="OVERRIDE_RESULT",
@@ -256,13 +257,15 @@ class EffectManager:
                 # 对于 spirit_focus 会生成 spirit_focus_hit, spirit_focus_dodge
                 if existing.id == new_eff.id:
                     existing.duration = max(existing.duration, duration)
-                    print(f"   [Update] {target.name} 的 [{new_eff.id}] 持续时间刷新为 {existing.duration}")
+                    if Config.VERBOSE_EFFECTS:
+                        print(f"   [Update] {target.name} 的 [{new_eff.id}] 持续时间刷新为 {existing.duration}")
                     found = True
                     break
-            
+
             if not found:
                 target.effects.append(new_eff)
-                print(f"   [Added] {target.name} 获得了 [{new_eff.id}] (持续 {duration} 回合)")
+                if Config.VERBOSE_EFFECTS:
+                    print(f"   [Added] {target.name} 获得了 [{new_eff.id}] (持续 {duration} 回合)")
 
     @staticmethod
     def tick_effects(target: Mecha) -> None:
@@ -287,10 +290,11 @@ class EffectManager:
             # 或者我们在使用时检查 duration > 0?
             # 通常 tick 是回合结束做。如果减为0，则移除。
             
-            if effect.duration != 0: 
+            if effect.duration != 0:
                 active_effects.append(effect)
             else:
-                print(f"   [Expired] {target.name} 的 [{effect.id}] 效果结束了")
+                if Config.VERBOSE_EFFECTS:
+                    print(f"   [Expired] {target.name} 的 [{effect.id}] 效果结束了")
         
         target.effects = active_effects
 
@@ -307,8 +311,9 @@ class TraitManager:
         """
         if not mecha.skills:
             return
-            
-        print(f"   [System] 为 {mecha.name} 初始化特性效果...")
+
+        if Config.VERBOSE_EFFECTS:
+            print(f"   [System] 为 {mecha.name} 初始化特性效果...")
         
         # 避免重复初始化
         existing_trait_ids = {e.id for e in mecha.effects}
@@ -320,14 +325,16 @@ class TraitManager:
             new_effects = EffectFactory.create_trait_effects(trait_id)
             
             if not new_effects:
-                print(f"      [WARNING] 特性 [{trait_id}] 未定义或无动态效果")
+                if Config.VERBOSE_EFFECTS:
+                    print(f"      [WARNING] 特性 [{trait_id}] 未定义或无动态效果")
                 continue
 
             for eff in new_effects:
                 # 检查是否已存在同名效果 (避免多次 apply)
                 if eff.id not in existing_trait_ids:
                     mecha.effects.append(eff)
-                    print(f"      - 激活永久特性: {eff.name} ({eff.id})")
+                    if Config.VERBOSE_EFFECTS:
+                        print(f"      - 激活永久特性: {eff.name} ({eff.id})")
 
 
 # ============================================================================

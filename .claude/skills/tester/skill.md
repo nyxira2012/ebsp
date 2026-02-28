@@ -25,17 +25,17 @@ description: 把项目代码进行测试，修正。在用户需要测试项目�
 - **Mac/Linux**: `pytest`
 - **Windows**: `pytest`
 
-### 2.2 只重测失败的用例
+### 2.1.1 只重测失败的用例
 如果出现失败，重新运行失败的测试：
 - **Mac/Linux**: `pytest --lf -v --tb=long`
 - **Windows**: `pytest --lf -v --tb=long`
 
-### 2.3 详细模式
+### 2.1.2 详细模式
 需要更详细的输出或进入调试：
 - **Mac/Linux**: `pytest -v --tb=long -s`
 - **Windows**: `pytest -v --tb=long -s`
 
-### 2.4 测试覆盖率
+### 2.2 测试覆盖率
 检查测试覆盖率，只在终端显示结果：
 - **Mac/Linux**: `pytest --cov=src --cov-report=term-missing`
 - **Windows**: `pytest --cov=src --cov-report=term-missing`
@@ -49,6 +49,10 @@ description: 把项目代码进行测试，修正。在用户需要测试项目�
 ### 3.2 攻击表模拟器
 - **Mac/Linux**: `python3 scripts/sim/sim_attack_table.py`
 - **Windows**: `python scripts\sim\sim_attack_table.py`
+
+### 3.3 战斗文本模拟
+- **Mac/Linux**: `python3 scripts/sim/sim_combat_text.py`
+- **Windows**: `python scripts\sim\sim_combat_text.py`
 
 ## 第四步：问题修复原则
 

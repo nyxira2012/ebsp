@@ -47,6 +47,7 @@ class TemplateTier(str, Enum):
     Template Priority Tiers (The T-Hierarchy)
     """
     T0_SCRIPTED = "T0_SCRIPTED"     # Scripted/Story events (Highest)
+    T0_LETHAL = "T0_LETHAL"         # Lethal damage (special priority)
     T1_HIGHLIGHT = "T1_HIGHLIGHT"   # Skill/Character highlights
     T2_TACTICAL = "T2_TACTICAL"     # Weapon/Physics interactions
     T3_FALLBACK = "T3_FALLBACK"     # Generic fallback (Lowest)

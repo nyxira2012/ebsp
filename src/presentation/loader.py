@@ -62,7 +62,8 @@ class TemplateLoader:
             result=cond_data.get('result'),
             weapon_type=cond_data.get('weapon_type'),
             required_tags=cond_data.get('tags', []),
-            skill_id=cond_data.get('skill_id')
+            skill_id=cond_data.get('skill_id'),
+            hp_status=cond_data.get('hp_status')
         )
 
         # Parse Content

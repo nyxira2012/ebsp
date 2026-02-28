@@ -24,7 +24,6 @@ class TemplateRegistry:
         loaded_templates = TemplateLoader.load_from_file(config_path)
         for tmpl in loaded_templates:
             self.register(tmpl)
-        print(f"[INFO] Loaded {len(loaded_templates)} templates from {config_path}")
 
     def register(self, template: PresentationTemplate):
         self._templates[template.id] = template

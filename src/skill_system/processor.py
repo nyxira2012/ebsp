@@ -108,7 +108,7 @@ class EffectProcessor:
 
                 # 概率判定
                 if effect.trigger_chance < 1.0 and random.random() >= effect.trigger_chance:
-                    EventManager.publish_event(TriggerEvent(
+                    context.publish_event(TriggerEvent(
                         skill_id=effect.id,
                         owner=owner,
                         hook_name=hook_name,
@@ -155,7 +155,7 @@ class EffectProcessor:
                 if is_triggered:
                     current_value = new_value
 
-                    EventManager.publish_event(TriggerEvent(
+                    context.publish_event(TriggerEvent(
                         skill_id=effect.id,
                         owner=owner,
                         hook_name=hook_name,
@@ -179,7 +179,7 @@ class EffectProcessor:
                         effect.charges -= 1
                         if effect.charges == 0:
                             effect.duration = 0
-                            EventManager.publish_event(TriggerEvent(
+                            context.publish_event(TriggerEvent(
                                 skill_id=effect.id,
                                 owner=owner,
                                 hook_name=hook_name,

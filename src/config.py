@@ -62,3 +62,6 @@ class Config:
     
     # ========== 精准削减上限 ==========
     PRECISION_REDUCTION_CAP = 0.8           # 精准最多削减 80% 防御概率
+
+    # ========== 日志控制 ==========
+    VERBOSE_EFFECTS = False                  # 是否输出效果系统日志 (Added/Expired/System等)

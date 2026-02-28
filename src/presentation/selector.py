@@ -12,51 +12,54 @@ class TemplateSelector:
     """
     def __init__(self, registry: TemplateRegistry):
         self.registry = registry
-        self._cooldowns: dict[str, int] = {} # template_id -> rounds remaining
-        self._demotion_weights: dict[str, int] = {} # template_id -> transient score penalty
+        # Bug Fix #1: Use (template_id, entity_id) as keys to scope cooldowns per entity
+        self._cooldowns: dict[tuple[str, str], int] = {} 
+        self._demotion_weights: dict[tuple[str, str], int] = {} 
 
     def select_template(self,
                         intent: VisualIntent,
-                        raw_event: RawAttackEvent) -> Optional[PresentationTemplate]:
+                        raw_event: RawAttackEvent,
+                        hp_status: Optional[str] = None) -> Optional[PresentationTemplate]:
         """
         Main selection logic.
-        Note: T0 (Scripted) is handled exclusively by ScriptedPresentationManager
-        in EventMapper before this selector is called. This method only handles T1->T2->T3.
         """
-        # 1. Gather candidates from T1/T2/T3 only (T0 is handled upstream)
-        candidates = self._gather_candidates(intent, raw_event)
+        # 1. Gather candidates from T1/T2/T3 only
+        candidates = self._gather_candidates(intent, raw_event, hp_status)
 
         # 2. Hierarchy Check (T1 -> T2 -> T3)
-        # T0 is intentionally skipped here; it is handled by ScriptedPresentationManager.
-
-        # T1: Highlight (Weighted Bidding)
+        winner = None
         if candidates[TemplateTier.T1_HIGHLIGHT]:
-            return self._pick_t1(candidates[TemplateTier.T1_HIGHLIGHT])
+            winner = self._pick_t1(candidates[TemplateTier.T1_HIGHLIGHT], raw_event)
+        elif candidates[TemplateTier.T2_TACTICAL]:
+            winner = self._pick_t2(candidates[TemplateTier.T2_TACTICAL])
+        elif candidates[TemplateTier.T3_FALLBACK]:
+            winner = self._pick_t3(candidates[TemplateTier.T3_FALLBACK])
 
-        # T2: Tactical (First Match/Random)
-        if candidates[TemplateTier.T2_TACTICAL]:
-            return self._pick_t2(candidates[TemplateTier.T2_TACTICAL])
+        if winner:
+            self._record_usage(winner, raw_event)
 
-        # T3: Fallback
-        if candidates[TemplateTier.T3_FALLBACK]:
-            return self._pick_t3(candidates[TemplateTier.T3_FALLBACK])
+        return winner
 
-        return None
+    def _get_target_id(self, tmpl: PresentationTemplate, event: RawAttackEvent) -> str:
+        """
+        Determines the entity responsible for this presentation template.
+        - Dodge/Parry/Block templates are scoped to the Defender.
+        - All other templates (usually attacks) are scoped to the Attacker.
+        """
+        if tmpl.conditions.result in ("DODGE", "PARRY", "BLOCK"):
+            return event.defender_id
+        return event.attacker_id
 
-    def _gather_candidates(self, intent: VisualIntent, event: RawAttackEvent) -> dict[TemplateTier, List[PresentationTemplate]]:
-        # Bug Fix #4: Skip T0_SCRIPTED tier here.
-        # T0 is exclusively managed by ScriptedPresentationManager in EventMapper.
-        # Allowing T0 templates through the registry would create two competing T0 systems
-        # with undefined priority between them.
+    def _gather_candidates(self, intent: VisualIntent, event: RawAttackEvent, hp_status: Optional[str] = None) -> dict[TemplateTier, List[PresentationTemplate]]:
         HANDLED_TIERS = (TemplateTier.T1_HIGHLIGHT, TemplateTier.T2_TACTICAL, TemplateTier.T3_FALLBACK)
-
         candidates = {tier: [] for tier in TemplateTier}
 
         for tier in HANDLED_TIERS:
             tier_templates = self.registry.get_templates_by_tier(tier)
             for tmpl in tier_templates:
-                # Check cooldown
-                if self._cooldowns.get(tmpl.id, 0) > 0:
+                # Scoped Cooldown Check
+                target_id = self._get_target_id(tmpl, event)
+                if self._cooldowns.get((tmpl.id, target_id), 0) > 0:
                     continue
 
                 if tmpl.conditions.matches(
@@ -64,64 +67,61 @@ class TemplateSelector:
                     result=event.attack_result,
                     weapon_type=event.weapon_type,
                     tags=event.weapon_tags,
-                    skills=event.triggered_skills
+                    skills=event.triggered_skills,
+                    hp_status=hp_status
                 ):
                     candidates[tier].append(tmpl)
         return candidates
 
-    def _pick_t0(self, candidates: List[PresentationTemplate]) -> PresentationTemplate:
-        # T0 is usually unique, return the first one
-        return candidates[0]
-
-    def _pick_t1(self, candidates: List[PresentationTemplate]) -> PresentationTemplate:
-        # Sort by (effective_score) descending
-        # effective_score = base_score - demotion_penalty
+    def _pick_t1(self, candidates: List[PresentationTemplate], event: RawAttackEvent) -> PresentationTemplate:
+        # Sort by effective_score = base_score - demotion_penalty
         
         def calculate_effective_score(tmpl: PresentationTemplate) -> int:
-            penalty = self._demotion_weights.get(tmpl.id, 0)
+            target_id = self._get_target_id(tmpl, event)
+            penalty = self._demotion_weights.get((tmpl.id, target_id), 0)
             return tmpl.priority_score - penalty
 
-        # Sort based on calculated effective score
         candidates.sort(key=calculate_effective_score, reverse=True)
         
         best = candidates[0]
         best_score = calculate_effective_score(best)
         
-        # Check for ties
         ties = [c for c in candidates if calculate_effective_score(c) == best_score]
-        winner = random.choice(ties)
-        
-        # Apply demotion logic
-        # -30 score penalty for next round, accumulating
-        self._demotion_weights[winner.id] = self._demotion_weights.get(winner.id, 0) + 30
-        
-        # Also apply 2 round hard cooldown as per original design default
-        # or we rely purely on weighting? The doc mentions "下回合其权重临时 -30"
-        # Let's keep cooldown separate if defined in template
-        if winner.cooldown > 0:
-            self._cooldowns[winner.id] = winner.cooldown
-        
-        return winner
+        return random.choice(ties)
 
     def _pick_t2(self, candidates: List[PresentationTemplate]) -> PresentationTemplate:
-        # Random for variety
         return random.choice(candidates)
 
     def _pick_t3(self, candidates: List[PresentationTemplate]) -> PresentationTemplate:
-        # Random for variety
         return random.choice(candidates)
 
+    def _record_usage(self, template: PresentationTemplate, event: RawAttackEvent):
+        """Record usage of a template to apply cooldowns and demotions."""
+        target_id = self._get_target_id(template, event)
+        key = (template.id, target_id)
+
+        # 1. Apply Cooldown if specified
+        if template.cooldown > 0:
+            self._cooldowns[key] = template.cooldown
+        else:
+            # Default minimal cooldown to avoid back-to-back repetition for same entity
+            self._cooldowns[key] = 1
+
+        # 2. Apply Demotion Weights (primarily for T1 bidding, but safe for all)
+        current_penalty = self._demotion_weights.get(key, 0)
+        self._demotion_weights[key] = min(90, current_penalty + 30)
+
     def tick_cooldowns(self):
-        """Call this at end of round to decrease cooldowns and recover weights"""
+        """Decrease cooldowns and recover weights for all entries"""
         # 1. Cooldowns
-        for tid in list(self._cooldowns.keys()):
-            self._cooldowns[tid] -= 1
-            if self._cooldowns[tid] <= 0:
-                del self._cooldowns[tid]
+        for key in list(self._cooldowns.keys()):
+            self._cooldowns[key] -= 1
+            if self._cooldowns[key] <= 0:
+                del self._cooldowns[key]
                 
         # 2. Demotion Recovery
-        # Decay penalty by 15 per round
-        for tid in list(self._demotion_weights.keys()):
-            self._demotion_weights[tid] = max(0, self._demotion_weights[tid] - 15)
-            if self._demotion_weights[tid] <= 0:
-                del self._demotion_weights[tid]
+        for key in list(self._demotion_weights.keys()):
+            self._demotion_weights[key] = max(0, self._demotion_weights[key] - 15)
+            if self._demotion_weights[key] <= 0:
+                del self._demotion_weights[key]
+

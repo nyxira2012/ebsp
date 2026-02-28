@@ -40,6 +40,14 @@ class RawAttackEvent:
     # Flags
     is_first_attack: bool          # Is this the first attack in the round?
     initiative_holder: str         # Who holds the initiative
+    is_counter: bool = False       # Flag for counter-attack sequences
+    is_support: bool = False       # Flag for support-attack/defense
+    
+    # Spirit Commands (important for T1 Highlighting)
+    spirit_commands: List[str] = field(default_factory=list) # e.g. ["hot_blood", "soul"]
+    
+    # Director Context
+    power_level_gap: int = 0      # 0=Even, 1=Attacker Stronger, -1=Defender Stronger
 
     # Statistics Extension (for StatisticsCollector)
     roll_value: float = 0.0        # Original Roll value for distribution analysis
@@ -52,6 +60,7 @@ class RawAttackEvent:
     defender_hp_after: int = 0     # Defender's HP after attack
     defender_en_after: int = 0     # Defender's EN after attack
     defender_will_after: int = 0   # Defender's Will after attack
+    defender_max_hp: int = 0       # Defender's Max HP (for damage grading)
 
 @dataclass
 class PresentationAttackEvent:

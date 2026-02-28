@@ -12,8 +12,9 @@ class TemplateConditions:
     weapon_type: Optional[str] = None
     required_tags: List[str] = field(default_factory=list)
     skill_id: Optional[str] = None  # For T1 Highlight templates
-    
-    def matches(self, intent: VisualIntent, result: str, weapon_type: str, tags: List[str], skills: List[str]) -> bool:
+    hp_status: Optional[str] = None  # LETHAL, CRITICAL, MODERATE, LIGHT
+
+    def matches(self, intent: VisualIntent, result: str, weapon_type: str, tags: List[str], skills: List[str], hp_status: Optional[str] = None) -> bool:
         if self.intent and self.intent != intent:
             return False
         if self.result and self.result != result:
@@ -26,6 +27,8 @@ class TemplateConditions:
         if self.skill_id:
             if self.skill_id not in skills:
                 return False
+        if self.hp_status and self.hp_status != hp_status:
+            return False
         return True
 
 @dataclass

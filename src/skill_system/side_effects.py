@@ -58,7 +58,7 @@ def _exec_consume_en(data: dict, context: BattleContext, owner: Mecha) -> None:
     val = data.get("val", 0)
     old_en = target.current_en
     target.consume_en(val)
-    EventManager.publish_event(TriggerEvent(
+    context.publish_event(TriggerEvent(
         skill_id="side_effect_consume_en",
         owner=target,
         hook_name="SIDE_EFFECT",
@@ -104,7 +104,7 @@ def _exec_apply_effect(data: dict, context: BattleContext, owner: Mecha) -> None
     new_effects = EffectFactory.create_effect(effect_id, duration=data.get("duration", 1))
     for eff in new_effects:
         target.effects.append(eff)
-        EventManager.publish_event(TriggerEvent(
+        context.publish_event(TriggerEvent(
             skill_id="side_effect_apply_effect",
             owner=target,
             hook_name="SIDE_EFFECT",

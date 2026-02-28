@@ -372,6 +372,24 @@ class BattleContext:
     hook_stack: List[str] = field(default_factory=list)
     cached_results: Dict[str, Any] = field(default_factory=dict)
 
+    # 当前战斗的事件管理器（可选，由 BattleSimulator 注入）
+    # 技能回调应优先通过 ctx.publish_event() 发布事件，以确保路由到正确的战斗实例，
+    # 而不是使用全局默认 EventManager。
+    event_manager: Optional[Any] = field(default=None, repr=False)
+
+    def publish_event(self, event: Any) -> None:
+        """发布技能触发事件，路由到当前战斗绑定的 EventManager 实例。
+
+        若未绑定实例（例如初始化上下文或测试场景），则回退到全局默认实例。
+        """
+        if self.event_manager is not None:
+            self.event_manager.publish_event(event)
+        else:
+            # Fallback：全局默认实例（向后兼容，单线程场景不受影响）
+            from .skill_system.event_manager import EventManager
+            EventManager._get_default().publish_event(event)
+
+
     # ========================================================================
     # 辅助方法 (Helper Methods)
     # ========================================================================

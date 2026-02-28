@@ -894,7 +894,7 @@ class TestEngineCoverage:
         sim.round_number = 1
 
         # Mock 先手判定，确保 mecha_a 是先手方
-        def mock_initiative(self_calc, a, b, round_num):
+        def mock_initiative(self_calc, a, b, round_num, event_manager=None):
             return a, b, InitiativeReason.PERFORMANCE
 
         # Mock 圆表判定 - 先攻方攻击 miss，后攻方反击击杀先攻方

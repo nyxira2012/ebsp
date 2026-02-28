@@ -1,12 +1,35 @@
 from typing import List, Optional
+import random
 from .models import RawAttackEvent, PresentationAttackEvent
 from .constants import PresentationTag, TemplateTier
 from .intent_extractor import IntentExtractor
 from .registry import TemplateRegistry
 from .selector import TemplateSelector
-from .template import PresentationTemplate
+from .template import PresentationTemplate, TemplateContent, TemplateVisuals, TemplateConditions
+from .helpers import calculate_hp_status, HpStatus
 
 from .scripted_manager import ScriptedPresentationManager
+
+
+# Lethal hit location configurations
+LETHAL_LOCATIONS = [
+    "驾驶舱",   # cockpit
+    "动力炉",   # reactor
+    "头部",     # head
+    "躯干",     # torso
+]
+
+LETHAL_ACTION_TEMPLATES = [
+    "{attacker}的{weapon}精准贯穿了{defender}的{location}！",
+    "{attacker}以{weapon}发动致命一击，直指{defender}的{location}！",
+    "终焉降临！{attacker}的{weapon}粉碎了{defender}的{location}！",
+]
+
+LETHAL_REACTION_TEMPLATES = [
+    "随着{location}被彻底贯穿，{defender}在烈焰中化为燃烧的残骸坠落！",
+    "{defender}的{location}发生剧烈爆炸，机体在连锁爆裂中支离破碎！",
+    "核心机能停止！{defender}的{location}被摧毁，机体化为虚空中燃烧的废铁！",
+]
 
 class EventMapper:
     """
@@ -27,19 +50,28 @@ class EventMapper:
         """
         # 1. Check T0 (Scripted) first
         forced_tmpl = self.scripted_manager.get_forced_template(
-            raw_event.round_number, 
-            raw_event.attacker_id, 
+            raw_event.round_number,
+            raw_event.attacker_id,
             raw_event.defender_id
         )
-        
+
         if forced_tmpl:
             template = forced_tmpl
         else:
+            # 1.5 Calculate HP status (used for matching, but no longer a hard override)
+            hp_status = calculate_hp_status(raw_event.defender_hp_after, raw_event.defender_max_hp, raw_event.damage)
+            
             # 2. Extract Intent
             intent = IntentExtractor.extract_intent(raw_event.weapon_type, raw_event.weapon_tags)
 
             # 3. Select Template via Selector (T1 -> T2 -> T3)
-            template = self.selector.select_template(intent, raw_event)
+            # This now allows T1/T2 to bid for LETHAL status if configured in YAML,
+            # supporting boss-specific death scenes or lethal skills.
+            template = self.selector.select_template(intent, raw_event, hp_status)
+
+            # 4. Fallback Logic: If no template matched, and it's LETHAL, use dynamic destruction
+            if not template and hp_status == HpStatus.LETHAL:
+                template = self._get_lethal_template(raw_event)
 
         if not template:
             # Should not happen if T3 fallback exists
@@ -131,6 +163,41 @@ class EventMapper:
             defender_name=raw.defender_name,
             weapon_name=raw.weapon_name,
             attack_result=raw.attack_result
+        )
+
+    def _get_lethal_template(self, raw: RawAttackEvent) -> PresentationTemplate:
+        """
+        Generate a lethal destruction template when the defender is destroyed.
+        Randomly selects a hit location and dramatic text.
+        """
+        location = random.choice(LETHAL_LOCATIONS)
+        action_text = random.choice(LETHAL_ACTION_TEMPLATES).format(
+            attacker=raw.attacker_name,
+            defender=raw.defender_name,
+            weapon=raw.weapon_name,
+            location=location
+        )
+        reaction_text = random.choice(LETHAL_REACTION_TEMPLATES).format(
+            attacker=raw.attacker_name,
+            defender=raw.defender_name,
+            weapon=raw.weapon_name,
+            location=location
+        )
+
+        return PresentationTemplate(
+            id="t0_lethal_dynamic",
+            tier=TemplateTier.T0_LETHAL,
+            conditions=TemplateConditions(),  # Empty conditions for dynamic templates
+            content=TemplateContent(
+                action_text=action_text,
+                reaction_text=reaction_text
+            ),
+            visuals=TemplateVisuals(
+                anim_id="lethal_explosion",
+                cam_id="cam_dramatic_zoom",
+                vfx_ids=["sfx_explosion_massive", "sfx_debris"],
+                sfx_ids=["sfx_explosion_cinematic", "sfx_explosion_far"]
+            )
         )
 
     def _create_emergency_fallback(self, raw: RawAttackEvent) -> List[PresentationAttackEvent]:
