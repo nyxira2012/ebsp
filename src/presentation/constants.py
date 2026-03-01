@@ -10,47 +10,37 @@ class Channel(str, Enum):
     IMPACT = "IMPACT"     # 命中/格挡/暴击
     SPECIAL = "SPECIAL"   # 支援/反击
 
-class VisualIntent(str, Enum):
+class MotionStyle(str, Enum):
     """
-    Standard Visual Intent - Describes the physical nature of the attack
-    Used to select the appropriate reaction animation and text.
+    攻击动作风格 (Action Style) - 描述驾驶员"怎么打"。
+    用于驱动 ActionBone 竞标。
     """
     # Melee
-    SLASH_LIGHT = "SLASH_LIGHT"      # Fast slash (Beam Saber, Knife)
-    SLASH_HEAVY = "SLASH_HEAVY"      # Heavy slash (Giant Sword, Axe)
-    STRIKE_BLUNT = "STRIKE_BLUNT"    # Blunt strike (Punch, Kick, Hammer)
+    SLASH_LIGHT = "SLASH_LIGHT"      # 快速斩击 (光束军刀, 军刀)
+    SLASH_HEAVY = "SLASH_HEAVY"      # 重型斩击 (大剑, 斧)
+    STRIKE_BLUNT = "STRIKE_BLUNT"    # 钝器打击 (拳, 脚, 锤)
 
     # Shooting
-    BEAM_INSTANT = "BEAM_INSTANT"    # Instant beam (Beam Rifle)
-    BEAM_MASSIVE = "BEAM_MASSIVE"    # Massive beam (Mega Particle Cannon)
-    PROJECTILE_SINGLE = "PROJECTILE_SINGLE"  # Single projectile (Bazooka, Sniper)
-    PROJECTILE_RAIN = "PROJECTILE_RAIN"      # Projectile rain (Missiles, Vulcan)
+    SHOOT_INSTANT = "SHOOT_INSTANT"    # 瞬间射击 (步枪)
+    SHOOT_MASSIVE = "SHOOT_MASSIVE"    # 巨炮轰击 (地图炮/高能炮)
+    PROJ_SINGLE = "PROJ_SINGLE"        # 单发点射 (火箭筒)
+    PROJ_RAIN = "PROJ_RAIN"            # 弹幕覆盖 (导弹, 火神炮)
 
     # Special
-    IMPACT_MASSIVE = "IMPACT_MASSIVE"  # Massive impact (Collision)
-    PSYCHO_WAVE = "PSYCHO_WAVE"        # Psycho wave (Funnel, Mind attack)
-    AOE_BURST = "AOE_BURST"            # Area burst (Map weapon)
+    IMPACT_RAM = "IMPACT_RAM"          # 全速撞击
+    PSYCHO_WAVE = "PSYCHO_WAVE"        # 精神波动
+    AOE_BURST = "AOE_BURST"            # 区域爆发
 
-class PresentationTag(str, Enum):
+class DamageMaterial(str, Enum):
     """
-    General Presentation Tags - Used for conditional logic in templates
+    伤害物理材质 (Impact Material) - 描述物理交互的"本质"。
+    用于驱动 ReactionBone 竞标。
     """
-    # Locations
-    LOC_HEAD = "TAG_LOC_HEAD"
-    LOC_ARM = "TAG_LOC_ARM"
-    LOC_LEG = "TAG_LOC_LEG"
-    LOC_BACKPACK = "TAG_LOC_BACKPACK"
-    
-    # Skills (Generalized)
-    SKILL_NEWTYPE = "TAG_SKILL_NEWTYPE"
-    SKILL_POTENTIAL = "TAG_SKILL_POTENTIAL"
-    SKILL_VALOR = "TAG_SKILL_VALOR"    # Hot Blood / Valor
-    SKILL_SUREHIT = "TAG_SKILL_SUREHIT" # Strike / Sure Hit
-    SKILL_FLASH = "TAG_SKILL_FLASH"    # Alert / Flash
-    
-    # Range
-    RANGE_POINT_BLANK = "TAG_RANGE_ZERO"
-    RANGE_LONG = "TAG_RANGE_LONG"
+    ENERGY = "ENERGY"      # 能量类 (光束, 粒子)
+    KINETIC = "KINETIC"    # 动能类 (实弹, 破片)
+    PHYSICAL = "PHYSICAL"  # 物理类 (金属刃, 撞击)
+    GENERIC = "GENERIC"    # 通用/其他
+
 
 class TemplateTier(str, Enum):
     """

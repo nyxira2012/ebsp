@@ -1,21 +1,21 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
-from .constants import TemplateTier, VisualIntent, Channel
+from typing import List, Optional
+from .constants import TemplateTier, MotionStyle, Channel
 
 @dataclass
 class TemplateConditions:
     """
     Conditions required for a template to be selected.
     """
-    intent: Optional[VisualIntent] = None
+    motion_style: Optional[MotionStyle] = None  # 动作风格（MDDC v5.1）
     result: Optional[str] = None  # MISS, DODGE, HIT, CRIT, BLOCK, PARRY
     weapon_type: Optional[str] = None
     required_tags: List[str] = field(default_factory=list)
     skill_id: Optional[str] = None  # For T1 Highlight templates
     hp_status: Optional[str] = None  # LETHAL, CRITICAL, MODERATE, LIGHT
 
-    def matches(self, intent: VisualIntent, result: str, weapon_type: str, tags: List[str], skills: List[str], hp_status: Optional[str] = None) -> bool:
-        if self.intent and self.intent != intent:
+    def matches(self, motion_style: MotionStyle, result: str, weapon_type: str, tags: List[str], skills: List[str], hp_status: Optional[str] = None) -> bool:
+        if self.motion_style and self.motion_style != motion_style:
             return False
         if self.result and self.result != result:
             return False
@@ -73,15 +73,13 @@ class PresentationTemplate:
 class ActionBone:
     """
     攻击方动作骨架 - 描述"谁、用什么、怎么打"。
-
-    关键原则：ActionBone 只关心攻击方的动作表现，不关心结果。
-    通过 physics_class 与 ReactionBone 做软约束（同族物理才能组合出合理画面）。
+    MDDC v5.1: 主要由 motion_style 驱动。
     """
     bone_id: str                      # 唯一标识
-    intent: VisualIntent              # 视觉意图（如 BEAM_INSTANT, SLASH_HEAVY）
-    physics_class: str                # Energy/Kinetic/Blade/Impact
+    motion_style: str                 # 动作风格（如 SLASH_LIGHT, SHOOT_INSTANT）
     text_fragments: List[str]         # 用于 L3 拼装的多段文本碎片
     anim_id: str                      # 动画资源ID
+    damage_material: str = "ANY"      # 可选：对材质的特定限制（ANY 表示通配）
     tier: TemplateTier = TemplateTier.T2_TACTICAL
     priority_score: int = 0           # 竞标优先级
     cooldown: int = 0                 # 冷却回合数
@@ -92,14 +90,13 @@ class ActionBone:
 class ReactionBone:
     """
     防御方反应骨架 - 描述"频道是什么、物理类是什么、反应如何"。
-
-    关键原则：ReactionBone 只关心防御方的反应表现，通过 channel 做硬约束，
-    通过 physics_class 做软约束。
+    MDDC v5.1: 主要由 damage_material 驱动，可选匹配 motion_style。
     """
     bone_id: str                      # 唯一标识
     channel: Channel                  # 只匹配对应频道 (FATAL/EVADE/IMPACT)
-    physics_class: str                # Energy/Kinetic/Blade/Impact
+    damage_material: str              # 物理材质（ENERGY/KINETIC/PHYSICAL）
     text_fragments: List[str]         # 用于 L3 拼装的多段文本碎片
+    motion_style: str = "ANY"         # 可选：对动作风格的特定限制（如特化"光束斩击"反应）
     vfx_ids: List[str] = field(default_factory=list)  # 视觉特效ID
     sfx_ids: List[str] = field(default_factory=list)  # 音效ID
     tier: TemplateTier = TemplateTier.T2_TACTICAL

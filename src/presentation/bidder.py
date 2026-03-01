@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
-from .constants import Channel, VisualIntent
+from .constants import Channel, MotionStyle, DamageMaterial
 from .template import ActionBone, ReactionBone
 
 logger = logging.getLogger(__name__)
@@ -30,8 +30,8 @@ class DualBidder:
     """
     双轨独立竞标器。
 
-    Action 竞标：过滤 intent 匹配 + cooldown 清零的 ActionBone 列表
-    Reaction 竞标：过滤 channel 匹配 + physics_class 兼容的 ReactionBone 列表
+    Action 竞标：强制匹配 MotionStyle，DamageMaterial 作为加分项
+    Reaction 竞标：强制匹配 DamageMaterial，MotionStyle 作为加分项
 
     两次竞标完全独立，互不影响。
     """
@@ -68,87 +68,144 @@ class DualBidder:
         return action_bone, reaction_bone
 
     def _bid_action(self, event: RawAttackEvent) -> Optional[ActionBone]:
-        """Action 竞标：匹配意图，physics_class 软约束，排除冷却中"""
-        from .intent_extractor import IntentExtractor
+        """Action 竞标：T2 精确匹配 → T3 通用降级"""
+        motion_style = event.motion_style
+        damage_material = event.damage_material
 
-        intent = IntentExtractor.extract_intent(event.weapon_type, event.weapon_tags)
-        physics_class = event.physics_class
-
-        # 首先按 intent 和 cooldown 过滤
+        # 1. T2 精确匹配：动作风格 + 材质
         candidates = [
             bone for bone in self.action_bones
-            if bone.intent == intent
+            if bone.motion_style == motion_style
+            and bone.damage_material == damage_material
+            and self._cooldowns.get(bone.bone_id, 0) <= 0
+            and getattr(bone, 'tier', None) != 'T3_FALLBACK'  # 排除 T3
+        ]
+
+        if candidates:
+            weights = [getattr(bone, 'weight', 1.0) for bone in candidates]
+            return random.choices(candidates, weights=weights, k=1)[0]
+
+        # 2. T2 降级：动作风格 + GENERIC 材质
+        candidates = [
+            bone for bone in self.action_bones
+            if bone.motion_style == motion_style
+            and bone.damage_material == "GENERIC"
+            and self._cooldowns.get(bone.bone_id, 0) <= 0
+            and getattr(bone, 'tier', None) != 'T3_FALLBACK'
+        ]
+
+        if candidates:
+            weights = [getattr(bone, 'weight', 1.0) for bone in candidates]
+            return random.choices(candidates, weights=weights, k=1)[0]
+
+        # 3. T3 FALLBACK：ANY 动作风格 + ANY 材质
+        t3_candidates = [
+            bone for bone in self.action_bones
+            if getattr(bone, 'tier', None) == 'T3_FALLBACK'
             and self._cooldowns.get(bone.bone_id, 0) <= 0
         ]
 
-        if not candidates:
-            logger.warning(f"[Bidder] Action 竞标失败: 无匹配 intent={intent} 的 ActionBone"
-                          f" (总库大小: {len(self.action_bones)})")
-            return None
+        if t3_candidates:
+            weights = [getattr(bone, 'weight', 1.0) for bone in t3_candidates]
+            return random.choices(t3_candidates, weights=weights, k=1)[0]
 
-        # physics_class 软约束：匹配者权重 * 2，不匹配者权重 * 0.3
-        weights = []
-        for bone in candidates:
-            base_weight = getattr(bone, 'weight', 1.0)
-            if bone.physics_class == physics_class:
-                weights.append(base_weight * 2.0)
-            else:
-                weights.append(base_weight * 0.3)
-
-        # 如果没有高权重候选，发出警告
-        if max(weights) < 1.0:
-            logger.warning(f"[Bidder] Action 竞标警告: intent={intent} 匹配但 physics_class={physics_class} 不匹配"
-                          f" (候选: {[b.physics_class for b in candidates]})")
-
-        # 加权随机选择
-        return random.choices(candidates, weights=weights, k=1)[0]
+        # 4. 终极兜底：硬编码 T3 骨架
+        return ActionBone(
+            bone_id="HARDCODED_T3_ACTION",
+            motion_style="ANY",
+            text_fragments=["{attacker}使用{weapon}展开了攻击！"],
+            anim_id="anim_generic_attack",
+            tier="T3_FALLBACK"
+        )
 
     def _bid_reaction(self, event: RawAttackEvent, channel: Channel) -> Optional[ReactionBone]:
-        """Reaction 竞标：匹配频道，physics_class 软约束，排除冷却中"""
-        physics_class = event.physics_class
-        attack_result = event.attack_result
+        """Reaction 竞标：T2 精确匹配 → T3 通用降级"""
+        damage_material = event.damage_material
+        motion_style = event.motion_style
 
-        # 首先按 channel 和 cooldown 过滤
-        candidates = [
+        # 1. 基础过滤：频道 + 精确匹配 attack_result + 冷却（排除 T3）
+        t2_candidates = [
             bone for bone in self.reaction_bones
             if bone.channel == channel
+            and bone.attack_result == event.attack_result  # 精确匹配，无通配
+            and self._cooldowns.get(bone.bone_id, 0) <= 0
+            and getattr(bone, 'tier', None) != 'T3_FALLBACK'
+        ]
+
+        # 2. T2 层：damage_material 匹配
+        material_matches = [
+            bone for bone in t2_candidates
+            if bone.damage_material == damage_material
+        ]
+        if material_matches:
+            # 2.1 优先精确匹配 motion_style
+            motion_exact = [
+                bone for bone in material_matches
+                if bone.motion_style == motion_style
+            ]
+            if motion_exact:
+                return self._weighted_select(motion_exact, motion_style)
+
+            # 2.2 否则选择 ANY 或加权选择
+            return self._weighted_select(material_matches, motion_style)
+
+        # 3. T2 降级：GENERIC 材质
+        generic_matches = [
+            bone for bone in t2_candidates
+            if bone.damage_material == "GENERIC"
+        ]
+        if generic_matches:
+            return self._weighted_select(generic_matches, motion_style)
+
+        # 4. T3 FALLBACK：ANY 材质
+        t3_candidates = [
+            bone for bone in self.reaction_bones
+            if bone.channel == channel
+            and getattr(bone, 'tier', None) == 'T3_FALLBACK'
             and self._cooldowns.get(bone.bone_id, 0) <= 0
         ]
+        if t3_candidates:
+            return self._weighted_select(t3_candidates, motion_style)
 
-        if not candidates:
-            logger.warning(f"[Bidder] Reaction 竞标失败: 无匹配 channel={channel.value} 的 ReactionBone"
-                          f" (总库大小: {len(self.reaction_bones)})")
-            return None
-
-        # 进一步按 attack_result 过滤（如果候选中有指定 attack_result 的模板）
-        result_filtered = [
-            bone for bone in candidates
-            if getattr(bone, 'attack_result', None) == attack_result
-            or getattr(bone, 'attack_result', None) is None
-        ]
-
-        # 如果有匹配 attack_result 的候选，优先使用它们
-        exact_match = [bone for bone in result_filtered if getattr(bone, 'attack_result', None) == attack_result]
-        if exact_match:
-            candidates = exact_match
+        # 5. 终极兜底：根据判定结果返回硬编码 T3 骨架
+        result_texts = {
+            "HIT": ["{defender}被击中了。"],
+            "CRIT": ["{defender}遭受了沉重打击！"],
+            "BLOCK": ["{defender}挡住了攻击。"],
+            "PARRY": ["{defender}招架了攻击。"],
+            "DODGE": ["{defender}巧妙地躲开了。"],
+            "MISS": ["攻击没能命中{defender}。"],
+        }
+        
+        # 致死频道强制覆盖描述
+        if channel == Channel.FATAL:
+            fragments = ["{defender}被彻底摧毁了。"]
         else:
-            candidates = result_filtered
+            fragments = result_texts.get(event.attack_result, ["{defender}受到了影响。"])
 
-        # physics_class 软约束：匹配者权重 * 2，不匹配者权重 * 0.5
+        return ReactionBone(
+            bone_id=f"HARDCODED_T3_REACTION_{event.attack_result}",
+            channel=channel,
+            damage_material="GENERIC",
+            text_fragments=fragments,
+            tier="T3_FALLBACK",
+            attack_result=event.attack_result
+        )
+
+    def _weighted_select(self, candidates: List, motion_style: str) -> Optional:
+        """加权随机选择（基于 motion_style）"""
         weights = []
         for bone in candidates:
-            base_weight = getattr(bone, 'weight', 1.0)
-            if bone.physics_class == physics_class:
-                weights.append(base_weight * 2.0)
-            else:
-                weights.append(base_weight * 0.5)
+            score = getattr(bone, 'weight', 1.0)
 
-        # 如果没有高权重候选，发出警告
-        if max(weights) < 1.0:
-            logger.warning(f"[Bidder] Reaction 竞标警告: channel={channel.value} 匹配但 physics_class={physics_class} 不匹配"
-                          f" (候选: {[b.physics_class for b in candidates]})")
+            # 动作风格加分
+            if bone.motion_style == motion_style:
+                score *= 2.5
+            elif bone.motion_style != "ANY":
+                score *= 0.2
 
-        # 加权随机选择
+            weights.append(score)
+
         return random.choices(candidates, weights=weights, k=1)[0]
 
     def tick_cooldowns(self):

@@ -57,7 +57,8 @@
         "weapon_type": "MELEE",
         "weapon_tags": [
             "heavy",
-            "slash_heavy"
+            "slash_heavy",
+            "energy"
         ],
         "power": 1800,
         "en_cost": 5,

@@ -10,10 +10,14 @@ Event Mapper - 演出系统核心编排器 (CPS v5.0)
 入口：map_attack() - 将 RawAttackEvent 转换为 PresentationAttackEvent 序列
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .registry import TemplateRegistry
+    from .template import PresentationTemplate
 
 from .models import RawAttackEvent, PresentationAttackEvent
-from .constants import PresentationTag, TemplateTier, Channel
+from .constants import Channel
 from .template import ActionBone, ReactionBone
 from .router import OutcomeRouter
 from .bidder import DualBidder

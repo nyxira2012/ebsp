@@ -2,7 +2,7 @@ import yaml
 import os
 from typing import List, Dict, Any, Tuple
 from .template import ActionBone, ReactionBone
-from .constants import TemplateTier, VisualIntent, Channel
+from .constants import TemplateTier, MotionStyle, Channel
 
 class TemplateLoader:
     """
@@ -41,6 +41,15 @@ class TemplateLoader:
                     except Exception as e:
                         print(f"[ERROR] Failed to parse action_bone {item.get('bone_id', 'unknown')}: {e}")
 
+            # 加载 t3_action_bones
+            if 't3_action_bones' in data:
+                for item in data['t3_action_bones']:
+                    try:
+                        bone = TemplateLoader._parse_action_bone(item)
+                        action_bones.append(bone)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to parse t3_action_bone {item.get('bone_id', 'unknown')}: {e}")
+
             # 加载 reaction_bones
             reaction_bones = []
             if 'reaction_bones' in data:
@@ -51,6 +60,15 @@ class TemplateLoader:
                     except Exception as e:
                         print(f"[ERROR] Failed to parse reaction_bone {item.get('bone_id', 'unknown')}: {e}")
 
+            # 加载 t3_reaction_bones
+            if 't3_reaction_bones' in data:
+                for item in data['t3_reaction_bones']:
+                    try:
+                        bone = TemplateLoader._parse_reaction_bone(item)
+                        reaction_bones.append(bone)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to parse t3_reaction_bone {item.get('bone_id', 'unknown')}: {e}")
+
             return action_bones, reaction_bones
 
         except Exception as e:
@@ -60,12 +78,12 @@ class TemplateLoader:
     @staticmethod
     def _parse_action_bone(data: Dict[str, Any]) -> ActionBone:
         """解析 ActionBone"""
-        # Parse intent
-        intent_str = data.get('intent', 'BEAM_INSTANT')
+        # Parse motion_style
+        style_str = data.get('motion_style', 'SHOOT_INSTANT')
         try:
-            intent = VisualIntent[intent_str] if intent_str in VisualIntent.__members__ else VisualIntent(intent_str)
+            motion_style = MotionStyle[style_str] if style_str in MotionStyle.__members__ else MotionStyle(style_str)
         except ValueError:
-            intent = VisualIntent.BEAM_INSTANT
+            motion_style = MotionStyle.SHOOT_INSTANT
 
         # Parse tier
         tier_str = data.get('tier', 'T2_TACTICAL')
@@ -76,8 +94,8 @@ class TemplateLoader:
 
         return ActionBone(
             bone_id=data['bone_id'],
-            intent=intent,
-            physics_class=data.get('physics_class', 'Energy'),
+            motion_style=motion_style.value,
+            damage_material=data.get('damage_material', 'ANY'),
             text_fragments=data.get('text_fragments', []),
             anim_id=data.get('anim_id', 'anim_default'),
             tier=tier,
@@ -107,7 +125,8 @@ class TemplateLoader:
         return ReactionBone(
             bone_id=data['bone_id'],
             channel=channel,
-            physics_class=data.get('physics_class', 'Impact'),
+            damage_material=data.get('damage_material', 'GENERIC'),
+            motion_style=data.get('motion_style', 'ANY'),
             text_fragments=data.get('text_fragments', []),
             vfx_ids=data.get('vfx_ids', []),
             sfx_ids=data.get('sfx_ids', []),

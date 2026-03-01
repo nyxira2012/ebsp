@@ -21,16 +21,6 @@ class TemplateRegistry:
         self._action_bones: List[ActionBone] = []
         self._reaction_bones: List[ReactionBone] = []
 
-        # T0 脚本模板（仅用于特殊剧情事件）
-        self._scripted_templates: Dict[str, PresentationTemplate] = {}
-
-        # 初始化默认的 T3 Fallback（硬编码保底）
-        self._initialize_defaults()
-
-        # 从配置加载
-        if config_path:
-            self.load_from_config(config_path)
-
     @property
     def action_bones(self) -> List[ActionBone]:
         """ActionBone 库（v5.0 L2 DualBidder 使用）"""
@@ -41,11 +31,6 @@ class TemplateRegistry:
         """ReactionBone 库（v5.0 L2 DualBidder 使用）"""
         return self._reaction_bones
 
-    @property
-    def scripted_templates(self) -> Dict[str, PresentationTemplate]:
-        """T0 脚本模板库（仅用于 scripted_manager）"""
-        return self._scripted_templates
-
     def load_from_config(self, config_path: str):
         """Loads and registers templates from a configuration file."""
         # 加载 action_bones 和 reaction_bones
@@ -54,14 +39,6 @@ class TemplateRegistry:
         # 存储新格式 action_bones / reaction_bones
         self._action_bones.extend(action_bones)
         self._reaction_bones.extend(reaction_bones)
-
-    def _register_scripted_template(self, template: PresentationTemplate):
-        """注册 T0 脚本模板（仅用于特殊剧情事件）"""
-        self._scripted_templates[template.id] = template
-
-    def get_scripted_template(self, template_id: str) -> Optional[PresentationTemplate]:
-        """获取 T0 脚本模板"""
-        return self._scripted_templates.get(template_id)
 
     def _initialize_defaults(self):
         """

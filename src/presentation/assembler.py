@@ -27,11 +27,12 @@ class DhlMapper:
     """
 
     # 部位映射表
+    # 注意：部位名不要包含"装甲"、"盾牌"等词，避免与模板拼接时重复
     _LOCATION_MAP: Dict[str, List[str]] = {
         "FATAL": ["驾驶舱", "动力炉", "核心反应堆"],
         "CRIT": ["主摄像机", "推进器端口", "关节部位", "传感器阵列"],
-        "HIT": ["外装甲", "机体侧翼", "腰部装甲", "肩部装甲"],
-        "BLOCK": ["盾牌表面", "前装甲", "防御力场"],
+        "HIT": ["机体侧翼", "腰部", "肩部", "机头"],
+        "BLOCK": ["盾牌", "前部", "防御力场"],
         "EVADE": [],  # 没有受击部位
     }
 
@@ -64,29 +65,48 @@ class DamageGrader:
     """
     损伤量级分级器
 
-    根据 damage/defender_max_hp 比例分级：
-    - <10%: 骚扰级
-    - 10-30%: 有效级
-    - 30-60%: 重创级
-    - >60%: 毁灭级
+    根据伤害值进行分级（使用绝对伤害基准）：
+    - 0: 无伤
+    - 1-800: 轻伤（轻微擦伤）
+    - 801-2000: 中伤（明显损伤）
+    - 2001-4000: 重伤（严重损伤）
+    - >4000: 濒死（致命打击）
+
+    注意：如果提供了 max_hp，则使用百分比分级；
+          否则使用绝对伤害值分级（默认基准 HP=10000）。
     """
 
+    # 默认机体 HP 基准值
+    _DEFAULT_HP = 10000
+
     @classmethod
-    def get_grade(cls, damage: int, max_hp: int) -> str:
+    def get_grade(cls, damage: int, max_hp: int = 0) -> str:
         """获取损伤量级描述"""
-        if max_hp <= 0:
-            return "骚扰级"
+        if damage <= 0:
+            return "无伤"
 
-        ratio = damage / max_hp
-
-        if ratio < 0.1:
-            return "骚扰级"
-        elif ratio < 0.3:
-            return "有效级"
-        elif ratio < 0.6:
-            return "重创级"
+        # 如果提供了有效的 max_hp，使用百分比分级
+        if max_hp > 0:
+            ratio = damage / max_hp
+            if ratio < 0.08:
+                return "轻伤"
+            elif ratio < 0.25:
+                return "中伤"
+            elif ratio < 0.5:
+                return "重伤"
+            else:
+                return "濒死"
         else:
-            return "毁灭级"
+            # 否则使用绝对伤害值分级（基于默认 HP）
+            ratio = damage / cls._DEFAULT_HP
+            if ratio < 0.08:
+                return "轻伤"
+            elif ratio < 0.25:
+                return "中伤"
+            elif ratio < 0.5:
+                return "重伤"
+            else:
+                return "濒死"
 
     @classmethod
     def get_hp_status_words(cls, hp_after: int, max_hp: int) -> List[str]:
@@ -131,6 +151,10 @@ class SVI:
             "attacker": event.attacker_name,
             "defender": event.defender_name,
             "weapon": event.weapon_name,
+            # 别名适配 (MDDC 模板建议使用全名)
+            "attacker_name": event.attacker_name,
+            "defender_name": event.defender_name,
+            "weapon_name": event.weapon_name,
             "hit_part": hit_part or "目标",
             "skill_name": cls._pick_skill_label(event),
             "damage_grade": DamageGrader.get_grade(event.damage, event.defender_max_hp),
@@ -157,7 +181,9 @@ class SVI:
                 "hope": "希望",
             }
             cmd = spirit_commands[0]
-            return cmd_map.get(cmd, cmd)
+            result = cmd_map.get(cmd, cmd)
+            if result:
+                return result
 
         # 其次触发技能名
         if event.triggered_skills:
@@ -210,37 +236,17 @@ class TextAssembler:
         variables: Dict[str, str]
     ) -> str:
         """组装攻击方文本"""
-        if not bone:
-            # 默认描述 - 根据意图生成更丰富的默认文本
-            from .intent_extractor import IntentExtractor, VisualIntent
-            intent = IntentExtractor.extract_intent(event.weapon_type, event.weapon_tags)
+        if bone and bone.text_fragments:
+            text = random.choice(bone.text_fragments)
+        else:
+            # 默认兜底
+            text = "{attacker}使用{weapon}展开了攻击！"
 
-            # 基于意图的默认描述
-            default_texts = {
-                VisualIntent.SLASH_LIGHT: f"{event.attacker_name}身形一闪，挥动{event.weapon_name}斩向敌机！",
-                VisualIntent.SLASH_HEAVY: f"{event.attacker_name}抡起沉重的{event.weapon_name}，以泰山压顶之势猛然砸下！",
-                VisualIntent.STRIKE_BLUNT: f"{event.attacker_name}踏步出击，试图以雷霆万钧的重击击碎对方的防御！",
-                VisualIntent.BEAM_INSTANT: f"{event.attacker_name}将准星锁定在对方的轮廓上，{event.weapon_name}喷薄出高度压缩的粒子流！",
-                VisualIntent.BEAM_MASSIVE: f"{event.attacker_name}的机身四周因能量聚集而扭曲，{event.weapon_name}蓄势待发！",
-                VisualIntent.PROJECTILE_SINGLE: f"{event.attacker_name}扣动扳机，{event.weapon_name}的退壳机排出一缕青烟。",
-                VisualIntent.PROJECTILE_RAIN: f"「覆盖前方区域！别放过他！」{event.attacker_name}的{event.weapon_name}向前方喷吐出密集的火蛇。",
-                VisualIntent.IMPACT_MASSIVE: f"{event.attacker_name}完全放弃了射击，将辅助推进器全部开启，机体化作一枚钢铁陨石撞向前方！",
-                VisualIntent.PSYCHO_WAVE: f"「去吧！按照我的意志！」{event.attacker_name}的意识通过感应系统无限扩张！",
-                VisualIntent.AOE_BURST: f"{event.attacker_name}启动了禁忌的武器序列，地平线上仿佛升起了第二颗太阳。",
-            }
-            text = default_texts.get(intent, f"{event.attacker_name}使用{event.weapon_name}发起攻击！")
-            try:
-                return text.format(**variables)
-            except KeyError:
-                return text
-
-        fragments = bone.text_fragments if bone.text_fragments else []
-
-        if not fragments:
-            return f"{event.attacker_name}使用{event.weapon_name}发起攻击！"
-
-        # 随机选择一个 fragment（每个 fragment 是一个完整的描述选项）
-        text = random.choice(fragments)
+        # 变量注入
+        try:
+            return text.format(**variables)
+        except KeyError:
+            return text
 
         # 变量注入
         try:
@@ -255,237 +261,40 @@ class TextAssembler:
         channel: Channel,
         variables: Dict[str, str]
     ) -> str:
-        """组装防御方文本"""
-        base_text = ""
+        """
+        组装防御方文本。
 
-        if channel == Channel.EVADE:
-            # 区分 MISS（攻击方打偏）、DODGE（防御方躲闪）、PARRY（武器招架）
-            if event.attack_result == "MISS":
-                # MISS - 攻击方打偏了
-                miss_texts = [
-                    f"{event.attacker_name}的攻击准头完全偏离，不知飞向何处！",
-                    f"{event.attacker_name}的攻击打空了，只在远处扬起一片尘土！",
-                    f"{event.attacker_name}未能锁定目标，攻击完全落空！",
-                    f"准星偏差过大，{event.attacker_name}的攻击在虚空中消散！",
-                ]
-                base_text = random.choice(miss_texts)
-            elif event.attack_result == "PARRY":
-                # PARRY - 用武器招架，根据攻击方武器类型区分
-                physics = event.physics_class
-                if physics == "Blade":
-                    parry_texts = [
-                        f"{event.defender_name}以武器精准招架，刀刃相交的刺耳声响彻战场！",
-                        f"火花四溅！{event.defender_name}的武器成功架住了斩击！",
-                        f"{event.defender_name}精妙地用武器偏转了锋利的斩击！",
-                        f"金属碰撞的尖锐声响！{event.defender_name}用武器化解了斩击攻势！",
-                    ]
-                elif physics == "Kinetic":
-                    parry_texts = [
-                        f"{event.defender_name}用武器精准弹开来袭的弹头！",
-                        f"火花四溅！{event.defender_name}的武器成功格挡了实弹攻击！",
-                        f"{event.defender_name}以武器将弹丸击飞，攻击被化解！",
-                        f"{event.defender_name}的武器与弹头相撞，将攻击完全偏转！",
-                    ]
-                elif physics == "Impact":
-                    parry_texts = [
-                        f"{event.defender_name}以武器撑住冲锋，在千钧一发之际完成招架！",
-                        f"{event.defender_name}用武器格开冲击，成功化解了撞击！",
-                        f"武器与机体碰撞！{event.defender_name}成功招架了重击！",
-                    ]
-                else:  # Energy
-                    parry_texts = [
-                        f"{event.defender_name}的I-Field感应场及时展开，光束被武器精准偏转！",
-                        f"光束在{event.defender_name}的武器表面划过，没有留下痕迹！",
-                        f"{event.defender_name}以武器诱导光束偏转，攻击被化解！",
-                        f"抗光束涂层闪耀！{event.defender_name}用武器架住了光束！",
-                    ]
-                base_text = random.choice(parry_texts)
-            else:  # DODGE - 防御方躲闪
-                physics = event.physics_class
-                if physics == "Blade":
-                    dodge_texts = [
-                        f"{event.defender_name}的姿态控制喷嘴喷出耀眼的火焰，完美躲过了斩击！",
-                        f"刀刃擦着装甲划过，{event.defender_name}险险避过！",
-                        f"{event.defender_name}以精妙的步法闪开了锋利的斩击！",
-                    ]
-                elif physics == "Kinetic":
-                    dodge_texts = [
-                        f"{event.defender_name}推进器反向喷射，滑步闪避！",
-                        f"侧身跃起，{event.defender_name}险险避过致命一击！",
-                        f"在千钧一发之际，{event.defender_name}完成闪避！",
-                    ]
-                elif physics == "Impact":
-                    dodge_texts = [
-                        f"{event.defender_name}侧身跃起，险险避过致命一击！",
-                        f"推进器全开，{event.defender_name}在千钧一发之际完成闪避！",
-                    ]
-                else:  # Energy
-                    dodge_texts = [
-                        f"{event.defender_name}推进器喷射，侧身闪开！",
-                        f"残影晃动，{event.defender_name}已不在原位！",
-                        f"{event.defender_name}机敏地躲过了攻击！",
-                    ]
-                base_text = random.choice(dodge_texts)
-
-        elif not bone or event.attack_result == "BLOCK":
-            # 基于频道的默认描述
-            if channel == Channel.FATAL:
-                fatal_texts = [
-                    f"{event.defender_name}的{variables.get('hit_part', '核心部位')}被击中，机体在烈焰中化为燃烧的残骸坠落！",
-                    f"核心机能停止！{event.defender_name}在连锁爆裂中支离破碎！",
-                    f"{event.defender_name}的系统显示大面积离线，机体在爆炸中逐渐支离破碎。",
-                ]
-                base_text = random.choice(fatal_texts)
-            elif event.attack_result == "CRIT":
-                crit_texts = [
-                    f"{event.defender_name}的{variables.get('hit_part', '装甲')}遭受重创，机体在剧痛中剧烈震颤！",
-                    f"致命一击！{event.defender_name}的多处系统同时报错，驾驶舱内火花四溅！",
-                    f"{event.defender_name}的装甲被贯穿，内部结构在连环爆炸中彻底崩溃！",
-                ]
-                base_text = random.choice(crit_texts)
-            elif event.attack_result == "BLOCK":
-                # BLOCK - 盾牌/装甲格挡，根据武器类型和伤害值区分
-                physics = event.physics_class
-                damage = abs(event.damage)  # 格挡后实际受到的伤害
-
-                # 伤害分级：轻微 < 300，中等 300-800，沉重 800-1500，危险 > 1500
-                if physics == "Blade":
-                    if damage < 300:
-                        block_texts = [
-                            f"{event.defender_name}轻描淡写地举盾格挡，斩击如微风般掠过！",
-                            f"刀刃在盾牌上轻擦，{event.defender_name}几乎无感地挡下攻击！",
-                            f"{event.defender_name}的盾牌微微一震，轻松架住了斩击！",
-                        ]
-                    elif damage < 800:
-                        block_texts = [
-                            f"刀刃在{event.defender_name}的盾牌上擦出火花，攻击被挡下！",
-                            f"{event.defender_name}举盾格挡，金属摩擦声刺耳！",
-                            f"{event.defender_name}的盾牌微微凹陷，但成功架住了斩击！",
-                        ]
-                    elif damage < 1500:
-                        block_texts = [
-                            f"{event.defender_name}以盾牌硬扛斩击，手臂传来剧痛但防御未破！",
-                            f"刀刃深深切进盾牌！{event.defender_name}咬紧牙关挡下了攻击！",
-                            f"{event.defender_name}的盾牌被斩出一道深痕，勉强撑住了！",
-                        ]
-                    else:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌险些被斩断！勉强挡下了致命一击！",
-                            f"盾牌发出悲鸣！{event.defender_name}以极限状态架住了斩击！",
-                            f"{event.defender_name}被斩击震退数步，但盾牌终究没有破碎！",
-                        ]
-
-                elif physics == "Kinetic":
-                    if damage < 300:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌稳稳接下弹丸，几乎纹丝不动！",
-                            f"实弹攻击在盾牌表面轻弹开，{event.defender_name}轻松格挡！",
-                            f"{event.defender_name}举盾一立，弹丸便无力坠落！",
-                        ]
-                    elif damage < 800:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌死死顶在前方，弹丸被完全挡下！",
-                            f"盾牌表面迸溅出火花！{event.defender_name}成功挡下了实弹！",
-                            f"弹丸在盾牌上炸开，{event.defender_name}的防御依然稳固！",
-                        ]
-                    elif damage < 1500:
-                        block_texts = [
-                            f"{event.defender_name}举盾格挡，实弹爆炸的冲击让机体滑行数米！",
-                            f"{event.defender_name}的盾牌表面被炸得凹凸不平，但撑住了！",
-                            f"爆炸的烟尘散去，{event.defender_name}的盾牌依然挺立！",
-                        ]
-                    else:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌被炸得千疮百孔！但终究没有破碎！",
-                            f"剧烈爆炸！{event.defender_name}被冲击波震退，盾牌受损严重！",
-                            f"{event.defender_name}的盾牌发出濒临破碎的声音，勉强挡下攻击！",
-                        ]
-
-                elif physics == "Impact":
-                    if damage < 300:
-                        block_texts = [
-                            f"{event.defender_name}举盾轻挡，冲击如挠痒般被化解！",
-                            f"盾牌微微一震，{event.defender_name}轻松挡住了撞击！",
-                            f"{event.defender_name}以盾牌轻推便化解了冲锋！",
-                        ]
-                    elif damage < 800:
-                        block_texts = [
-                            f"{event.defender_name}以盾牌硬抗冲击，机体微微滑行后稳住！",
-                            f"盾牌承受重击！{event.defender_name}成功挡住了撞击！",
-                            f"{event.defender_name}举盾格挡，冲击力被大部分吸收！",
-                        ]
-                    elif damage < 1500:
-                        block_texts = [
-                            f"{event.defender_name}举起盾牌，被冲击力震得滑行十数米！",
-                            f"盾牌发出咯吱声！{event.defender_name}咬紧牙关挡下了重击！",
-                            f"推进器全开抵消冲击！{event.defender_name}勉强稳住防线！",
-                        ]
-                    else:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌发出濒临破碎的悲鸣，但终究没有垮！",
-                            f"巨大冲击！{event.defender_name}被撞飞，盾牌已到极限！",
-                            f"{event.defender_name}以盾牌拼命格挡，机体被撞退数十米！",
-                        ]
-
-                else:  # Energy
-                    if damage < 300:
-                        block_texts = [
-                            f"{event.defender_name}的I-Field微微闪烁，光束便消散于无形！",
-                            f"光束轻触盾牌即逝，{event.defender_name}轻松格挡！",
-                            f"{event.defender_name}的抗光束涂层几乎未损，光束被完全偏转！",
-                        ]
-                    elif damage < 800:
-                        block_texts = [
-                            f"{event.defender_name}的I-Field展开，光束在感应场表面扭曲消散！",
-                            f"{event.defender_name}的抗光束盾牌闪耀，光束攻击被完全偏转！",
-                            f"能量雾气弥漫！{event.defender_name}的盾牌成功化解了光束！",
-                        ]
-                    elif damage < 1500:
-                        block_texts = [
-                            f"光束灼烧盾牌表面！{event.defender_name}的防御阵线依然稳固！",
-                            f"{event.defender_name}的盾牌表面被烧得通红，但成功挡下了光束！",
-                            f"I-Field剧烈闪烁！{event.defender_name}以极限状态偏转了光束！",
-                        ]
-                    else:
-                        block_texts = [
-                            f"{event.defender_name}的盾牌几乎被熔穿！但光束终究未能穿透！",
-                            f"盾牌发出刺耳警报！{event.defender_name}拼死挡下了高能光束！",
-                            f"光束贯穿盾牌一角！{event.defender_name}以濒死状态完成格挡！",
-                        ]
-
-                base_text = random.choice(block_texts)
-            else:
-                hit_texts = [
-                    f"{event.defender_name}的{variables.get('hit_part', '装甲')}受到攻击！",
-                    f"攻击命中了{event.defender_name}的{variables.get('hit_part', '机体')}！",
-                    f"{event.defender_name}承受了这次打击，机体表面多了一道伤痕。",
-                ]
-                base_text = random.choice(hit_texts)
-
-            try:
-                base_text = base_text.format(**variables)
-            except KeyError:
-                pass
-
+        逻辑优先级：
+        1. 优先使用传入的 bone 中的片段
+        2. 变量注入
+        3. 附加判定结果和伤害数值
+        """
+        if bone and bone.text_fragments:
+            base_text = random.choice(bone.text_fragments)
         else:
-            fragments = bone.text_fragments if bone.text_fragments else []
-
-            if not fragments:
-                if channel == Channel.FATAL:
-                    base_text = f"{event.defender_name}被击中要害，机体严重损毁！"
-                else:
-                    base_text = f"{event.defender_name}受到攻击！"
+            # 理论上 Bidder 已经保证了有骨架提供，这里作为防御性兜底
+            if event.is_lethal:
+                base_text = "{defender}被彻底摧毁了。"
+            elif event.attack_result == "CRIT":
+                base_text = "{defender}遭受了沉重打击！"
+            elif event.attack_result == "BLOCK":
+                base_text = "{defender}挡住了攻击。"
+            elif event.attack_result == "PARRY":
+                base_text = "{defender}招架了攻击。"
+            elif event.attack_result == "DODGE":
+                base_text = "{defender}巧妙地躲开了。"
+            elif event.attack_result == "MISS":
+                base_text = "攻击没能命中{defender}。"
             else:
-                # 随机选择一个 fragment（每个 fragment 是一个完整的描述选项）
-                base_text = random.choice(fragments)
+                base_text = "{defender}被击中了。"
 
-            # 变量注入
-            try:
-                base_text = base_text.format(**variables)
-            except KeyError:
-                pass
+        # 变量注入
+        try:
+            base_text = base_text.format(**variables)
+        except KeyError:
+            pass
 
-        # 添加判定结果和伤害信息
+        # 统一附加判定结果和伤害信息
         result_map = {
             "CRIT": "暴击",
             "HIT": "命中",
@@ -496,6 +305,15 @@ class TextAssembler:
         }
         result_name = result_map.get(event.attack_result, event.attack_result)
         damage = event.damage
-        base_text += f"（{result_name}！{-damage}）"
+        
+        # 根据是否致死选择图标
+        icon = " 💀" if event.is_lethal else ""
+        
+        if damage > 0:
+            # 自动附加伤害基准
+            damage_grade = DamageGrader.get_grade(damage, event.defender_max_hp)
+            base_text += f"（{result_name}！-{damage}，{damage_grade}{icon}）"
+        else:
+            base_text += f"（{result_name}！{icon}）"
 
         return base_text

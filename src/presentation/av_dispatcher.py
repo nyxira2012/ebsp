@@ -10,8 +10,7 @@ from typing import List, Optional, Callable, Tuple
 from dataclasses import dataclass
 
 from .models import RawAttackEvent, PresentationAttackEvent
-from .constants import Channel, TemplateTier
-from .intent_extractor import VisualIntent
+from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier
 
 
 @dataclass
@@ -203,34 +202,40 @@ class AVDispatcher:
             delay += 0.4
 
         # 意图相关延迟（根据武器类型）
-        from .intent_extractor import IntentExtractor
-        intent = IntentExtractor.extract_intent(event.weapon_type, event.weapon_tags)
+        # 使用 event_builder 已提取的 motion_style
+        try:
+            motion_style = MotionStyle(event.motion_style)
+        except ValueError:
+            motion_style = MotionStyle.SHOOT_INSTANT
 
-        if intent in (VisualIntent.BEAM_MASSIVE, VisualIntent.AOE_BURST):
+        if motion_style in (MotionStyle.SHOOT_MASSIVE, MotionStyle.AOE_BURST):
             delay += 0.3  # 光束武器/地图武器需要更多飞行时间
-        elif intent == VisualIntent.PROJECTILE_RAIN:
+        elif motion_style == MotionStyle.PROJ_RAIN:
             delay += 0.2  # 导弹齐射
 
         return delay
 
     def _get_default_action_anim(self, event: RawAttackEvent) -> str:
         """获取默认攻击动画"""
-        from .intent_extractor import IntentExtractor
-        intent = IntentExtractor.extract_intent(event.weapon_type, event.weapon_tags)
+        # 使用 event_builder 已提取的 motion_style
+        try:
+            motion_style = MotionStyle(event.motion_style)
+        except ValueError:
+            motion_style = MotionStyle.SHOOT_INSTANT
 
         anim_map = {
-            VisualIntent.SLASH_LIGHT: "anim_slash_fast",
-            VisualIntent.SLASH_HEAVY: "anim_slash_heavy",
-            VisualIntent.STRIKE_BLUNT: "anim_strike",
-            VisualIntent.BEAM_INSTANT: "anim_rifle_shoot",
-            VisualIntent.BEAM_MASSIVE: "anim_mega_beam",
-            VisualIntent.PROJECTILE_SINGLE: "anim_shoot_single",
-            VisualIntent.PROJECTILE_RAIN: "anim_missile_rain",
-            VisualIntent.IMPACT_MASSIVE: "anim_collision",
-            VisualIntent.PSYCHO_WAVE: "anim_psycho",
-            VisualIntent.AOE_BURST: "anim_aoe_burst",
+            MotionStyle.SLASH_LIGHT: "anim_slash_fast",
+            MotionStyle.SLASH_HEAVY: "anim_slash_heavy",
+            MotionStyle.STRIKE_BLUNT: "anim_strike",
+            MotionStyle.SHOOT_INSTANT: "anim_rifle_shoot",
+            MotionStyle.SHOOT_MASSIVE: "anim_mega_beam",
+            MotionStyle.PROJ_SINGLE: "anim_shoot_single",
+            MotionStyle.PROJ_RAIN: "anim_missile_rain",
+            MotionStyle.IMPACT_RAM: "anim_collision",
+            MotionStyle.PSYCHO_WAVE: "anim_psycho",
+            MotionStyle.AOE_BURST: "anim_aoe_burst",
         }
-        return anim_map.get(intent, "anim_default_attack")
+        return anim_map.get(motion_style, "anim_default_attack")
 
     def _get_default_reaction_anim(self, event: RawAttackEvent, channel: Channel) -> str:
         """获取默认反应动画"""
@@ -243,15 +248,15 @@ class AVDispatcher:
         if event.attack_result == "CRIT":
             return "anim_hit_critical"
 
-        # 根据物理类选择
-        physics = getattr(event, 'physics_class', 'Impact')
+        # 根据物理材质选择
+        material = event.damage_material
         anim_map = {
-            "Energy": "anim_hit_energy",
-            "Kinetic": "anim_hit_kinetic",
-            "Blade": "anim_hit_blade",
-            "Impact": "anim_hit_impact",
+            "ENERGY": "anim_hit_energy",
+            "KINETIC": "anim_hit_kinetic",
+            "PHYSICAL": "anim_hit_blade",
+            "GENERIC": "anim_hit_impact",
         }
-        return anim_map.get(physics, "anim_hit_default")
+        return anim_map.get(material, "anim_hit_default")
 
     def _get_damage_display(self, event: RawAttackEvent, channel: Channel) -> int:
         """

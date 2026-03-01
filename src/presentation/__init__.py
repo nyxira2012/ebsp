@@ -8,9 +8,8 @@
 - L4: AV Dispatcher - 视听调度
 """
 
-from .constants import VisualIntent, PresentationTag, TemplateTier, Channel
+from .constants import MotionStyle, TemplateTier, Channel, DamageMaterial
 from .models import RawAttackEvent, PresentationAttackEvent, PresentationRoundEvent
-from .intent_extractor import IntentExtractor
 from .template import (
     ActionBone, ReactionBone,
     # PresentationTemplate 仅保留用于 T0 脚本模板
@@ -25,3 +24,17 @@ from .router import OutcomeRouter
 from .bidder import DualBidder
 from .assembler import TextAssembler
 from .av_dispatcher import AVDispatcher
+
+# MDDC 数据契约导出
+__all__ = [
+    # 常量
+    "MotionStyle", "DamageMaterial", "Channel", "TemplateTier",
+    # 模型
+    "RawAttackEvent", "PresentationAttackEvent", "PresentationRoundEvent",
+    # 模板
+    "ActionBone", "ReactionBone",
+    "PresentationTemplate", "TemplateConditions", "TemplateContent", "TemplateVisuals",
+    # 核心组件
+    "EventMapper", "TemplateRegistry", "TextRenderer", "JSONRenderer",
+    "OutcomeRouter", "DualBidder", "TextAssembler", "AVDispatcher",
+]

@@ -17,8 +17,8 @@
 action_bones:
   # --- 光束类 (Beam/Energy) ---
   - bone_id: "act_beam_rifle_aim"
-    intent: "BEAM_INSTANT"
-    physics_class: "Energy"
+    motion_style: "SHOOT_INSTANT"
+    damage_material: "ENERGY"
     text_fragments:
       - "{attacker}锁定能量特征，随着电荷汇聚完毕，扣下扳机！"
       - "{attacker}的{weapon}瞄准系统锁定目标，随着扳机扣下，光束喷薄而出！"
@@ -26,8 +26,10 @@ action_bones:
     anim_id: "anim_rifle_shoot"
 
   - bone_id: "act_beam_mega_charge"
-    intent: "BEAM_MASSIVE"
-    physics_class: "Energy"
+    motion_style: "SHOOT_MASSIVE"
+    damage_material: "ENERGY"
+    cooldown: 0
+    weight: 1.0
     text_fragments:
       - "{attacker}的{weapon}开始充能，周围的空间因能量密度过高而扭曲，一道巨大的光束横扫战场！"
       - "能量读数突破临界值！{attacker}将{weapon}的出力推至极限，毁灭性的光束倾泻而出！"
@@ -36,27 +38,74 @@ action_bones:
 
   # --- 斩击类 (Blade) ---
   - bone_id: "act_slash_light"
-    intent: "SLASH_LIGHT"
-    physics_class: "Blade"
+    motion_style: "SLASH_LIGHT"
+    damage_material: "PHYSICAL"
     text_fragments:
       - "{attacker}身形一闪，{weapon}划出一道致命的弧线，斩向敌机！"
       - "{attacker}从腰间拔出{weapon}，机体已化作白色闪光，瞬间划破空气！"
       - "{attacker}以迅雷不及掩耳之势挥动{weapon}，向敌人发起致命斩击！"
     anim_id: "anim_slash_fast"
 
+  - bone_id: "act_slash_light_energy"
+    motion_style: "SLASH_LIGHT"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}的光束军刀在空气中留下一道灼热的轨迹，向敌机斩去！"
+      - "高温光束刃划破空气！{attacker}的{weapon}化作一道白色闪光！"
+      - "{attacker}手中的{weapon}喷吐出炽热的高温粒子，斩向敌机！"
+    anim_id: "anim_slash_fast_energy"
+
   - bone_id: "act_slash_heavy"
-    intent: "SLASH_HEAVY"
-    physics_class: "Blade"
+    motion_style: "SLASH_HEAVY"
+    damage_material: "PHYSICAL"
     text_fragments:
       - "{attacker}将推进器出力推至极限，{weapon}划出一道足以撕裂大气层的弧光，劈向敌机！"
       - "{attacker}抡起沉重的{weapon}，以泰山压顶之势猛然砸下！"
       - "{attacker}的{weapon}在空中留下一道完美的、象征终焉的轨迹，狠狠斩下！"
     anim_id: "anim_slash_heavy"
 
+  - bone_id: "act_slash_heavy_energy"
+    motion_style: "SLASH_HEAVY"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}手中的{weapon}喷吐出炽热的高温粒子，将空气都烧得噼啪作响！"
+      - "{attacker}挥舞着燃烧的{weapon}，一道熔金般的烈焰轨迹劈向敌机！"
+      - "灼热的气浪扑面而来！{attacker}的{weapon}带着赤红的高温光芒斩下！"
+    anim_id: "anim_slash_heavy_energy"
+
   # --- 实弹类 (Kinetic) ---
+  - bone_id: "act_rifle_kinetic"
+    motion_style: "SHOOT_INSTANT"
+    damage_material: "KINETIC"
+    text_fragments:
+      - "{attacker}的{weapon}瞄准系统锁定目标，枪口喷出火舌！"
+      - "{attacker}扣下扳机，{weapon}发出有节奏的咆哮，弹壳飞舞！"
+      - "{attacker}稳稳地端起{weapon}，精确点射，弹头呼啸而出！"
+    anim_id: "anim_rifle_fullauto"
+
   - bone_id: "act_projectile_single"
-    intent: "PROJECTILE_SINGLE"
-    physics_class: "Kinetic"
+    motion_style: "PROJ_SINGLE"
+    damage_material: "KINETIC"
+    text_fragments:
+      - "{attacker}扣动扳机，{weapon}的退壳机排出一缕青烟，弹头呼啸而出！"
+      - "{attacker}发射出一枚高速破甲弹，弹丸撕裂空气的声音在战场上空回荡！"
+      - "为了这一刻，{attacker}甚至彻底接管了火控计算机的权限，精确射击！"
+    anim_id: "anim_shoot_single"
+
+  - bone_id: "act_heavy_cannon"
+    motion_style: "SHOOT_MASSIVE"
+    damage_material: "KINETIC"
+    cooldown: 3
+    weight: 0.3
+    text_fragments:
+      - "{attacker}的{weapon}发出雷鸣般的咆哮，巨大的后坐力让机体猛然后坐！"
+      - "炮口制退器喷出炽热的火焰，{attacker}的{weapon}将毁灭性的弹丸投向目标！"
+      - "{attacker}调整了火控计算机的射击诸元，{weapon}以雷霆万钧之势开火！"
+    anim_id: "anim_heavy_cannon"
+
+  - bone_id: "act_projectile_rain"
+    motion_style: "PROJ_SINGLE"
+    damage_material: "KINETIC"
     text_fragments:
       - "{attacker}扣动扳机，{weapon}的退壳机排出一缕青烟，弹头呼啸而出！"
       - "{attacker}发射出一枚高速破甲弹，弹丸撕裂空气的声音在战场上空回荡！"
@@ -64,8 +113,8 @@ action_bones:
     anim_id: "anim_shoot_single"
 
   - bone_id: "act_projectile_rain"
-    intent: "PROJECTILE_RAIN"
-    physics_class: "Kinetic"
+    motion_style: "PROJ_RAIN"
+    damage_material: "KINETIC"
     text_fragments:
       - "「覆盖前方区域！」{attacker}的{weapon}向前方喷吐出密集的火蛇！"
       - "{attacker}试图用压倒性的钢铁暴雨封锁目标的所有活动空间！"
@@ -74,8 +123,8 @@ action_bones:
 
   # --- 撞击类 (Impact) ---
   - bone_id: "act_impact_ram"
-    intent: "IMPACT_MASSIVE"
-    physics_class: "Impact"
+    motion_style: "IMPACT_RAM"
+    damage_material: "GENERIC"
     text_fragments:
       - "{attacker}完全放弃了射击，将辅助推进器全部开启，机体化作一枚钢铁陨石撞向敌机！"
       - "{attacker}将推进器推至极限，以不可阻挡之势向{defender}冲去！"
@@ -83,8 +132,8 @@ action_bones:
     anim_id: "anim_collision"
 
   - bone_id: "act_strike_blunt"
-    intent: "STRIKE_BLUNT"
-    physics_class: "Impact"
+    motion_style: "STRIKE_BLUNT"
+    damage_material: "GENERIC"
     text_fragments:
       - "{attacker}加速重拳挥出，空气在高速移动的拳头前部形成了肉眼可见的激波！"
       - "{attacker}踏步出击，试图以雷霆万钧的重击击碎对方的防御！"
@@ -92,32 +141,46 @@ action_bones:
     anim_id: "anim_strike"
 
   # --- 特殊类 ---
+  - bone_id: "act_psycho_funnel"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    cooldown: 2
+    weight: 1.0
+    text_fragments:
+      - "「去吧！」{attacker}的精神感应浮游炮化作无数光束，如暴雨般倾泻而下！"
+      - "{attacker}的意识通过感应系统无限扩张，{weapon}同时锁定多个目标！"
+      - "无数浮游炮在{attacker}的意志驱动下，从四面八方射出致命的光束！"
+      - "「消失吧！」{attacker}的浮游炮群在空中划出复杂轨迹，光束交织成死亡之网！"
+    anim_id: "anim_funnel"
+
+  - bone_id: "act_psycho_wave"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "「去吧！按照我的意志！」{attacker}的意识通过感应系统无限扩张，浮游炮群同时开火！"
+      - "{attacker}释放出无差别的精神波动，无数光束从四面八方袭来！"
+      - "{attacker}的意识突破物质的边界，浮游炮化作死亡之网！"
+    anim_id: "anim_psycho"
+
   - bone_id: "act_aoe_burst"
-    intent: "AOE_BURST"
-    physics_class: "Energy"
+    motion_style: "AOE_BURST"
+    damage_material: "ENERGY"
     text_fragments:
       - "{attacker}启动了禁忌的武器序列，地平线上仿佛升起了第二颗太阳"
       - "{attacker}将所有的能量倾注于这一次全域打击"
       - "{attacker}的超大威力武器进入了最终发射程序"
     anim_id: "anim_aoe_burst"
 
-  - bone_id: "act_psycho_wave"
-    intent: "PSYCHO_WAVE"
-    physics_class: "Energy"
-    text_fragments:
-      - "「去吧！按照我的意志！」{attacker}的意识通过感应系统无限扩张"
-      - "{attacker}释放出无差别的灵魂波动"
-      - "{attacker}的意识正在突破物质的边界"
-    anim_id: "anim_psycho"
-
 # =====================================================
 # ReactionBone 库 (防御方反应骨架)
 # =====================================================
 reaction_bones:
   # --- IMPACT 频道: 命中反应 ---
+  # HIT 普通命中
   - bone_id: "react_energy_hit"
     channel: "IMPACT"
-    physics_class: "Energy"
+    damage_material: "ENERGY"
+    attack_result: "HIT"
     text_fragments:
       - "{defender}的{hit_part}被高能光束灼穿，留下熔融痕迹"
       - "{defender}的{hit_part}装甲涂层在高热中迅速蒸发，发出刺耳的嘶鸣"
@@ -126,9 +189,23 @@ reaction_bones:
     vfx_ids: ["vfx_beam_impact", "vfx_armor_melt"]
     sfx_ids: ["sfx_beam_hit"]
 
+  # CRIT 暴击 - 能量武器
+  - bone_id: "react_energy_crit"
+    channel: "IMPACT"
+    damage_material: "ENERGY"
+    attack_result: "CRIT"
+    text_fragments:
+      - "{defender}的{hit_part}被贯穿，高能粒子瞬间引爆内部系统，火花四溅！"
+      - "光束熔穿了{defender}的{hit_part}装甲，液压管线爆裂，机体剧烈震颤！"
+      - "{defender}的{hit_part}遭受致命烧蚀，警报声响彻驾驶舱，系统濒临崩溃！"
+      - "高能粒子流从{defender}的{hit_part}贯穿而过，诱发了连锁短路爆炸！"
+    vfx_ids: ["vfx_beam_crit", "vfx_explosion_energy"]
+    sfx_ids: ["sfx_crit_energy"]
+
   - bone_id: "react_kinetic_hit"
     channel: "IMPACT"
-    physics_class: "Kinetic"
+    damage_material: "KINETIC"
+    attack_result: "HIT"
     text_fragments:
       - "弹头狠狠撞入{defender}的{hit_part}，物理性的撕裂比能量武器更加残暴"
       - "{defender}的{hit_part}装甲板被炸出一个大坑，破碎的机件四散飞溅"
@@ -137,9 +214,23 @@ reaction_bones:
     vfx_ids: ["vfx_explosion_solid", "vfx_debris"]
     sfx_ids: ["sfx_shell_hit"]
 
+  # CRIT 暴击 - 动能武器
+  - bone_id: "react_kinetic_crit"
+    channel: "IMPACT"
+    damage_material: "KINETIC"
+    attack_result: "CRIT"
+    text_fragments:
+      - "穿甲弹头粗暴地扯碎了{defender}的{hit_part}内部管线，引发了一连串短路爆炸！"
+      - "{defender}的{hit_part}被动能弹丸彻底贯穿，机体结构在剧烈冲击中扭曲变形！"
+      - "弹头在{defender}的{hit_part}内部炸裂，碎片横扫了整个动力舱！"
+      - "{defender}的{hit_part}遭受重创，主框架断裂，机体失控坠向地面！"
+    vfx_ids: ["vfx_crit_kinetic", "vfx_debris_large"]
+    sfx_ids: ["sfx_crit_kinetic"]
+
   - bone_id: "react_blade_hit"
     channel: "IMPACT"
-    physics_class: "Blade"
+    damage_material: "PHYSICAL"
+    attack_result: "HIT"
     text_fragments:
       - "利刃深深切入{defender}的{hit_part}，留下灼热的伤痕"
       - "{defender}的{hit_part}被刀锋削去一大块，金属扭曲声刺耳"
@@ -148,9 +239,23 @@ reaction_bones:
     vfx_ids: ["vfx_slash_spark", "vfx_armor_cut"]
     sfx_ids: ["sfx_blade_hit"]
 
+  # CRIT 暴击 - 近战武器
+  - bone_id: "react_blade_crit"
+    channel: "IMPACT"
+    damage_material: "PHYSICAL"
+    attack_result: "CRIT"
+    text_fragments:
+      - "{defender}的{hit_part}被一刀两断！机械臂连同武器一同坠向地面！"
+      - "致命斩击贯穿{defender}的{hit_part}，驾驶员在剧痛中发出惨叫！"
+      - "{defender}的{hit_part}被利刃整块削下，重要管线裸露喷涌！"
+      - "刀锋从{defender}的{hit_part}横扫而过，机体在火花中几乎被一分为二！"
+    vfx_ids: ["vfx_crit_slash", "vfx_severance"]
+    sfx_ids: ["sfx_crit_blade"]
+
   - bone_id: "react_impact_hit"
     channel: "IMPACT"
-    physics_class: "Impact"
+    damage_material: "GENERIC"
+    attack_result: "HIT"
     text_fragments:
       - "{defender}的{hit_part}遭受重击，主显示器瞬间布满了裂痕"
       - "巨大的冲击力透过{defender}的{hit_part}将内部零件震得四散飞起"
@@ -159,51 +264,247 @@ reaction_bones:
     vfx_ids: ["vfx_impact_shock", "vfx_screen_crack"]
     sfx_ids: ["sfx_collision_heavy"]
 
+  # CRIT 暴击 - 冲击类
+  - bone_id: "react_impact_crit"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    attack_result: "CRIT"
+    text_fragments:
+      - "{defender}的{hit_part}遭受毁灭性重击，主装甲彻底崩碎，内部系统全面瘫痪！"
+      - "恐怖的冲击力将{defender}的{hit_part}连同骨架一并粉碎，机体在反作用力下翻滚！"
+      - "{defender}的{hit_part}被重锤砸成碎铁，驾驶舱玻璃瞬间布满蛛网裂纹！"
+      - "冲击波震碎了{defender}的{hit_part}整个装甲区，机体在剧烈震颤中失去了控制！"
+    vfx_ids: ["vfx_crit_impact", "vfx_armor_shatter"]
+    sfx_ids: ["sfx_crit_impact"]
+
   # --- EVADE 频道: 闪避反应 ---
-  - bone_id: "react_evade_energy"
+  # MISS - 完全未命中
+  - bone_id: "react_miss_blade_melee_energy"
     channel: "EVADE"
-    physics_class: "Energy"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_LIGHT"
+    attack_result: "MISS"
     text_fragments:
-      - "{defender}推进器喷射，侧身闪开！"
-      - "残影晃动，{defender}已不在原位！"
-      - "{defender}机敏地躲过了攻击！"
+      - "高温光束刃斩空了，{defender}早已不在原位！"
+      - "{defender}后撤半步，致命的光束军刀落了空！"
+      - "光束军刀划过空气，{defender}提前闪开了！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_blade_miss"]
+
+  - bone_id: "react_miss_energy_melee"
+    channel: "EVADE"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_LIGHT"
+    attack_result: "MISS"
+    text_fragments:
+      - "高温光束刃斩空了，{defender}早已不在原位！"
+      - "{defender}后撤半步，致命的光束军刀落了空！"
+      - "光束军刀划过空气，{defender}提前闪开了！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_blade_miss"]
+
+  - bone_id: "react_miss_energy_heavy"
+    channel: "EVADE"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_HEAVY"
+    attack_result: "MISS"
+    text_fragments:
+      - "那道熔金般的烈焰轨迹劈空了，{defender}提前闪开了！"
+      - "{defender}姿态控制喷嘴全开，险险避过那道燃烧的斩击！"
+      - "灼热的气浪扑面而来，但{defender}已在毫厘之间脱离了攻击范围！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_blade_miss"]
+
+  - bone_id: "react_miss_generic"
+    channel: "EVADE"
+    damage_material: "GENERIC"
+    attack_result: "MISS"
+    text_fragments:
+      - "{defender}一个侧滑，攻击从身旁擦过！"
+      - "{defender}猛地加速，攻击打在了空处！"
+      - "{defender}预判了攻击弹道，提前避开了！"
     vfx_ids: ["vfx_dodge_trail"]
     sfx_ids: ["sfx_dodge"]
 
-  - bone_id: "react_evade_kinetic"
+  - bone_id: "react_miss_energy_generic"
     channel: "EVADE"
-    physics_class: "Kinetic"
+    damage_material: "ENERGY"
+    attack_result: "MISS"
     text_fragments:
-      - "{defender}推进器反向喷射，滑步闪避！"
-      - "{defender}侧身跃起，险险避过致命一击！"
-      - "{defender}在千钧一发之际完成闪避！"
+      - "光束擦着{defender}的装甲划过，只留下一道焦痕！"
+      - "{defender}侧身闪开，高能光束落空了！"
+      - "{defender}推进器全开，光束险之又险地擦肩而过！"
+    vfx_ids: ["vfx_dodge_trail", "vfx_beam_nearmiss"]
+    sfx_ids: ["sfx_dodge"]
+
+  - bone_id: "react_miss_kinetic"
+    channel: "EVADE"
+    damage_material: "KINETIC"
+    attack_result: "MISS"
+    text_fragments:
+      - "弹头从{defender}身旁呼啸而过，击中远处的地面！"
+      - "{defender}一个急停跃起，弹幕打在原来的位置！"
+      - "{defender}利用地形掩护，攻击全部落空！"
+    vfx_ids: ["vfx_dodge_trail", "vfx_ground_impact"]
+    sfx_ids: ["sfx_dodge", "sfx_bullet_whiz"]
+
+  # PSYCHO_WAVE 专用的闪避模板 (浮游炮是多方位远程光束)
+  - bone_id: "react_miss_psycho"
+    channel: "EVADE"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    attack_result: "MISS"
+    text_fragments:
+      - "浮游炮的光束交织成网，但{defender}从缝隙中穿过了！"
+      - "无数光束从四面八方袭来，{defender}惊险地全部避开！"
+      - "{defender}的感应系统捕捉到危险，提前脱离了浮游炮的包围圈！"
+    vfx_ids: ["vfx_dodge_trail", "vfx_beam_nearmiss"]
+    sfx_ids: ["sfx_dodge"]
+
+  - bone_id: "react_dodge_psycho"
+    channel: "EVADE"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    attack_result: "DODGE"
+    text_fragments:
+      - "浮游炮群的光束从四面八方射来，{defender}以惊人的机动性全部躲开！"
+      - "{defender}在光束交织的死亡之网中穿梭，毫发无伤！"
+      - "精神感应浮游炮的围攻被{defender}以极限机动化解！"
     vfx_ids: ["vfx_dodge_trail"]
     sfx_ids: ["sfx_dodge"]
 
-  - bone_id: "react_evade_blade"
+  - bone_id: "react_parry_psycho"
     channel: "EVADE"
-    physics_class: "Blade"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    attack_result: "PARRY"
     text_fragments:
-      - "{defender}的姿态控制喷嘴喷出耀眼的火焰，完美躲过了攻击！"
-      - "{defender}以精妙的步法闪开了锋利的斩击！"
-      - "刀刃擦着{defender}的装甲划过，险险避过！"
+      - "{defender}的I-Field展开，将四面袭来的光束尽数弹开！"
+      - "浮游炮的光束被{defender}的防御场偏转，化作战场上的流光！"
+      - "{defender}以精神力对抗精神力，将袭来的光束群全部弹回！"
+    vfx_ids: ["vfx_shield_glow", "vfx_beam_diffuse"]
+    sfx_ids: ["sfx_shield_absorb"]
+
+  - bone_id: "react_block_psycho"
+    channel: "IMPACT"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    attack_result: "BLOCK"
+    text_fragments:
+      - "{defender}的I-Field全力展开，浮游炮的光束群在防御场上激起涟漪！"
+      - "数道光束同时命中，但{defender}的抗光束涂层成功吸收了大部分伤害！"
+      - "浮游炮的围攻被{defender}的全方位防御挡下！"
+    vfx_ids: ["vfx_shield_glow", "vfx_beam_diffuse"]
+    sfx_ids: ["sfx_shield_absorb"]
+
+  - bone_id: "react_miss_blade"
+    channel: "EVADE"
+    damage_material: "PHYSICAL"
+    attack_result: "MISS"
+    text_fragments:
+      - "刀刃斩在空气中，{defender}已不在原位！"
+      - "{defender}后撤半步，致命的斩击落了空！"
+      - "{defender}预判了斩击轨迹，提前闪开了！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_blade_miss"]
+
+  # DODGE - 闪避成功
+  - bone_id: "react_dodge_energy_melee"
+    channel: "EVADE"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_LIGHT"
+    attack_result: "DODGE"
+    text_fragments:
+      - "{defender}的姿态控制喷嘴喷出耀眼的火焰，完美躲过了那道致命的光束刃！"
+      - "{defender}紧急机动，闪开了高温光束军刀的斩击！"
+      - "光束刃擦着{defender}的装甲划过，险险避过！"
     vfx_ids: ["vfx_dodge_trail"]
     sfx_ids: ["sfx_dodge"]
 
-  - bone_id: "react_evade_impact"
+  - bone_id: "react_dodge_energy_heavy"
     channel: "EVADE"
-    physics_class: "Impact"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_HEAVY"
+    attack_result: "DODGE"
     text_fragments:
-      - "{defender}推进器反向喷射，滑步闪避！"
-      - "{defender}侧身跃起，险险避过致命一击！"
-      - "{defender}在千钧一发之际完成闪避！"
+      - "灼热的气浪扑面而来，{defender}在千钧一发之际完成了闪避动作！"
+      - "{defender}推进器反向喷射，那道熔金般的烈焰轨迹险险擦过！"
+      - "{defender}以惊人的反应速度躲开了那道燃烧的斩击！"
     vfx_ids: ["vfx_dodge_trail"]
     sfx_ids: ["sfx_dodge"]
 
+  - bone_id: "react_dodge_energy"
+    channel: "EVADE"
+    damage_material: "ENERGY"
+    motion_style: "ANY"
+    attack_result: "DODGE"
+    text_fragments:
+      - "{defender}推进器反向喷射，完美躲过了那道致命的高能光束！"
+      - "{defender}姿态控制喷嘴喷出耀眼的火焰，惊险避开高能粒子流！"
+      - "高能光束擦着{defender}的装甲划过，险险避过！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_dodge"]
+
+  - bone_id: "react_dodge_generic"
+    channel: "EVADE"
+    damage_material: "GENERIC"
+    attack_result: "DODGE"
+    text_fragments:
+      - "{defender}姿态控制喷嘴喷出火焰，惊险闪避！"
+      - "{defender}在千钧一发之际完成了闪避动作！"
+      - "{defender}以惊人的反应速度躲开了攻击！"
+    vfx_ids: ["vfx_dodge_trail"]
+    sfx_ids: ["sfx_dodge"]
+
+  - bone_id: "react_parry_blade"
+    channel: "EVADE"
+    damage_material: "PHYSICAL"
+    attack_result: "PARRY"
+    text_fragments:
+      - "刀光一闪！{defender}的利刃将袭来的斩击一刀两断，顺势逼近！"
+      - "{defender}以武器精准劈开来袭攻击，在火花中发动反击！"
+      - "铿锵作响！{defender}架住攻击的同时，武器已指向敌机要害！"
+    vfx_ids: ["vfx_spark_burst", "vfx_metal_clash"]
+    sfx_ids: ["sfx_clash_light"]
+
+  - bone_id: "react_parry_energy"
+    channel: "EVADE"
+    damage_material: "ENERGY"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}的I-Field感应场弹开光束，机体顺势突进！"
+      - "盾牌表面迸发耀眼闪光！{defender}将光束劈散的同时展开反攻！"
+      - "能量束被{defender}以精妙的角度切开，化作战场上的流光！"
+    vfx_ids: ["vfx_shield_glow", "vfx_beam_diffuse"]
+    sfx_ids: ["sfx_shield_absorb"]
+
+  - bone_id: "react_parry_kinetic"
+    channel: "EVADE"
+    damage_material: "KINETIC"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}的盾牌将弹头精准切开，碎片四散的同时机体已前压！"
+      - "{defender}以武器弹开来袭弹幕，在火光中拉开反击距离！"
+      - "弹头被{defender}巧劲偏转，爆炸的瞬间已展开攻势！"
+    vfx_ids: ["vfx_shield_spark", "vfx_deflect"]
+    sfx_ids: ["sfx_deflect"]
+
+  - bone_id: "react_parry_generic"
+    channel: "EVADE"
+    damage_material: "GENERIC"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}以硬碰硬！在猛烈撞击中将攻势弹开，顺势反击！"
+      - "轰然作响！{defender}架住冲击的同时，机体已展开反制行动！"
+      - "{defender}以精妙的角度偏转重击，借力卸下攻势的同时逼近！"
+    vfx_ids: ["vfx_impact_shock", "vfx_deflect"]
+    sfx_ids: ["sfx_clash_heavy"]
+
+  
   # --- FATAL 频道: 致死反应 ---
   - bone_id: "react_fatal_energy"
     channel: "FATAL"
-    physics_class: "Energy"
+    damage_material: "ENERGY"
     text_fragments:
       - "{defender}的{hit_part}被高能光束贯穿，机体在烈焰中化为燃烧的残骸"
       - "{defender}的{hit_part}熔穿后引发连锁爆炸，系统瞬间离线"
@@ -214,7 +515,7 @@ reaction_bones:
 
   - bone_id: "react_fatal_kinetic"
     channel: "FATAL"
-    physics_class: "Kinetic"
+    damage_material: "KINETIC"
     text_fragments:
       - "弹头直接贯穿{defender}的{hit_part}，机体在空中化为破碎的流星"
       - "{defender}的{hit_part}被击碎，核心机能停止，连锁爆裂接踵而至"
@@ -225,7 +526,7 @@ reaction_bones:
 
   - bone_id: "react_fatal_blade"
     channel: "FATAL"
-    physics_class: "Blade"
+    damage_material: "PHYSICAL"
     text_fragments:
       - "{defender}的{hit_part}连同骨架一同被切断！系统在爆炸中崩溃"
       - "利刃贯穿{defender}的{hit_part}，驾驶员甚至来不及反应"
@@ -236,7 +537,7 @@ reaction_bones:
 
   - bone_id: "react_fatal_impact"
     channel: "FATAL"
-    physics_class: "Impact"
+    damage_material: "GENERIC"
     text_fragments:
       - "{defender}的{hit_part}被重锤贯穿，机体在剧烈撞击声中化为碎片"
       - "冲击波摧毁了{defender}的{hit_part}，机体瞬间被压成废铁"
@@ -248,65 +549,138 @@ reaction_bones:
   # --- BLOCK/PARRY 反应 ---
   - bone_id: "react_block_energy"
     channel: "IMPACT"
-    physics_class: "Energy"
+    damage_material: "ENERGY"
     attack_result: "BLOCK"
     text_fragments:
-      - "{defender}的{hit_part}盾牌表面亮起刺眼红光，防御阵线依然稳固"
+      - "{defender}举起盾牌，表面亮起刺眼红光，防御阵线依然稳固"
       - "I-Field在{defender}的{hit_part}展开，光束在感应场表面扭曲消散"
-      - "{defender}的{hit_part}抗光束涂层迅速蒸发，能量雾气弥漫"
-      - "光束撞上{defender}的{hit_part}后被完全偏转，没有留下痕迹"
+      - "{defender}的抗光束涂层迅速蒸发，能量雾气弥漫"
+      - "光束撞上{defender}的{hit_part}后被偏转开"
     vfx_ids: ["vfx_shield_glow", "vfx_beam_diffuse"]
     sfx_ids: ["sfx_shield_absorb"]
 
   - bone_id: "react_block_kinetic"
     channel: "IMPACT"
-    physics_class: "Kinetic"
+    damage_material: "KINETIC"
     attack_result: "BLOCK"
     text_fragments:
-      - "{defender}的{hit_part}盾牌死死顶在前方，表面已千疮百孔但防线稳固"
-      - "{defender}的{hit_part}厚重装甲层硬扛下来，攻击被成功挡下"
+      - "{defender}举起盾牌死死顶在前方，表面已千疮百孔但防线稳固"
+      - "{defender}的厚重装甲层硬扛下来，攻击被成功挡下"
       - "{defender}的{hit_part}表面迸溅出火花，攻击被弹开"
       - "弹头撞击{defender}的{hit_part}后被粉碎，防御依然完整"
     vfx_ids: ["vfx_shield_spark", "vfx_armor_impact"]
     sfx_ids: ["sfx_shield_block"]
 
+  - bone_id: "react_block_physical"
+    channel: "IMPACT"
+    damage_material: "PHYSICAL"
+    attack_result: "BLOCK"
+    text_fragments:
+      - "{defender}举起盾牌，将斩击硬生生挡下"
+      - "{defender}的武器横在身前，架住了致命一击"
+      - "{defender}侧身格挡，攻击被弹开"
+    vfx_ids: ["vfx_shield_spark", "vfx_armor_impact"]
+    sfx_ids: ["sfx_shield_block"]
+
+  - bone_id: "react_block_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    attack_result: "BLOCK"
+    text_fragments:
+      - "{defender}稳稳架住攻击，防御未破"
+      - "{defender}以臂甲格挡，攻势被化解"
+      - "{defender}挡下了这次攻击"
+    vfx_ids: ["vfx_shield_spark", "vfx_armor_impact"]
+    sfx_ids: ["sfx_shield_block"]
+
   - bone_id: "react_parry_blade"
     channel: "IMPACT"
-    physics_class: "Blade"
+    damage_material: "PHYSICAL"
     attack_result: "PARRY"
     text_fragments:
-      - "火花四溅！{defender}以武器精准招架，化解了攻势"
-      - "金属撞击的尖锐声响！{defender}成功架住了来袭攻击"
-      - "{defender}承受撞击，传感器因强烈碰撞产生杂讯"
+      - "刀光一闪！{defender}的利刃将袭来的斩击一刀两断，顺势逼近！"
+      - "{defender}以武器精准劈开来袭攻击，在火花中发动反击！"
+      - "铿锵作响！{defender}架住攻击的同时，武器已指向敌机要害！"
     vfx_ids: ["vfx_spark_burst", "vfx_metal_clash"]
     sfx_ids: ["sfx_clash_light"]
 
   - bone_id: "react_parry_energy"
     channel: "IMPACT"
-    physics_class: "Energy"
+    damage_material: "ENERGY"
     attack_result: "PARRY"
     text_fragments:
-      - "{defender}的I-Field感应场及时展开，能量攻击被偏转"
-      - "光束在{defender}的盾牌表面划过，没有留下痕迹"
+      - "{defender}的I-Field感应场弹开光束，机体顺势突进！"
+      - "盾牌表面迸发耀眼闪光！{defender}将光束劈散的同时展开反攻！"
+      - "能量束被{defender}以精妙的角度切开，化作战场上的流光！"
     vfx_ids: ["vfx_shield_glow", "vfx_beam_diffuse"]
     sfx_ids: ["sfx_shield_absorb"]
 
   - bone_id: "react_parry_kinetic"
     channel: "IMPACT"
-    physics_class: "Kinetic"
+    damage_material: "KINETIC"
     attack_result: "PARRY"
     text_fragments:
-      - "{defender}的盾牌精准偏转，弹头被弹飞到一旁"
-      - "{defender}以精妙的角度架住了来袭的攻击"
+      - "{defender}的盾牌将弹头精准切开，碎片四散的同时机体已前压！"
+      - "{defender}以武器弹开来袭弹幕，在火光中拉开反击距离！"
+      - "弹头被{defender}巧劲偏转，爆炸的瞬间已展开攻势！"
     vfx_ids: ["vfx_shield_spark", "vfx_deflect"]
     sfx_ids: ["sfx_deflect"]
 
-  - bone_id: "react_parry_impact"
+  - bone_id: "react_parry_generic"
     channel: "IMPACT"
-    physics_class: "Impact"
+    damage_material: "GENERIC"
     attack_result: "PARRY"
     text_fragments:
-      - "{defender}推进器全开，在接触前完成了闪避"
-      - "千钧一发之际，{defender}侧身避开了正面冲撞"
+      - "{defender}以硬碰硬！在猛烈撞击中将攻势弹开，顺势反击！"
+      - "轰然作响！{defender}架住冲击的同时，机体已展开反制行动！"
+      - "{defender}以精妙的角度偏转重击，借力卸下攻势的同时逼近！"
+    vfx_ids: ["vfx_impact_shock", "vfx_deflect"]
+    sfx_ids: ["sfx_clash_heavy"]
+
+# =====================================================
+# T3_FALLBACK 通用模板 (最低优先级兜底)
+# =====================================================
+t3_action_bones:
+  - bone_id: "t3_attack_generic"
+    motion_style: "ANY"
+    damage_material: "ANY"
+    tier: "T3_FALLBACK"
+    text_fragments:
+      - "{attacker} 使用 {weapon} 攻击 {defender}！"
+      - "{attacker} 向 {defender} 发起攻击！"
+      - "{attacker} 的 {weapon} 锁定了 {defender}！"
+    anim_id: "anim_attack_generic"
+
+t3_reaction_bones:
+  - bone_id: "t3_react_generic"
+    channel: "IMPACT"
+    damage_material: "ANY"
+    tier: "T3_FALLBACK"
+    text_fragments:
+      - "{defender} 受到了攻击！"
+      - "攻击命中了 {defender}！"
+      - "{defender} 被 {attacker} 的攻击命中！"
+    vfx_ids: ["vfx_impact_generic"]
+    sfx_ids: ["sfx_impact_generic"]
+
+  - bone_id: "t3_react_evade"
+    channel: "EVADE"
+    damage_material: "ANY"
+    tier: "T3_FALLBACK"
+    text_fragments:
+      - "{defender} 躲开了攻击！"
+      - "攻击落空了！"
+      - "{defender} 成功回避！"
     vfx_ids: ["vfx_dodge_trail"]
     sfx_ids: ["sfx_dodge"]
+
+  - bone_id: "t3_react_fatal"
+    channel: "FATAL"
+    damage_material: "ANY"
+    tier: "T3_FALLBACK"
+    text_fragments:
+      - "{defender} 被击坠了！"
+      - "{defender} 的机体被摧毁！"
+      - "致命一击！{defender} 坠落！"
+    vfx_ids: ["vfx_explosion_generic"]
+    sfx_ids: ["sfx_explosion_generic"]

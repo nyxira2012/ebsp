@@ -41,38 +41,64 @@ class AttackEventBuilder:
     """
 
     @staticmethod
-    def _classify_physics(weapon_tags: List[str], weapon_name: str = "") -> str:
-        """
-        根据武器标签判断物理类 (Physics Class)。
-        Energy: 光束/能量武器
-        Kinetic: 实弹/导弹武器
-        Blade: 斩击/格斗武器
-        Impact: 撞击/冲击武器
-        """
+    def _extract_motion_style(weapon_type: str, weapon_tags: List[str], weapon_name: str = "") -> str:
+        """从武器数据中提取动作风格 (Action Style)"""
         tags = [t.lower() for t in weapon_tags]
         name = weapon_name.lower()
 
-        # 优先判断光束类（beam标签优先，避免被bazooka等词误判）
-        if any(tag in tags for tag in ["beam", "energy", "particle", "laser", "光束"]):
-            return "Energy"
+        # 辅助函数：检查标签是否包含任意关键词
+        def has_keyword(keywords):
+            return any(any(kw in tag for tag in tags) for kw in keywords)
 
-        # 斩击类
-        if any(tag in tags for tag in ["slash", "blade", "saber", "sword", "axe", "knife", "军刀", "斩"]):
-            return "Blade"
+        # 1. 精神/浮游类（优先检查，因为标签可能包含 beam）
+        if has_keyword(["psycho", "精神", "funnel", "浮游"]):
+            return "PSYCHO_WAVE"
 
-        # 实弹类（排除光束类武器）
-        if any(tag in tags for tag in ["missile", "projectile", "shell", "bullet", "rocket", "导弹", "实弹"]):
-            return "Kinetic"
+        # 2. 斩击类
+        if has_keyword(["slash", "blade", "saber", "sword", "axe", "knife", "军刀", "斩", "剑", "斧"]):
+            if has_keyword(["heavy", "giant", "重"]):
+                return "SLASH_HEAVY"
+            return "SLASH_LIGHT"
 
-        # 根据武器名称补充判断（针对没有标签的情况）
-        if "光束" in name or "粒子" in name or "激光" in name:
-            return "Energy"
-        if "火箭" in name and "光束" not in name:
-            return "Kinetic"
-        if "军刀" in name or "剑" in name or "斧" in name:
-            return "Blade"
+        # 3. 射击类
+        if has_keyword(["missile", "projectile", "rocket", "导弹", "火箭"]):
+            return "PROJ_RAIN"
+        if has_keyword(["bazooka", "cannon", "炮"]):
+            return "PROJ_SINGLE"
+        if has_keyword(["beam", "rifle", "laser", "步枪", "射击"]):
+            if has_keyword(["massive", "mega", "map", "巨"]):
+                return "SHOOT_MASSIVE"
+            return "SHOOT_INSTANT"
 
-        return "Impact"
+        # 4. 撞击类
+        if has_keyword(["ram", "tackle", "撞"]):
+            return "IMPACT_RAM"
+
+        return "STRIKE_BLUNT"
+
+    @staticmethod
+    def _extract_damage_material(weapon_tags: List[str], weapon_name: str = "") -> str:
+        """从武器数据中提取物理材质 (Damage Material)"""
+        tags = [t.lower() for t in weapon_tags]
+        name = weapon_name.lower()
+
+        # 辅助函数：检查标签是否包含任意关键词
+        def has_keyword(keywords):
+            return any(any(kw in tag for tag in tags) for kw in keywords)
+
+        # 1. 能量类
+        if has_keyword(["beam", "energy", "particle", "laser", "光束", "高能"]):
+            return "ENERGY"
+
+        # 2. 实弹类
+        if has_keyword(["missile", "projectile", "shell", "bullet", "rocket", "导弹", "实弹", "物理弹"]):
+            return "KINETIC"
+
+        # 3. 物理/金属类
+        if has_keyword(["slash", "blade", "saber", "physical", "冲击", "撞"]):
+            return "PHYSICAL"
+
+        return "GENERIC"
 
     @staticmethod
     def build(
@@ -150,9 +176,13 @@ class AttackEventBuilder:
             defender_will_after=defender.current_will,
             defender_max_hp=defender.final_max_hp,
 
-            # ── 演出系统数据契约 (Phase 0) ───────────────────────────
-            # is_lethal: 攻击后 HP <= 0 才是致死（注意：此时 defender 已经扣血）
+            # ── 演出系统数据契约 (MDDC v5.1) ─────────────────────────
             is_lethal=(defender.current_hp <= 0),
-            physics_class=AttackEventBuilder._classify_physics(getattr(weapon, 'tags', [])),
+            motion_style=AttackEventBuilder._extract_motion_style(
+                weapon.type.value, getattr(weapon, 'tags', []), weapon.name
+            ),
+            damage_material=AttackEventBuilder._extract_damage_material(
+                getattr(weapon, 'tags', []), weapon.name
+            ),
             spirit_commands=spirit_commands,
         )
