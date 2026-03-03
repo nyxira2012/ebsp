@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .template import PresentationTemplate
 
 from .models import RawAttackEvent, PresentationAttackEvent
-from .constants import Channel
+from .constants import Channel, TemplateTier
 from .template import ActionBone, ReactionBone
 from .router import OutcomeRouter
 from .bidder import DualBidder
@@ -145,6 +145,8 @@ class EventMapper:
             hit_location=hit_part,
             action_template_id=getattr(action_bone, 'bone_id', None) if action_bone else None,
             reaction_template_id=getattr(reaction_bone, 'bone_id', None) if reaction_bone else None,
+            action_tier=getattr(action_bone, 'tier', TemplateTier.T2_TACTICAL) if action_bone else TemplateTier.T3_FALLBACK,
+            reaction_tier=getattr(reaction_bone, 'tier', TemplateTier.T2_TACTICAL) if reaction_bone else TemplateTier.T3_FALLBACK,
         )
 
         return [action_event, reaction_event]

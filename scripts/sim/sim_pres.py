@@ -87,7 +87,7 @@ WEAPON_TYPES = [
         "id": "blunt_strike",
         "name": "铁锤重击",
         "motion_style": MotionStyle.STRIKE_BLUNT,
-        "damage_material": DamageMaterial.GENERIC,
+        "damage_material": DamageMaterial.PHYSICAL,
         "attacker": "勇士",
         "defender": "高达",
     },
@@ -152,13 +152,10 @@ def run_simulation():
     config_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "config", "presentation_templates.yaml"
     )
-    registry = TemplateRegistry()
-    registry.load_from_config(config_path)
-    mapper = EventMapper(registry)
 
     total_cases = 0
 
-    
+
     # 遍历所有武器类型
     for weapon in WEAPON_TYPES:
         print(f"\n{'=' * 100}")
@@ -168,6 +165,11 @@ def run_simulation():
         # 遍历所有判定结果
         for result_code, damage, is_lethal, result_name in ATTACK_RESULTS:
             total_cases += 1
+
+            # 每个测试用例创建新的 mapper，避免冷却状态干扰
+            registry = TemplateRegistry()
+            registry.load_from_config(config_path)
+            mapper = EventMapper(registry)
 
             # 创建事件
             event = create_event(weapon, result_code, damage, is_lethal)

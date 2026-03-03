@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
-from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier
+from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier, MacroMotion, MOTION_STYLE_TO_MACRO
 from .template import ActionBone, ReactionBone
 
 logger = logging.getLogger(__name__)
@@ -106,44 +106,59 @@ class DualBidder:
         )
 
     def _bid_reaction(self, event: RawAttackEvent, channel: Channel) -> Optional[ReactionBone]:
-        """Reaction 竞标：T2 精确匹配 → T2 降级 → T3 硬编码兜底"""
+        """Reaction 竞标：T2_Perfect → T2.5_Decay → T3_Fallback
+
+        降级匹配锁链（文档6机制3）：
+        1. T2_Perfect: 精确匹配 MotionStyle + DamageMaterial
+        2. T2.5_Decay: 仅匹配 MacroMotion（4大类动作分类，忽略材质）
+        3. T3_Fallback: 硬编码兜底
+        """
         damage_material = event.damage_material
         motion_style = event.motion_style
+        # 获取宏观动作分类（用于 T2.5_Decay 层匹配）
+        # 将字符串 motion_style 转换为 MotionStyle 枚举
+        try:
+            motion_enum = MotionStyle(motion_style)
+        except ValueError:
+            motion_enum = None
+        macro_motion = MOTION_STYLE_TO_MACRO.get(motion_enum, MacroMotion.GENERIC) if motion_enum else MacroMotion.GENERIC
 
-        # 1. 基础过滤：频道 + 精确匹配 attack_result + 冷却
-        t2_candidates = [
+        # 基础过滤：频道 + attack_result + 冷却
+        base_candidates = [
             bone for bone in self.reaction_bones
             if bone.channel == channel
-            and bone.attack_result == event.attack_result  # 精确匹配，无通配
+            and bone.attack_result == event.attack_result
             and self._cooldowns.get(bone.bone_id, 0) <= 0
         ]
 
-        # 2. T2 层：damage_material 匹配
-        material_matches = [
-            bone for bone in t2_candidates
-            if bone.damage_material == damage_material
+        # ============ T2_Perfect: 精确匹配 MotionStyle + DamageMaterial ============
+        t2_perfect = [
+            bone for bone in base_candidates
+            if bone.motion_style == motion_style
+            and bone.damage_material == damage_material
         ]
-        if material_matches:
-            # 2.1 优先精确匹配 motion_style
-            motion_exact = [
-                bone for bone in material_matches
-                if bone.motion_style == motion_style
-            ]
-            if motion_exact:
-                return self._weighted_select(motion_exact, motion_style)
+        if t2_perfect:
+            return self._weighted_select(t2_perfect, motion_style)
 
-            # 2.2 否则选择 ANY 或加权选择
-            return self._weighted_select(material_matches, motion_style)
-
-        # 3. T2 降级：GENERIC 材质
-        generic_matches = [
-            bone for bone in t2_candidates
-            if bone.damage_material == "GENERIC"
+        # ============ T2.5_Decay: 仅匹配 MacroMotion（忽略材质） ============
+        t2_decay = [
+            bone for bone in base_candidates
+            if bone.macro_motion == macro_motion
+            and bone.damage_material == "GENERIC"  # 通用材质模板作为 Decay 层
         ]
-        if generic_matches:
-            return self._weighted_select(generic_matches, motion_style)
+        if t2_decay:
+            return self._weighted_select(t2_decay, motion_style)
 
-        # 4. T3 硬编码兜底：无匹配模板时的最终 fallback
+        # 进一步降级：macro_motion=ANY 的通用模板
+        t2_decay_any = [
+            bone for bone in base_candidates
+            if bone.macro_motion == "ANY"
+            and bone.damage_material == "GENERIC"
+        ]
+        if t2_decay_any:
+            return self._weighted_select(t2_decay_any, motion_style)
+
+        # ============ T3_Fallback: 硬编码兜底 ============
         result_texts = {
             "HIT": ["{defender}被击中了。"],
             "CRIT": ["{defender}遭受了沉重打击！"],
@@ -168,7 +183,7 @@ class DualBidder:
             attack_result=event.attack_result
         )
 
-    def _weighted_select(self, candidates: List, motion_style: str) -> Optional:
+    def _weighted_select(self, candidates: List[ReactionBone], motion_style: str) -> Optional[ReactionBone]:
         """加权随机选择（基于 motion_style）"""
         weights = []
         for bone in candidates:

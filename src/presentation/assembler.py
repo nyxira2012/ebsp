@@ -248,12 +248,6 @@ class TextAssembler:
         except KeyError:
             return text
 
-        # 变量注入
-        try:
-            return text.format(**variables)
-        except KeyError:
-            return text
-
     def _assemble_reaction(
         self,
         bone: Optional[ReactionBone],

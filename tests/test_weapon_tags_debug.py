@@ -66,22 +66,4 @@ if sim.presentation_timeline:
 else:
     print("没有演出事件生成！")
 
-print("\n=== 检查原始攻击事件 ===")
-# 直接检查 EventMapper 接收到的数据
-from src.presentation.intent_extractor import IntentExtractor
-
-# 模拟一个原始攻击事件
-test_weapon = mecha_a.weapons[0] if mecha_a.weapons else None
-if test_weapon:
-    print(f"测试武器: {test_weapon.name}")
-    print(f"  - 类型: {test_weapon.type.value}")
-    print(f"  - 标签: {getattr(test_weapon, 'tags', [])}")
-
-    # 提取视觉意图
-    intent = IntentExtractor.extract_intent(
-        test_weapon.type.value,
-        getattr(test_weapon, 'tags', [])
-    )
-    print(f"  - 提取的视觉意图: {intent.value}")
-
 print("\n调试完成！")

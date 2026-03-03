@@ -91,6 +91,7 @@ class ReactionBone:
     """
     防御方反应骨架 - 描述"频道是什么、物理类是什么、反应如何"。
     MDDC v5.1: 主要由 damage_material 驱动，可选匹配 motion_style。
+    文档6机制3：降级时使用 macro_motion（4大类动作分类）进行匹配。
     """
     bone_id: str                      # 唯一标识
     channel: Channel                  # 只匹配对应频道 (FATAL/EVADE/IMPACT)
@@ -99,6 +100,7 @@ class ReactionBone:
     motion_style: str = "ANY"         # 可选：对动作风格的特定限制（如特化"光束斩击"反应）
     vfx_ids: List[str] = field(default_factory=list)  # 视觉特效ID
     sfx_ids: List[str] = field(default_factory=list)  # 音效ID
+    macro_motion: str = "ANY"         # 宏观动作分类（RANGED_DIRECT/MELEE_CLASH/RANGED_AOE/OMNI_DIRECTIONAL）
     tier: TemplateTier = TemplateTier.T2_TACTICAL
     weight: float = 1.0               # 竞标权重
     tags: List[str] = field(default_factory=list)  # 额外标签

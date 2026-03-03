@@ -115,6 +115,8 @@ class AVDispatcher:
         hit_location: Optional[str] = None,
         action_template_id: Optional[str] = None,
         reaction_template_id: Optional[str] = None,
+        action_tier: TemplateTier = TemplateTier.T2_TACTICAL,
+        reaction_tier: TemplateTier = TemplateTier.T2_TACTICAL,
     ) -> Tuple[PresentationAttackEvent, PresentationAttackEvent]:
         """
         调度生成 Action 和 Reaction 两个事件。
@@ -139,7 +141,7 @@ class AVDispatcher:
             round_number=raw_event.round_number,
             timestamp=action_ts,
             text=action_text,
-            tier=TemplateTier.T2_TACTICAL,  # 默认战术层级
+            tier=action_tier,  # 使用传入的 tier
             anim_id=action_anim_id or self._get_default_action_anim(raw_event),
             camera_cam=action_cam,
             vfx_ids=vfx_ids or [],
@@ -158,7 +160,7 @@ class AVDispatcher:
             round_number=raw_event.round_number,
             timestamp=reaction_ts,
             text=reaction_text,
-            tier=TemplateTier.T2_TACTICAL,
+            tier=reaction_tier,  # 使用传入的 tier
             anim_id=reaction_anim_id or self._get_default_reaction_anim(raw_event, channel),
             camera_cam=reaction_cam,
             vfx_ids=vfx_ids or [],

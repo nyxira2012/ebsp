@@ -97,12 +97,21 @@ class TemplateLoader:
         except ValueError:
             channel = Channel.IMPACT
 
-        # Parse tier
-        tier_str = data.get('tier', 'T2_TACTICAL')
-        try:
-            tier = TemplateTier[tier_str]
-        except KeyError:
-            tier = TemplateTier.T2_TACTICAL
+        # Parse tier (自动识别 T2.5_Decay 层)
+        tier_str = data.get('tier', None)
+        if tier_str:
+            try:
+                tier = TemplateTier[tier_str]
+            except KeyError:
+                tier = TemplateTier.T2_TACTICAL
+        else:
+            # 自动判断：GENERIC + macro_motion != ANY → T2.5_Decay 层
+            damage_mat = data.get('damage_material', 'GENERIC')
+            macro_motion = data.get('macro_motion', 'ANY')
+            if damage_mat == 'GENERIC' and macro_motion != 'ANY':
+                tier = TemplateTier.T2_5_DECAY
+            else:
+                tier = TemplateTier.T2_TACTICAL
 
         return ReactionBone(
             bone_id=data['bone_id'],
@@ -112,6 +121,7 @@ class TemplateLoader:
             text_fragments=data.get('text_fragments', []),
             vfx_ids=data.get('vfx_ids', []),
             sfx_ids=data.get('sfx_ids', []),
+            macro_motion=data.get('macro_motion', 'ANY'),
             tier=tier,
             weight=data.get('weight', 1.0),
             tags=data.get('tags', []),

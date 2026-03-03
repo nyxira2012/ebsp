@@ -31,6 +31,38 @@ class MotionStyle(str, Enum):
     PSYCHO_WAVE = "PSYCHO_WAVE"        # 精神波动
     AOE_BURST = "AOE_BURST"            # 区域爆发
 
+class MacroMotion(str, Enum):
+    """
+    宏观动作分类 (Macro-Motion) - 描述物理交互的"骨架"。
+    用于驱动 ReactionBone 竞标，优先级仅次于 Result。
+    文档6机制3：降级匹配时使用4大类动作分类。
+    """
+    RANGED_DIRECT = "RANGED_DIRECT"      # 定向直射 (步枪, 单发火箭)
+    MELEE_CLASH = "MELEE_CLASH"          # 近战格斗 (斩击, 打击, 撞击)
+    RANGED_AOE = "RANGED_AOE"            # 大范围覆盖 (弹幕, 地图炮)
+    OMNI_DIRECTIONAL = "OMNI_DIRECTIONAL" # 全方位空间 (浮游炮)
+    GENERIC = "GENERIC"                  # 通用兜底
+
+# 映射表：MotionStyle -> MacroMotion
+# 用于 T2.5_Decay 层的降级匹配
+MOTION_STYLE_TO_MACRO = {
+    # Melee -> MELEE_CLASH
+    MotionStyle.SLASH_LIGHT: MacroMotion.MELEE_CLASH,
+    MotionStyle.SLASH_HEAVY: MacroMotion.MELEE_CLASH,
+    MotionStyle.STRIKE_BLUNT: MacroMotion.MELEE_CLASH,
+    MotionStyle.IMPACT_RAM: MacroMotion.MELEE_CLASH,
+
+    # Shooting -> RANGED_DIRECT / RANGED_AOE
+    MotionStyle.SHOOT_INSTANT: MacroMotion.RANGED_DIRECT,
+    MotionStyle.PROJ_SINGLE: MacroMotion.RANGED_DIRECT,
+    MotionStyle.SHOOT_MASSIVE: MacroMotion.RANGED_AOE,
+    MotionStyle.PROJ_RAIN: MacroMotion.RANGED_AOE,
+    MotionStyle.AOE_BURST: MacroMotion.RANGED_AOE,
+
+    # Special -> OMNI_DIRECTIONAL
+    MotionStyle.PSYCHO_WAVE: MacroMotion.OMNI_DIRECTIONAL,
+}
+
 class DamageMaterial(str, Enum):
     """
     伤害物理材质 (Impact Material) - 描述物理交互的"本质"。
@@ -49,5 +81,6 @@ class TemplateTier(str, Enum):
     T0_SCRIPTED = "T0_SCRIPTED"     # Scripted/Story events (Highest)
     T0_LETHAL = "T0_LETHAL"         # Lethal damage (special priority)
     T1_HIGHLIGHT = "T1_HIGHLIGHT"   # Skill/Character highlights
-    T2_TACTICAL = "T2_TACTICAL"     # Weapon/Physics interactions (from YAML)
+    T2_TACTICAL = "T2_TACTICAL"     # Weapon/Physics interactions (from YAML, T2_Perfect)
+    T2_5_DECAY = "T2_5_DECAY"       # Generic macro-motion templates (T2.5_Decay layer)
     T3_FALLBACK = "T3_FALLBACK"     # Hard-coded fallback (no template match)
