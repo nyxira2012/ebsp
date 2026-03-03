@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
-from .constants import Channel, MotionStyle, DamageMaterial
+from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier
 from .template import ActionBone, ReactionBone
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class DualBidder:
         return action_bone, reaction_bone
 
     def _bid_action(self, event: RawAttackEvent) -> Optional[ActionBone]:
-        """Action 竞标：T2 精确匹配 → T3 通用降级"""
+        """Action 竞标：T2 精确匹配 → T2 降级 → T3 硬编码兜底"""
         motion_style = event.motion_style
         damage_material = event.damage_material
 
@@ -78,7 +78,6 @@ class DualBidder:
             if bone.motion_style == motion_style
             and bone.damage_material == damage_material
             and self._cooldowns.get(bone.bone_id, 0) <= 0
-            and getattr(bone, 'tier', None) != 'T3_FALLBACK'  # 排除 T3
         ]
 
         if candidates:
@@ -91,45 +90,32 @@ class DualBidder:
             if bone.motion_style == motion_style
             and bone.damage_material == "GENERIC"
             and self._cooldowns.get(bone.bone_id, 0) <= 0
-            and getattr(bone, 'tier', None) != 'T3_FALLBACK'
         ]
 
         if candidates:
             weights = [getattr(bone, 'weight', 1.0) for bone in candidates]
             return random.choices(candidates, weights=weights, k=1)[0]
 
-        # 3. T3 FALLBACK：ANY 动作风格 + ANY 材质
-        t3_candidates = [
-            bone for bone in self.action_bones
-            if getattr(bone, 'tier', None) == 'T3_FALLBACK'
-            and self._cooldowns.get(bone.bone_id, 0) <= 0
-        ]
-
-        if t3_candidates:
-            weights = [getattr(bone, 'weight', 1.0) for bone in t3_candidates]
-            return random.choices(t3_candidates, weights=weights, k=1)[0]
-
-        # 4. 终极兜底：硬编码 T3 骨架
+        # 3. T3 硬编码兜底：无匹配模板时的最终 fallback
         return ActionBone(
-            bone_id="HARDCODED_T3_ACTION",
+            bone_id="T3_FALLBACK_ACTION",
             motion_style="ANY",
             text_fragments=["{attacker}使用{weapon}展开了攻击！"],
             anim_id="anim_generic_attack",
-            tier="T3_FALLBACK"
+            tier=TemplateTier.T3_FALLBACK
         )
 
     def _bid_reaction(self, event: RawAttackEvent, channel: Channel) -> Optional[ReactionBone]:
-        """Reaction 竞标：T2 精确匹配 → T3 通用降级"""
+        """Reaction 竞标：T2 精确匹配 → T2 降级 → T3 硬编码兜底"""
         damage_material = event.damage_material
         motion_style = event.motion_style
 
-        # 1. 基础过滤：频道 + 精确匹配 attack_result + 冷却（排除 T3）
+        # 1. 基础过滤：频道 + 精确匹配 attack_result + 冷却
         t2_candidates = [
             bone for bone in self.reaction_bones
             if bone.channel == channel
             and bone.attack_result == event.attack_result  # 精确匹配，无通配
             and self._cooldowns.get(bone.bone_id, 0) <= 0
-            and getattr(bone, 'tier', None) != 'T3_FALLBACK'
         ]
 
         # 2. T2 层：damage_material 匹配
@@ -157,17 +143,7 @@ class DualBidder:
         if generic_matches:
             return self._weighted_select(generic_matches, motion_style)
 
-        # 4. T3 FALLBACK：ANY 材质
-        t3_candidates = [
-            bone for bone in self.reaction_bones
-            if bone.channel == channel
-            and getattr(bone, 'tier', None) == 'T3_FALLBACK'
-            and self._cooldowns.get(bone.bone_id, 0) <= 0
-        ]
-        if t3_candidates:
-            return self._weighted_select(t3_candidates, motion_style)
-
-        # 5. 终极兜底：根据判定结果返回硬编码 T3 骨架
+        # 4. T3 硬编码兜底：无匹配模板时的最终 fallback
         result_texts = {
             "HIT": ["{defender}被击中了。"],
             "CRIT": ["{defender}遭受了沉重打击！"],
@@ -176,7 +152,7 @@ class DualBidder:
             "DODGE": ["{defender}巧妙地躲开了。"],
             "MISS": ["攻击没能命中{defender}。"],
         }
-        
+
         # 致死频道强制覆盖描述
         if channel == Channel.FATAL:
             fragments = ["{defender}被彻底摧毁了。"]
@@ -184,11 +160,11 @@ class DualBidder:
             fragments = result_texts.get(event.attack_result, ["{defender}受到了影响。"])
 
         return ReactionBone(
-            bone_id=f"HARDCODED_T3_REACTION_{event.attack_result}",
+            bone_id=f"T3_FALLBACK_REACTION_{event.attack_result}",
             channel=channel,
             damage_material="GENERIC",
             text_fragments=fragments,
-            tier="T3_FALLBACK",
+            tier=TemplateTier.T3_FALLBACK,
             attack_result=event.attack_result
         )
 

@@ -10,7 +10,7 @@ class TemplateLoader:
 
     v5.0 架构：
     - 只加载 action_bones 和 reaction_bones
-    - T0 脚本模板通过代码直接创建，不从 YAML 加载
+    - T0 脚本模板通过 ScriptedPresentationManager 代码直接创建
     """
 
     @staticmethod
@@ -41,15 +41,6 @@ class TemplateLoader:
                     except Exception as e:
                         print(f"[ERROR] Failed to parse action_bone {item.get('bone_id', 'unknown')}: {e}")
 
-            # 加载 t3_action_bones
-            if 't3_action_bones' in data:
-                for item in data['t3_action_bones']:
-                    try:
-                        bone = TemplateLoader._parse_action_bone(item)
-                        action_bones.append(bone)
-                    except Exception as e:
-                        print(f"[ERROR] Failed to parse t3_action_bone {item.get('bone_id', 'unknown')}: {e}")
-
             # 加载 reaction_bones
             reaction_bones = []
             if 'reaction_bones' in data:
@@ -59,15 +50,6 @@ class TemplateLoader:
                         reaction_bones.append(bone)
                     except Exception as e:
                         print(f"[ERROR] Failed to parse reaction_bone {item.get('bone_id', 'unknown')}: {e}")
-
-            # 加载 t3_reaction_bones
-            if 't3_reaction_bones' in data:
-                for item in data['t3_reaction_bones']:
-                    try:
-                        bone = TemplateLoader._parse_reaction_bone(item)
-                        reaction_bones.append(bone)
-                    except Exception as e:
-                        print(f"[ERROR] Failed to parse t3_reaction_bone {item.get('bone_id', 'unknown')}: {e}")
 
             return action_bones, reaction_bones
 
