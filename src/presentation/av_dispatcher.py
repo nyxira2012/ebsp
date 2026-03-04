@@ -9,7 +9,7 @@ L4 视听调度层 - 影视级调色
 from typing import List, Optional, Callable, Tuple
 from dataclasses import dataclass
 
-from .models import RawAttackEvent, PresentationAttackEvent
+from .models import RawAttackEvent, PresentationAttackEvent, DispatchPayload
 from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier
 
 
@@ -31,12 +31,6 @@ class AVDispatcher:
     2. 语义化时间轴自适应（根据结果和意图调整延迟）
     3. 统一处理 Action 和 Reaction 事件的生成
     """
-
-    # Threshold constants for camera selection
-    HEAVY_DAMAGE_THRESHOLD = 500      # Damage threshold for heavy camera shake
-    LONG_RANGE_THRESHOLD = 800         # Distance threshold for long shot camera
-    CLOSE_RANGE_THRESHOLD = 100        # Distance threshold for close-up camera
-    CLOSE_COMBAT_DODGE_THRESHOLD = 200 # Distance threshold for close combat dodge camera
 
     # 摄像机选择规则表（优先级从高到低）
     CAMERA_RULES: List[CameraRule] = [
@@ -102,31 +96,19 @@ class AVDispatcher:
     def __init__(self):
         pass
 
-    def dispatch(
-        self,
-        raw_event: RawAttackEvent,
-        action_text: str,
-        reaction_text: str,
-        channel: Channel,
-        action_anim_id: Optional[str] = None,
-        reaction_anim_id: Optional[str] = None,
-        vfx_ids: Optional[List[str]] = None,
-        sfx_ids: Optional[List[str]] = None,
-        hit_location: Optional[str] = None,
-        action_template_id: Optional[str] = None,
-        reaction_template_id: Optional[str] = None,
-        action_tier: TemplateTier = TemplateTier.T2_TACTICAL,
-        reaction_tier: TemplateTier = TemplateTier.T2_TACTICAL,
-    ) -> Tuple[PresentationAttackEvent, PresentationAttackEvent]:
+    def dispatch(self, payload: DispatchPayload) -> Tuple[PresentationAttackEvent, PresentationAttackEvent]:
         """
         调度生成 Action 和 Reaction 两个事件。
 
         Args:
-            hit_location: 受击部位（由 TextAssembler.DhlMapper 提供的中文部位名）
+            payload: 调度数据传输对象，包含所有需要的参数
 
         Returns:
             (action_event, reaction_event) 元组
         """
+        raw_event = payload.raw_event
+        channel = payload.channel
+
         # 选择摄像机
         action_cam = self._select_camera(raw_event, channel, is_action=True)
         reaction_cam = self._select_camera(raw_event, channel, is_action=False)
@@ -140,13 +122,13 @@ class AVDispatcher:
             event_type="ACTION",
             round_number=raw_event.round_number,
             timestamp=action_ts,
-            text=action_text,
-            tier=action_tier,  # 使用传入的 tier
-            anim_id=action_anim_id or self._get_default_action_anim(raw_event),
+            text=payload.action_text,
+            tier=payload.action_tier,
+            anim_id=payload.action_anim_id or self._get_default_action_anim(raw_event),
             camera_cam=action_cam,
-            vfx_ids=vfx_ids or [],
-            sfx_ids=sfx_ids or [],
-            template_id=action_template_id or "",
+            vfx_ids=payload.vfx_ids,
+            sfx_ids=payload.sfx_ids,
+            template_id=payload.action_template_id or "",
             raw_event=raw_event,
             attacker_name=raw_event.attacker_name,
             defender_name=raw_event.defender_name,
@@ -159,15 +141,15 @@ class AVDispatcher:
             event_type="REACTION",
             round_number=raw_event.round_number,
             timestamp=reaction_ts,
-            text=reaction_text,
-            tier=reaction_tier,  # 使用传入的 tier
-            anim_id=reaction_anim_id or self._get_default_reaction_anim(raw_event, channel),
+            text=payload.reaction_text,
+            tier=payload.reaction_tier,
+            anim_id=payload.reaction_anim_id or self._get_default_reaction_anim(raw_event, channel),
             camera_cam=reaction_cam,
-            vfx_ids=vfx_ids or [],
-            sfx_ids=sfx_ids or [],
+            vfx_ids=payload.vfx_ids,
+            sfx_ids=payload.sfx_ids,
             damage_display=self._get_damage_display(raw_event, channel),
-            hit_location=hit_location or "body",
-            template_id=reaction_template_id or "",
+            hit_location=payload.hit_part or "body",
+            template_id=payload.reaction_template_id or "",
             raw_event=raw_event,
             attacker_name=raw_event.attacker_name,
             defender_name=raw_event.defender_name,
@@ -204,11 +186,8 @@ class AVDispatcher:
             delay += 0.4
 
         # 意图相关延迟（根据武器类型）
-        # 使用 event_builder 已提取的 motion_style
-        try:
-            motion_style = MotionStyle(event.motion_style)
-        except ValueError:
-            motion_style = MotionStyle.SHOOT_INSTANT
+        # motion_style 现在已经是枚举类型，直接使用
+        motion_style = event.motion_style
 
         if motion_style in (MotionStyle.SHOOT_MASSIVE, MotionStyle.AOE_BURST):
             delay += 0.3  # 光束武器/地图武器需要更多飞行时间
@@ -219,11 +198,8 @@ class AVDispatcher:
 
     def _get_default_action_anim(self, event: RawAttackEvent) -> str:
         """获取默认攻击动画"""
-        # 使用 event_builder 已提取的 motion_style
-        try:
-            motion_style = MotionStyle(event.motion_style)
-        except ValueError:
-            motion_style = MotionStyle.SHOOT_INSTANT
+        # motion_style 现在已经是枚举类型，直接使用
+        motion_style = event.motion_style
 
         anim_map = {
             MotionStyle.SLASH_LIGHT: "anim_slash_fast",

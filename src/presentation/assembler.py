@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, Dict
 from dataclasses import dataclass
 
 from .models import RawAttackEvent
-from .constants import Channel
+from .constants import Channel, T3_FALLBACK_TEXTS, T3_FALLBACK_FATAL
 from .template import ActionBone, ReactionBone
 
 
@@ -267,20 +267,11 @@ class TextAssembler:
             base_text = random.choice(bone.text_fragments)
         else:
             # 理论上 Bidder 已经保证了有骨架提供，这里作为防御性兜底
-            if event.is_lethal:
-                base_text = "{defender}被彻底摧毁了。"
-            elif event.attack_result == "CRIT":
-                base_text = "{defender}遭受了沉重打击！"
-            elif event.attack_result == "BLOCK":
-                base_text = "{defender}挡住了攻击。"
-            elif event.attack_result == "PARRY":
-                base_text = "{defender}招架了攻击。"
-            elif event.attack_result == "DODGE":
-                base_text = "{defender}巧妙地躲开了。"
-            elif event.attack_result == "MISS":
-                base_text = "攻击没能命中{defender}。"
+            # 使用 constants 中统一定义的兜底文本
+            if event.is_lethal or channel == Channel.FATAL:
+                base_text = T3_FALLBACK_FATAL
             else:
-                base_text = "{defender}被击中了。"
+                base_text = T3_FALLBACK_TEXTS.get(event.attack_result, ["{defender} 受到了影响。"])[0]
 
         # 变量注入
         try:

@@ -84,3 +84,17 @@ class TemplateTier(str, Enum):
     T2_TACTICAL = "T2_TACTICAL"     # Weapon/Physics interactions (from YAML, T2_Perfect)
     T2_5_DECAY = "T2_5_DECAY"       # Generic macro-motion templates (T2.5_Decay layer)
     T3_FALLBACK = "T3_FALLBACK"     # Hard-coded fallback (no template match)
+
+
+# ============ T3_Fallback 兜底文本常量 ============
+# 统一维护 T3 层的兜底文本，避免在 bidder.py 和 assembler.py 中重复定义
+T3_FALLBACK_TEXTS: dict[str, list[str]] = {
+    "HIT": ["{defender} 被击中了。"],
+    "CRIT": ["{defender} 遭受了沉重打击！"],
+    "BLOCK": ["{defender} 挡住了攻击。"],
+    "PARRY": ["{defender} 招架了攻击。"],
+    "DODGE": ["{defender} 巧妙地躲开了。"],
+    "MISS": ["攻击没能命中{defender}。"],
+}
+
+T3_FALLBACK_FATAL = "{defender} 被彻底摧毁了。"

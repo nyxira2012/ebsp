@@ -2,7 +2,7 @@
 L2 剧本解构层 - 动反双轨独立竞标 (Dual-Track Bidding)
 
 职责：将传统"大一统模板"解耦为 Action（攻击方）与 Reaction（防御方）两段独立剧本。
-核心理念：攻守分离，万物皆可组。10种攻击 + 10种受击 = 100种组合。
+核心理念：攻守分离，万物皆可组。10 种攻击 + 10 种受击 = 100 种组合。
 """
 
 import random
@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
-from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier, MacroMotion, MOTION_STYLE_TO_MACRO
+from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier, MacroMotion, MOTION_STYLE_TO_MACRO, T3_FALLBACK_TEXTS, T3_FALLBACK_FATAL
 from .template import ActionBone, ReactionBone
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ class DualBidder:
         return ActionBone(
             bone_id="T3_FALLBACK_ACTION",
             motion_style="ANY",
-            text_fragments=["{attacker}使用{weapon}展开了攻击！"],
+            text_fragments=["{attacker} 使用{weapon}展开了攻击！"],
             anim_id="anim_generic_attack",
             tier=TemplateTier.T3_FALLBACK
         )
@@ -108,20 +108,16 @@ class DualBidder:
     def _bid_reaction(self, event: RawAttackEvent, channel: Channel) -> Optional[ReactionBone]:
         """Reaction 竞标：T2_Perfect → T2.5_Decay → T3_Fallback
 
-        降级匹配锁链（文档6机制3）：
+        降级匹配锁链（文档 6 机制 3）：
         1. T2_Perfect: 精确匹配 MotionStyle + DamageMaterial
-        2. T2.5_Decay: 仅匹配 MacroMotion（4大类动作分类，忽略材质）
+        2. T2.5_Decay: 仅匹配 MacroMotion（4 大类动作分类，忽略材质）
         3. T3_Fallback: 硬编码兜底
         """
         damage_material = event.damage_material
         motion_style = event.motion_style
         # 获取宏观动作分类（用于 T2.5_Decay 层匹配）
-        # 将字符串 motion_style 转换为 MotionStyle 枚举
-        try:
-            motion_enum = MotionStyle(motion_style)
-        except ValueError:
-            motion_enum = None
-        macro_motion = MOTION_STYLE_TO_MACRO.get(motion_enum, MacroMotion.GENERIC) if motion_enum else MacroMotion.GENERIC
+        # motion_style 现在已经是枚举类型，直接使用
+        macro_motion = MOTION_STYLE_TO_MACRO.get(motion_style, MacroMotion.GENERIC)
 
         # 基础过滤：频道 + attack_result + 冷却
         base_candidates = [
@@ -159,20 +155,11 @@ class DualBidder:
             return self._weighted_select(t2_decay_any, motion_style)
 
         # ============ T3_Fallback: 硬编码兜底 ============
-        result_texts = {
-            "HIT": ["{defender}被击中了。"],
-            "CRIT": ["{defender}遭受了沉重打击！"],
-            "BLOCK": ["{defender}挡住了攻击。"],
-            "PARRY": ["{defender}招架了攻击。"],
-            "DODGE": ["{defender}巧妙地躲开了。"],
-            "MISS": ["攻击没能命中{defender}。"],
-        }
-
-        # 致死频道强制覆盖描述
+        # 使用 constants 中统一定义的兜底文本
         if channel == Channel.FATAL:
-            fragments = ["{defender}被彻底摧毁了。"]
+            fragments = [T3_FALLBACK_FATAL]
         else:
-            fragments = result_texts.get(event.attack_result, ["{defender}受到了影响。"])
+            fragments = T3_FALLBACK_TEXTS.get(event.attack_result, ["{defender} 受到了影响。"])
 
         return ReactionBone(
             bone_id=f"T3_FALLBACK_REACTION_{event.attack_result}",

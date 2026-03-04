@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from .models import RawAttackEvent
+from .constants import MotionStyle, DamageMaterial
 
 if TYPE_CHECKING:
     # 避免循环导入：TYPE_CHECKING 块只在类型检查时导入
@@ -41,7 +42,7 @@ class AttackEventBuilder:
     """
 
     @staticmethod
-    def _extract_motion_style(weapon_type: str, weapon_tags: List[str], weapon_name: str = "") -> str:
+    def _extract_motion_style(weapon_type: str, weapon_tags: List[str], weapon_name: str = "") -> MotionStyle:
         """从武器数据中提取动作风格 (Action Style)"""
         tags = [t.lower() for t in weapon_tags]
         name = weapon_name.lower()
@@ -52,32 +53,32 @@ class AttackEventBuilder:
 
         # 1. 精神/浮游类（优先检查，因为标签可能包含 beam）
         if has_keyword(["psycho", "精神", "funnel", "浮游"]):
-            return "PSYCHO_WAVE"
+            return MotionStyle.PSYCHO_WAVE
 
         # 2. 斩击类
         if has_keyword(["slash", "blade", "saber", "sword", "axe", "knife", "军刀", "斩", "剑", "斧"]):
             if has_keyword(["heavy", "giant", "重"]):
-                return "SLASH_HEAVY"
-            return "SLASH_LIGHT"
+                return MotionStyle.SLASH_HEAVY
+            return MotionStyle.SLASH_LIGHT
 
         # 3. 射击类
         if has_keyword(["missile", "projectile", "rocket", "导弹", "火箭"]):
-            return "PROJ_RAIN"
+            return MotionStyle.PROJ_RAIN
         if has_keyword(["bazooka", "cannon", "炮"]):
-            return "PROJ_SINGLE"
+            return MotionStyle.PROJ_SINGLE
         if has_keyword(["beam", "rifle", "laser", "步枪", "射击"]):
             if has_keyword(["massive", "mega", "map", "巨"]):
-                return "SHOOT_MASSIVE"
-            return "SHOOT_INSTANT"
+                return MotionStyle.SHOOT_MASSIVE
+            return MotionStyle.SHOOT_INSTANT
 
         # 4. 撞击类
         if has_keyword(["ram", "tackle", "撞"]):
-            return "IMPACT_RAM"
+            return MotionStyle.IMPACT_RAM
 
-        return "STRIKE_BLUNT"
+        return MotionStyle.STRIKE_BLUNT
 
     @staticmethod
-    def _extract_damage_material(weapon_tags: List[str], weapon_name: str = "") -> str:
+    def _extract_damage_material(weapon_tags: List[str], weapon_name: str = "") -> DamageMaterial:
         """从武器数据中提取物理材质 (Damage Material)"""
         tags = [t.lower() for t in weapon_tags]
         name = weapon_name.lower()
@@ -88,17 +89,17 @@ class AttackEventBuilder:
 
         # 1. 能量类
         if has_keyword(["beam", "energy", "particle", "laser", "光束", "高能"]):
-            return "ENERGY"
+            return DamageMaterial.ENERGY
 
         # 2. 实弹类
         if has_keyword(["missile", "projectile", "shell", "bullet", "rocket", "导弹", "实弹", "物理弹"]):
-            return "KINETIC"
+            return DamageMaterial.KINETIC
 
         # 3. 物理/金属类
         if has_keyword(["slash", "blade", "saber", "physical", "冲击", "撞"]):
-            return "PHYSICAL"
+            return DamageMaterial.PHYSICAL
 
-        return "GENERIC"
+        return DamageMaterial.GENERIC
 
     @staticmethod
     def build(

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .registry import TemplateRegistry
     from .template import PresentationTemplate
 
-from .models import RawAttackEvent, PresentationAttackEvent
+from .models import RawAttackEvent, PresentationAttackEvent, DispatchPayload
 from .constants import Channel, TemplateTier
 from .template import ActionBone, ReactionBone
 from .router import OutcomeRouter
@@ -31,12 +31,12 @@ class EventMapper:
     Event Mapper - 战斗事件的导演编排器
 
     核心职责：
-    1. L1 ODR路由 - 根据战斗结局锁定演出频道
-    2. L2 双轨竞标 - 独立选择Action和Reaction骨架
+    1. L1 ODR 路由 - 根据战斗结局锁定演出频道
+    2. L2 双轨竞标 - 独立选择 Action 和 Reaction 骨架
     3. L3 原子拼装 - 组装最终文本
-    4. L4 AV调度 - 生成视听演出事件
+    4. L4 AV 调度 - 生成视听演出事件
 
-    这是v5.0四层架构的唯一入口，所有旧路径逻辑已被移除。
+    这是 v5.0 四层架构的唯一入口，所有旧路径逻辑已被移除。
     """
 
     def __init__(self, registry: Optional['TemplateRegistry'] = None):
@@ -44,7 +44,7 @@ class EventMapper:
         初始化 EventMapper。
 
         Args:
-            registry: 模板注册表，如果为None则创建默认实例
+            registry: 模板注册表，如果为 None 则创建默认实例
         """
         if registry is None:
             from .registry import TemplateRegistry
@@ -73,7 +73,7 @@ class EventMapper:
                 self._bidder = DualBidder(action_bones, reaction_bones)
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.info(f"[EventMapper] DualBidder 初始化完成: "
+                logger.info(f"[EventMapper] DualBidder 初始化完成："
                            f"{len(action_bones)} action_bones, {len(reaction_bones)} reaction_bones")
             else:
                 self._bidder = None
@@ -88,11 +88,11 @@ class EventMapper:
         主入口：将原始战斗事件转换为演出事件序列
 
         流程：
-        1. L1 ODR路由 - 确定演出频道 (FATAL/EVADE/IMPACT/SPECIAL)
-        2. T0拦截检查 - 是否有脚本强制模板
+        1. L1 ODR 路由 - 确定演出频道 (FATAL/EVADE/IMPACT/SPECIAL)
+        2. T0 拦截检查 - 是否有脚本强制模板
         3. L2 双轨竞标 - 选择 ActionBone + ReactionBone
         4. L3 原子拼装 - 组装最终文本
-        5. L4 AV调度 - 生成 PresentationAttackEvent 对
+        5. L4 AV 调度 - 生成 PresentationAttackEvent 对
 
         Returns:
             List[PresentationAttackEvent]: 包含 [Action, Reaction] 的事件列表
@@ -108,7 +108,7 @@ class EventMapper:
         )
 
         if forced_tmpl:
-            # T0 脚本事件 - 直接由AVDispatcher处理
+            # T0 脚本事件 - 直接由 AVDispatcher 处理
             return self._handle_scripted_event(raw_event, forced_tmpl, channel)
 
         # === L2-L4: 四层架构处理 ===
@@ -124,7 +124,7 @@ class EventMapper:
         if self._bidder:
             action_bone, reaction_bone = self._bidder.bid(raw_event, channel)
         else:
-            # 无竞标器时使用None（Assembler会处理）
+            # 无竞标器时使用 None（Assembler 会处理）
             action_bone, reaction_bone = None, None
 
         # === L3: 原子拼装 ===
@@ -132,31 +132,34 @@ class EventMapper:
             action_bone, reaction_bone, raw_event, channel
         )
 
-        # === L4: AV 调度 ===
-        action_event, reaction_event = self._av_dispatcher.dispatch(
-            raw_event,
-            action_text,
-            reaction_text,
-            channel,
+        # === L3.5: 构建 DispatchPayload DTO ===
+        payload = DispatchPayload(
+            raw_event=raw_event,
+            channel=channel,
+            action_text=action_text,
+            reaction_text=reaction_text,
+            hit_part=hit_part,
             action_anim_id=getattr(action_bone, 'anim_id', None) if action_bone else None,
             reaction_anim_id=getattr(reaction_bone, 'anim_id', None) if reaction_bone else None,
             vfx_ids=getattr(reaction_bone, 'vfx_ids', []) if reaction_bone else [],
             sfx_ids=getattr(reaction_bone, 'sfx_ids', []) if reaction_bone else [],
-            hit_location=hit_part,
             action_template_id=getattr(action_bone, 'bone_id', None) if action_bone else None,
             reaction_template_id=getattr(reaction_bone, 'bone_id', None) if reaction_bone else None,
-            action_tier=getattr(action_bone, 'tier', TemplateTier.T2_TACTICAL) if action_bone else TemplateTier.T3_FALLBACK,
-            reaction_tier=getattr(reaction_bone, 'tier', TemplateTier.T2_TACTICAL) if reaction_bone else TemplateTier.T3_FALLBACK,
+            action_tier=getattr(action_bone, 'tier', TemplateTier.T3_FALLBACK) if action_bone else TemplateTier.T3_FALLBACK,
+            reaction_tier=getattr(reaction_bone, 'tier', TemplateTier.T3_FALLBACK) if reaction_bone else TemplateTier.T3_FALLBACK,
         )
+
+        # === L4: AV 调度（使用 DTO） ===
+        action_event, reaction_event = self._av_dispatcher.dispatch(payload)
 
         return [action_event, reaction_event]
 
     def _handle_scripted_event(self, raw_event: RawAttackEvent, tmpl: 'PresentationTemplate',
                                channel: Channel) -> List[PresentationAttackEvent]:
         """
-        处理T0脚本强制模板事件。
+        处理 T0 脚本强制模板事件。
 
-        T0模板通常是特殊剧情事件，不遵循标准的竞标流程。
+        T0 模板通常是特殊剧情事件，不遵循标准的竞标流程。
         """
         from .template import PresentationTemplate
 
@@ -172,20 +175,22 @@ class EventMapper:
             weapon=raw_event.weapon_name
         )
 
-        # 使用AVDispatcher生成事件，但优先使用模板中的视觉设置
-        action_event, reaction_event = self._av_dispatcher.dispatch(
-            raw_event,
-            action_text,
-            reaction_text,
-            channel,
+        # 使用 AVDispatcher 生成事件，但优先使用模板中的视觉设置
+        payload = DispatchPayload(
+            raw_event=raw_event,
+            channel=channel,
+            action_text=action_text,
+            reaction_text=reaction_text,
+            hit_part=None,
             action_anim_id=tmpl.visuals.anim_id,
             reaction_anim_id=tmpl.visuals.anim_id,
             vfx_ids=tmpl.visuals.vfx_ids,
             sfx_ids=tmpl.visuals.sfx_ids,
-            hit_location=None,
             action_template_id=tmpl.id,
             reaction_template_id=tmpl.id,
         )
+
+        action_event, reaction_event = self._av_dispatcher.dispatch(payload)
 
         return [action_event, reaction_event]
 

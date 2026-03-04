@@ -13,7 +13,8 @@
       "Bash(pytest3:*)",
       "Bash(python3.12:*)",
       "Bash(/Users/dupidupi/.local/bin/python3:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(find:*)"
     ]
   }
 }

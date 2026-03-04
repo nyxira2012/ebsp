@@ -1,6 +1,37 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
-from .constants import TemplateTier
+from .constants import TemplateTier, MotionStyle, DamageMaterial, Channel
+
+
+@dataclass
+class DispatchPayload:
+    """
+    演出调度数据传输对象（DTO）
+
+    用于 L3 Assembler → L4 AVDispatcher 的数据传递，封装所有需要的参数。
+    避免过长参数列表，保持流水线优雅。
+    """
+    # 核心数据
+    raw_event: 'RawAttackEvent'
+    channel: Channel
+
+    # 文本内容（由 L3 产出）
+    action_text: str
+    reaction_text: str
+    hit_part: Optional[str]
+
+    # 视觉资源（由 L2 Bone 产出）
+    action_anim_id: Optional[str] = None
+    reaction_anim_id: Optional[str] = None
+    vfx_ids: List[str] = field(default_factory=list)
+    sfx_ids: List[str] = field(default_factory=list)
+
+    # 模板元数据
+    action_template_id: Optional[str] = None
+    reaction_template_id: Optional[str] = None
+    action_tier: TemplateTier = TemplateTier.T3_FALLBACK
+    reaction_tier: TemplateTier = TemplateTier.T3_FALLBACK
+
 
 @dataclass
 class RawAttackEvent:
@@ -42,10 +73,10 @@ class RawAttackEvent:
     initiative_holder: str         # Who holds the initiative
     is_counter: bool = False       # Flag for counter-attack sequences
     is_support: bool = False       # Flag for support-attack/defense
-    
+
     # Spirit Commands (important for T1 Highlighting)
-    spirit_commands: List[str] = field(default_factory=list) # e.g. ["hot_blood", "soul"]
-    
+    spirit_commands: List[str] = field(default_factory=list) # e.g., ["hot_blood", "soul"]
+
     # Director Context
     power_level_gap: int = 0      # 0=Even, 1=Attacker Stronger, -1=Defender Stronger
 
@@ -63,9 +94,10 @@ class RawAttackEvent:
     defender_max_hp: int = 0       # Defender's Max HP (for damage grading)
 
     # CPS v5.1 MDDC 多维数据契约字段
-    motion_style: str = ""         # 动作风格: SLASH_LIGHT, SHOOT_INSTANT, etc.
-    damage_material: str = ""      # 物理材质: ENERGY, KINETIC, PHYSICAL
+    motion_style: MotionStyle = MotionStyle.SHOOT_INSTANT  # 动作风格：SLASH_LIGHT, SHOOT_INSTANT, etc.
+    damage_material: DamageMaterial = DamageMaterial.GENERIC  # 物理材质：ENERGY, KINETIC, PHYSICAL
     is_lethal: bool = False        # 预计算致死标志 (引擎层判定)
+
 
 @dataclass
 class PresentationAttackEvent:
@@ -77,29 +109,30 @@ class PresentationAttackEvent:
     event_type: str               # ACTION (Attacker) or REACTION (Defender)
     round_number: int             # Round number
     timestamp: float = 0.0        # Relative timestamp for playback
-    
+
     # Content
     text: str = ""                # The narrative text to display
     display_tags: List[str] = field(default_factory=list) # Tags for UI highlighting (e.g., "CRITICAL", "BLOCK")
-    
+
     # Visual Resources
     tier: TemplateTier = TemplateTier.T3_FALLBACK
     anim_id: str = "default_anim" # Animation Resource ID
     camera_cam: str = "cam_default" # Camera movement ID
     vfx_ids: List[str] = field(default_factory=list) # Visual Effects
     sfx_ids: List[str] = field(default_factory=list) # Sound Effects
-    
+
     # Combat Data Update (Visual Only)
     damage_display: int = 0       # Damage number to pop up
     hit_location: str = "body"    # Visual hit location
-    
+
     # References
     template_id: str = ""         # The ID of the template used
     raw_event: Optional[RawAttackEvent] = None
     attacker_name: str = ""
     defender_name: str = ""
     weapon_name: str = ""
-    attack_result: str = "" 
+    attack_result: str = ""
+
 
 @dataclass
 class PresentationAttackSequence:
@@ -109,6 +142,7 @@ class PresentationAttackSequence:
     attacker_id: str
     defender_id: str
     events: List[PresentationAttackEvent] = field(default_factory=list)
+
 
 @dataclass
 class PresentationRoundEvent:

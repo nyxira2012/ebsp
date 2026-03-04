@@ -283,6 +283,21 @@ reaction_bones:
     sfx_ids: ["sfx_crit_kinetic", "sfx_alarm"]
 
   # ==============================================================================
+  # RANGED_DIRECT + KINETIC (火箭炮/单发实弹) - PARRY 特化
+  # ==============================================================================
+  - bone_id: "react_proj_single_parry"
+    channel: "EVADE"
+    motion_style: "PROJ_SINGLE"
+    damage_material: "KINETIC"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}的近防火神炮疯狂咆哮，在火箭弹逼近的瞬间将其凌空打爆！"
+      - "火箭弹被{defender}以精妙的装甲倾角弹开，在大气中划出一道偏转的轨迹！"
+      - "{defender}的 ECM 系统发出强力干扰，火箭弹的制导失灵，擦着机体飞向虚空！"
+    vfx_ids: ["vfx_ricochet", "vfx_flak_burst", "vfx_ecm_wave"]
+    sfx_ids: ["sfx_flak_fire", "sfx_ricochet", "sfx_ecm_jam"]
+
+  # ==============================================================================
   # RANGED_AOE + ENERGY (扩散粒子炮/大型光束炮)
   # ==============================================================================
   - bone_id: "react_beam_aoe_parry"
@@ -389,6 +404,36 @@ reaction_bones:
       - "斩击的恐怖扭矩让{defender}的{hit_part}彻底变形，机体骨架在冲击下发出令人牙酸的扭曲声，濒临机能停止！"
     vfx_ids: ["vfx_crit_impact", "vfx_structure_twist", "vfx_hydraulic_leak"]
     sfx_ids: ["sfx_crit_impact", "sfx_structure_groan"]
+
+  # ==============================================================================
+  # MELEE_CLASH + GENERIC (冲撞攻击) - PARRY 特化
+  # ==============================================================================
+  - bone_id: "react_impact_ram_parry"
+    channel: "EVADE"
+    motion_style: "IMPACT_RAM"
+    damage_material: "GENERIC"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}的装甲以斜角迎击，冲撞被顺势弹开的同时，推进器爆发展开反制追击！"
+      - "硬碰硬的对撞激起耀眼火花，{defender}借后坐力拉开距离，炮口已锁定对方！"
+      - "{defender}抓住冲撞的瞬间切入死角，对方机体在惯性作用下暴露出致命的破绽！"
+    vfx_ids: ["vfx_impact_deflect", "vfx_thruster_burst", "vfx_spark_heavy"]
+    sfx_ids: ["sfx_clash_heavy", "sfx_thruster", "sfx_metal_impact"]
+
+  # ==============================================================================
+  # MELEE_CLASH + PHYSICAL (钝器打击/铁锤/拳击) - PARRY 特化
+  # ==============================================================================
+  - bone_id: "react_strike_blunt_parry"
+    channel: "EVADE"
+    motion_style: "STRIKE_BLUNT"
+    damage_material: "PHYSICAL"
+    attack_result: "PARRY"
+    text_fragments:
+      - "{defender}的盾牌稳稳架住重击，推进器顺势爆发推开距离，炮口已对准对方！"
+      - "重拳被{defender}以柔劲化解，动能分散的瞬间，反击的武器已举起！"
+      - "{defender}格挡后利用对方惯性失衡，机体如鬼魅般切入内圈展开反制！"
+    vfx_ids: ["vfx_shield_block", "vfx_thruster_burst", "vfx_impact_shock"]
+    sfx_ids: ["sfx_metal_hit", "sfx_thruster", "sfx_counter_attack"]
 
   # ==============================================================================
   # T2.5_Decay 层：4 大类通用模板 (macro_motion + GENERIC)
