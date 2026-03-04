@@ -4,6 +4,7 @@
         "name": "RX-78-2 高达",
         "portrait_id": "p_m_rx78",
         "model_asset": "gundam_rx78",
+        "series": "RX",
         "init_hp": 5000,
         "init_en": 200,
         "init_armor": 1200,
@@ -21,7 +22,7 @@
             "WEAPON",
             "WEAPON",
             "EQUIP",
-            "EQUIP"
+            "EXCLUSIVE"
         ],
         "fixed_weapons": [
             "wpn_beam_rifle",
@@ -33,6 +34,7 @@
         "name": "MS-06S 扎古II (夏亚专用)",
         "portrait_id": "p_m_zaku",
         "model_asset": "zaku_ii_char",
+        "series": "ZAKU",
         "init_hp": 5500,
         "init_en": 180,
         "init_armor": 1500,
@@ -55,6 +57,66 @@
             "wpn_machine_gun",
             "wpn_heat_axe",
             "wpn_bazooka"
+        ]
+    },
+    {
+        "id": "mech_nu",
+        "name": "RX-93 ν 高达",
+        "portrait_id": "p_m_nu",
+        "model_asset": "gundam_nu",
+        "series": "RX",
+        "init_hp": 6200,
+        "init_en": 220,
+        "init_armor": 1600,
+        "init_mobility": 95,
+        "init_hit": 20.0,
+        "init_precision": 35.0,
+        "init_crit": 28.0,
+        "init_dodge": 25.0,
+        "init_parry": 18.0,
+        "init_block": 22.0,
+        "init_block_red": 150,
+        "init_en_regen_rate": 2.5,
+        "init_en_regen_fixed": 4,
+        "slots": [
+            "WEAPON",
+            "WEAPON",
+            "EQUIP",
+            "EXCLUSIVE"
+        ],
+        "fixed_weapons": [
+            "wpn_beam_rifle",
+            "wpn_funnel_system"
+        ]
+    },
+    {
+        "id": "mech_sazabi",
+        "name": "MSN-04 沙扎比",
+        "portrait_id": "p_m_sazabi",
+        "model_asset": "sazabi",
+        "series": "NEO_ZEON",
+        "init_hp": 6800,
+        "init_en": 200,
+        "init_armor": 1800,
+        "init_mobility": 88,
+        "init_hit": 19.0,
+        "init_precision": 32.0,
+        "init_crit": 32.0,
+        "init_dodge": 18.0,
+        "init_parry": 20.0,
+        "init_block": 30.0,
+        "init_block_red": 140,
+        "init_en_regen_rate": 2.0,
+        "init_en_regen_fixed": 3,
+        "slots": [
+            "WEAPON",
+            "WEAPON",
+            "EQUIP",
+            "EXCLUSIVE"
+        ],
+        "fixed_weapons": [
+            "wpn_funnel_system",
+            "wpn_railgun"
         ]
     }
 ]

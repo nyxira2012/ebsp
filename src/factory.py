@@ -4,9 +4,9 @@ This module provides a unified factory interface for creating game objects
 from their configuration definitions.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .models import (
-    MechaSnapshot, PilotConfig, WeaponSnapshot, WeaponType,
+    MechaSnapshot, PilotConfig, SubPilotConfig, WeaponSnapshot, WeaponType,
     MechaConfig, EquipmentConfig
 )
 
@@ -42,6 +42,134 @@ class MechaFactory:
             'weapon_proficiency': pilot_config.weapon_proficiency,
             'mecha_proficiency': pilot_config.mecha_proficiency,
         }
+
+    @staticmethod
+    def _aggregate_skills(
+        pilot_conf: PilotConfig | None,
+        equipments: List[EquipmentConfig] | None,
+        sub_pilot_conf: Optional[SubPilotConfig] = None
+    ) -> List[str]:
+        """聚合所有来源的技能列表
+
+        Args:
+            pilot_conf: 主驾驶员配置
+            equipments: 装备列表
+            sub_pilot_conf: 副驾驶配置（可选）
+
+        Returns:
+            去重后的技能ID列表
+        """
+        skills = []
+
+        # 1. 主驾驶员天赋技能
+        if pilot_conf and pilot_conf.innate_skills:
+            skills.extend(pilot_conf.innate_skills)
+
+        # 2. 装备被动技能
+        if equipments:
+            for equip in equipments:
+                if equip.passive_skills:
+                    skills.extend(equip.passive_skills)
+
+        # 3. 副驾驶技能（如果存在）
+        if sub_pilot_conf and hasattr(sub_pilot_conf, 'innate_skills'):
+            skills.extend(sub_pilot_conf.innate_skills)
+
+        # 去重并保持顺序
+        seen = set()
+        result = []
+        for skill in skills:
+            if skill not in seen:
+                seen.add(skill)
+                result.append(skill)
+
+        return result
+
+    @staticmethod
+    def _aggregate_pilot_stats(
+        main_pilot: PilotConfig | None,
+        sub_pilot: Optional['SubPilotConfig'] = None
+    ) -> Dict[str, int]:
+        """聚合主副驾驶员属性
+
+        Args:
+            main_pilot: 主驾驶员配置
+            sub_pilot: 副驾驶配置（可选）
+
+        Returns:
+            聚合后的属性字典
+        """
+        if not main_pilot:
+            return {}
+
+        # 主驾驶员属性（100%）
+        stats = {
+            'stat_shooting': main_pilot.stat_shooting,
+            'stat_melee': main_pilot.stat_melee,
+            'stat_awakening': main_pilot.stat_awakening,
+            'stat_defense': main_pilot.stat_defense,
+            'stat_reaction': main_pilot.stat_reaction,
+            'weapon_proficiency': main_pilot.weapon_proficiency,
+            'mecha_proficiency': main_pilot.mecha_proficiency,
+        }
+
+        # 副驾驶属性（按贡献率叠加）
+        if sub_pilot and sub_pilot.contribution_rate > 0:
+            rate = sub_pilot.contribution_rate
+            stats['stat_shooting'] += int(sub_pilot.stat_shooting * rate)
+            stats['stat_melee'] += int(sub_pilot.stat_melee * rate)
+            stats['stat_awakening'] += int(sub_pilot.stat_awakening * rate)
+            stats['stat_defense'] += int(sub_pilot.stat_defense * rate)
+            stats['stat_reaction'] += int(sub_pilot.stat_reaction * rate)
+            # 熟练度通常不共享，但可根据需求调整
+
+        return stats
+
+    @staticmethod
+    def _backup_sub_pilot_stats(sub_pilot: Optional['SubPilotConfig'] | None) -> Dict[str, int]:
+        """备份副驾驶原始属性（用于UI显示等）"""
+        if not sub_pilot:
+            return {}
+
+        return {
+            'stat_shooting': sub_pilot.stat_shooting,
+            'stat_melee': sub_pilot.stat_melee,
+            'stat_awakening': sub_pilot.stat_awakening,
+            'stat_defense': sub_pilot.stat_defense,
+            'stat_reaction': sub_pilot.stat_reaction,
+        }
+
+    @staticmethod
+    def _validate_equipment_slot(
+        equip: EquipmentConfig,
+        slot_type: str,
+        mecha_series: str = ""
+    ) -> bool:
+        """验证装备是否可安装到指定槽位
+
+        Args:
+            equip: 装备配置
+            slot_type: 槽位类型
+            mecha_series: 机体系列标识（用于EXCLUSIVE验证）
+
+        Returns:
+            是否可安装
+        """
+        # EXCLUSIVE槽位检查
+        if slot_type == "EXCLUSIVE":
+            if not equip.compatible_series:
+                return False  # 非专属装备不能装EXCLUSIVE槽
+            return mecha_series in equip.compatible_series
+
+        # 其他槽位的基本类型检查
+        if slot_type == "WEAPON":
+            return equip.type == "WEAPON"
+        if slot_type == "EQUIP":
+            return equip.type == "EQUIP"
+        if slot_type == "FIXED":
+            return True  # FIXED槽位由fixed_weapons管理
+
+        return False
 
     @staticmethod
     def _apply_equipment_modifiers(
@@ -126,7 +254,8 @@ class MechaFactory:
         pilot_conf: PilotConfig | None = None,
         equipments: List[EquipmentConfig] | None = None,
         weapon_configs: dict | None = None,
-        upgrade_level: int = 0
+        upgrade_level: int = 0,
+        sub_pilot_conf: Optional[SubPilotConfig] = None
     ) -> MechaSnapshot:
         """Create a MechaSnapshot from configuration with optional enhancements.
 
@@ -135,12 +264,20 @@ class MechaFactory:
             pilot_conf: Optional pilot configuration for stat backup.
             equipments: Optional list of equipment to apply modifiers.
             upgrade_level: Upgrade level for stat bonuses (default: 0).
+            sub_pilot_conf: Optional sub-pilot configuration.
 
         Returns:
             Fully configured MechaSnapshot ready for combat.
         """
-        # Backup pilot stats
-        pilot_stats_backup = MechaFactory._backup_pilot_stats(pilot_conf)
+        # 聚合主副驾驶员属性
+        pilot_stats_backup = MechaFactory._aggregate_pilot_stats(
+            pilot_conf, sub_pilot_conf
+        )
+        sub_pilot_stats_backup = MechaFactory._backup_sub_pilot_stats(sub_pilot_conf)
+        contribution_rate = sub_pilot_conf.contribution_rate if sub_pilot_conf else 0.0
+
+        # 聚合技能（支持副驾驶）
+        skills = MechaFactory._aggregate_skills(pilot_conf, equipments, sub_pilot_conf)
 
         # Apply upgrade bonuses
         hp_bonus = upgrade_level * 200
@@ -193,8 +330,11 @@ class MechaFactory:
             final_en_regen_rate=final_en_regen_rate,
             final_en_regen_fixed=final_en_regen_fixed,
             pilot_stats_backup=pilot_stats_backup,
+            sub_pilot_stats_backup=sub_pilot_stats_backup,
+            sub_pilot_contribution_rate=contribution_rate,
+            sub_portrait=sub_pilot_conf.portrait_id if sub_pilot_conf else None,
             weapons=weapons,
-            skills=[],
+            skills=skills,
         )
 
     @staticmethod

@@ -5,7 +5,7 @@
 """
 import pytest
 from src.models import (
-    MechaConfig, PilotConfig, EquipmentConfig, WeaponType, MechaSnapshot
+    MechaConfig, PilotConfig, SubPilotConfig, EquipmentConfig, WeaponType, MechaSnapshot
 )
 from src.factory import MechaFactory
 
@@ -84,8 +84,160 @@ class TestMechaFactory:
         snapshot = MechaFactory.create_mecha_snapshot(
             mecha_conf, pilot_conf, upgrade_level=5
         )
-        
+
         # HP + 5*200 = 1000 -> 3000+1000=4000
         assert snapshot.final_max_hp == 4000
         # Armor + 5*20 = 100 -> 800+100=900
         assert snapshot.final_armor == 900
+
+    def test_skill_aggregation(self, mecha_conf, pilot_conf, equip_parts):
+        """测试技能聚合功能"""
+        # 设置装备携带技能
+        equip_parts.passive_skills = ["skill_test"]
+        pilot_conf.innate_skills = ["trait_nt"]
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf, equipments=[equip_parts]
+        )
+
+        assert "trait_nt" in snapshot.skills
+        assert "skill_test" in snapshot.skills
+        assert len(snapshot.skills) == len(set(snapshot.skills))  # 去重验证
+
+    def test_skill_aggregation_deduplication(self, mecha_conf, pilot_conf, equip_parts):
+        """测试技能聚合去重功能"""
+        # 驾驶员和装备携带相同技能
+        equip_parts.passive_skills = ["skill_ace"]
+        pilot_conf.innate_skills = ["skill_ace", "trait_nt"]
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf, equipments=[equip_parts]
+        )
+
+        # 应该去重，只保留一份
+        assert snapshot.skills.count("skill_ace") == 1
+        assert "trait_nt" in snapshot.skills
+        assert len(snapshot.skills) == 2
+
+    def test_exclusive_slot_validation(self):
+        """测试EXCLUSIVE槽位验证"""
+        # 创建专属装备（RX系列专用）
+        exclusive_armor = EquipmentConfig(
+            id="e_gundam_armor",
+            name="高达专用装甲",
+            type="EQUIP",
+            compatible_series=["RX"]
+        )
+
+        # RX系列机体 - 应该通过
+        assert MechaFactory._validate_equipment_slot(
+            exclusive_armor, "EXCLUSIVE", "RX"
+        ) is True
+
+        # 非RX系列机体 - 应该失败
+        assert MechaFactory._validate_equipment_slot(
+            exclusive_armor, "EXCLUSIVE", "ZAKU"
+        ) is False
+
+        # 专属装备不能安装到普通EQUIP槽位（类型不匹配）
+        assert MechaFactory._validate_equipment_slot(
+            exclusive_armor, "WEAPON", "RX"
+        ) is False
+
+    def test_exclusive_slot_generic_equipment(self):
+        """测试通用装备不能安装到EXCLUSIVE槽位"""
+        # 通用装备（无 series 字段）
+        generic_equip = EquipmentConfig(
+            id="e_booster",
+            name="增压器",
+            type="EQUIP"
+        )
+
+        # 通用装备不能安装到EXCLUSIVE槽位
+        assert MechaFactory._validate_equipment_slot(
+            generic_equip, "EXCLUSIVE", "RX"
+        ) is False
+
+        # 但可以安装到普通EQUIP槽位
+        assert MechaFactory._validate_equipment_slot(
+            generic_equip, "EQUIP", ""
+        ) is True
+
+    def test_sub_pilot_stats_aggregation(self, mecha_conf, pilot_conf):
+        """测试副驾驶属性聚合"""
+        # 主驾驶员：射击100
+        pilot_conf.stat_shooting = 100
+
+        # 副驾驶：射击50，贡献率30%
+        sub_pilot = SubPilotConfig(
+            id="sub_001",
+            name="Sub Pilot",
+            portrait_id="p_sub",
+            stat_shooting=50,
+            contribution_rate=0.3
+        )
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf, sub_pilot_conf=sub_pilot
+        )
+
+        # 预期：100 + 50*0.3 = 115
+        assert snapshot.pilot_stats_backup['stat_shooting'] == 115
+        assert snapshot.sub_pilot_contribution_rate == 0.3
+        # 验证副驾驶原始属性备份
+        assert snapshot.sub_pilot_stats_backup['stat_shooting'] == 50
+
+    def test_sub_pilot_skill_aggregation(self, mecha_conf, pilot_conf):
+        """测试副驾驶技能聚合"""
+        pilot_conf.innate_skills = ["trait_nt"]
+
+        sub_pilot = SubPilotConfig(
+            id="sub_001",
+            name="Sub Pilot",
+            portrait_id="p_sub",
+            innate_skills=["skill_support"]
+        )
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf, sub_pilot_conf=sub_pilot
+        )
+
+        assert "trait_nt" in snapshot.skills
+        assert "skill_support" in snapshot.skills
+        # 验证副驾驶肖像
+        assert snapshot.sub_portrait == "p_sub"
+
+    def test_sub_pilot_contribution_rate_variations(self, mecha_conf, pilot_conf):
+        """测试不同副驾驶贡献率"""
+        pilot_conf.stat_shooting = 100
+
+        # 50% 贡献率
+        sub_pilot_50 = SubPilotConfig(
+            id="sub_50",
+            name="Sub 50%",
+            portrait_id="p_sub",
+            stat_shooting=60,
+            contribution_rate=0.5
+        )
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf, sub_pilot_conf=sub_pilot_50
+        )
+
+        # 100 + 60*0.5 = 130
+        assert snapshot.pilot_stats_backup['stat_shooting'] == 130
+        assert snapshot.sub_pilot_contribution_rate == 0.5
+
+    def test_no_sub_pilot(self, mecha_conf, pilot_conf):
+        """测试无副驾驶时的默认行为"""
+        pilot_conf.stat_shooting = 100
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            mecha_conf, pilot_conf
+        )
+
+        # 无副驾驶时，属性应为主驾驶员原始值
+        assert snapshot.pilot_stats_backup['stat_shooting'] == 100
+        assert snapshot.sub_pilot_contribution_rate == 0.0
+        assert snapshot.sub_pilot_stats_backup == {}
+        assert snapshot.sub_portrait is None

@@ -10,7 +10,7 @@ from typing import Dict, List, Type, TypeVar
 from pydantic import BaseModel
 
 from .models import (
-    PilotConfig, EquipmentConfig, MechaConfig, 
+    PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
     WeaponType # 导入用于校验或转换
 )
 
@@ -30,6 +30,7 @@ class DataLoader:
         
         # 配置容器 (存储静态配置)
         self.pilots: Dict[str, PilotConfig] = {}
+        self.sub_pilots: Dict[str, SubPilotConfig] = {}
         self.equipments: Dict[str, EquipmentConfig] = {} # 包含武器和装备
         self.mechas: Dict[str, MechaConfig] = {}
 
@@ -40,8 +41,8 @@ class DataLoader:
     
     def load_all(self) -> None:
         """加载所有游戏静态配置。"""
-        # 1. 加载驾驶员
-        self._load_from_json("pilots.json", PilotConfig, self.pilots)
+        # 1. 加载驾驶员和副驾驶（从同一个文件，根据 type 区分）
+        self._load_pilots_with_sub()
 
         # 2. 加载装备与武器 (统一为 EquipmentConfig)
         self._load_from_json("equipments.json", EquipmentConfig, self.equipments)
@@ -81,13 +82,40 @@ class DataLoader:
             except Exception as e:
                 print(f"加载 {filename} 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
 
+    def _load_pilots_with_sub(self) -> None:
+        """加载驾驶员和副驾驶配置，根据 type 字段区分"""
+        file_path = self.data_dir / "pilots.json"
+        if not file_path.exists():
+            raise FileNotFoundError(f"驾驶员数据文件不存在: {file_path}")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+
+        for item in raw_data:
+            try:
+                # 根据 type 字段决定使用哪个模型
+                pilot_type = item.get('type', 'MAIN')
+                if pilot_type == 'SUB':
+                    obj = SubPilotConfig.model_validate(item)
+                    self.sub_pilots[obj.id] = obj
+                else:
+                    obj = PilotConfig.model_validate(item)
+                    self.pilots[obj.id] = obj
+            except Exception as e:
+                print(f"加载 pilots.json 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
+
     # ============= 获取方法 =============
     
     def get_pilot_config(self, pilot_id: str) -> PilotConfig:
         if pilot_id not in self.pilots:
             raise KeyError(f"驾驶员配置不存在: {pilot_id}")
         return self.pilots[pilot_id]
-        
+
+    def get_sub_pilot_config(self, sub_pilot_id: str) -> SubPilotConfig:
+        if sub_pilot_id not in self.sub_pilots:
+            raise KeyError(f"副驾驶员配置不存在: {sub_pilot_id}")
+        return self.sub_pilots[sub_pilot_id]
+
     def get_equipment_config(self, equip_id: str) -> EquipmentConfig:
         if equip_id not in self.equipments:
             raise KeyError(f"装备/武器配置不存在: {equip_id}")

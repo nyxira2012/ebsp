@@ -24,10 +24,11 @@ class WeaponType(str, Enum):
 
 class SlotType(str, Enum):
     """槽位类型"""
-    FIXED = "FIXED"     # 固定槽位
-    WEAPON = "WEAPON"   # 武器槽
-    EQUIP = "EQUIP"     # 设备槽
-    SUB_PILOT = "SUB"   # 副驾驶槽 (虚拟)
+    FIXED = "FIXED"         # 固定槽位
+    WEAPON = "WEAPON"       # 武器槽
+    EQUIP = "EQUIP"         # 设备槽
+    EXCLUSIVE = "EXCLUSIVE" # 专属槽位
+    SUB_PILOT = "SUB"       # 副驾驶槽 (虚拟)
 
 class AttackResult(str, Enum):
     """攻击判定结果"""
@@ -65,7 +66,10 @@ class MechaConfig(BaseModel):
     name: str
     portrait_id: str
     model_asset: str = "default_model"
-    
+
+    # 机体系列标识（用于EXCLUSIVE槽位匹配）
+    series: str = ""
+
     # 基础属性 (Level 0)
     init_hp: int
     init_en: int
@@ -96,6 +100,9 @@ class EquipmentConfig(BaseModel):
     id: str
     name: str
     type: str               # WEAPON / EQUIP - 装备类型
+
+    # 专属槽位兼容性（空列表表示通用装备，非空表示只能安装在指定系列的机体的EXCLUSIVE槽位）
+    compatible_series: List[str] = Field(default=[], alias="series")
 
     # 属性修正 (加法叠加)
     # key 必须匹配 MechaSnapshot 中的属性名 (e.g. "final_max_hp", "final_mobility")
@@ -178,6 +185,32 @@ class PilotConfig(BaseModel):
     mecha_proficiency: int = 2000     # 机体熟练度 (影响防御率)
 
     innate_skills: List[str] = []
+
+class SubPilotConfig(BaseModel):
+    """副驾驶员配置表
+
+    注意：复用 PilotConfig 的结构，但属性贡献率较低
+    """
+    id: str
+    name: str
+    portrait_id: str
+
+    # 核心五维（贡献率默认为30%）
+    stat_shooting: int = 0
+    stat_melee: int = 0
+    stat_awakening: int = 0
+    stat_defense: int = 0
+    stat_reaction: int = 0
+
+    # 熟练度
+    weapon_proficiency: int = 0
+    mecha_proficiency: int = 0
+
+    # 天生技能
+    innate_skills: List[str] = []
+
+    # 贡献率（0.0-1.0，默认0.3表示30%）
+    contribution_rate: float = 0.3
 
 # ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic
@@ -265,6 +298,10 @@ class MechaSnapshot(BaseModel):
     # 驾驶员属性备份 (用于伤害计算和防御公式)
     # keys: shooting, melee, awakening, defense, reaction, weapon_proficiency, mecha_proficiency
     pilot_stats_backup: Dict[str, int] = {}
+
+    # 副驾驶属性备份 (用于UI显示等)
+    sub_pilot_stats_backup: Dict[str, int] = Field(default_factory=dict)
+    sub_pilot_contribution_rate: float = 0.0  # 副驾驶贡献率
 
     # 战斗中的动态状态 (不序列化到纯JSON配置，但运行时需要)
     effects: List[Any] = Field(default_factory=list, exclude=True) # 运行时 Effect 对象列表

@@ -6,7 +6,8 @@
         "stat_modifiers": {
             "final_mobility": 10.0,
             "final_hit": 5.0
-        }
+        },
+        "passive_skills": ["skill_maneuver"]
     },
     {
         "id": "e_chobham_armor",
@@ -16,6 +17,28 @@
             "final_max_hp": 1000,
             "final_armor": 2000
         }
+    },
+    {
+        "id": "e_gundam_armor",
+        "name": "高达专用装甲",
+        "type": "EQUIP",
+        "series": ["RX"],
+        "stat_modifiers": {
+            "final_max_hp": 2000,
+            "final_armor": 3000
+        }
+    },
+    {
+        "id": "e_sazabi_thruster",
+        "name": "沙扎比推进器",
+        "type": "EQUIP",
+        "series": ["NEO_ZEON"],
+        "stat_modifiers": {
+            "final_max_en": 80,
+            "final_mobility": 15.0,
+            "final_dodge": 12.0
+        },
+        "passive_skills": ["skill_high_mobility"]
     },
     {
         "id": "e_magnetron_coating",
@@ -33,7 +56,8 @@
         "stat_modifiers": {
             "final_precision": 10.0,
             "final_crit": 5.0
-        }
+        },
+        "passive_skills": ["skill_precision_boost"]
     },
     {
         "id": "e_power_generator",

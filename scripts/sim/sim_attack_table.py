@@ -73,6 +73,24 @@ TEST_SCENARIOS = {
         "attacker": {"hit_bonus": 10.0, "crit_bonus": 5.0},
         "defender": {"dodge_bonus": 40.0, "parry_bonus": 30.0, "block_bonus": 20.0},
     },
+    6: {
+        "name": "精准削减检测",
+        "description": "精准+30 vs 高防御，验证精准对躲闪/招架/格挡的削减效果",
+        "attacker": {"hit_bonus": 50.0, "crit_bonus": 50.0, "precision_bonus": 30.0},
+        "defender": {"dodge_bonus": 30.0, "parry_bonus": 40.0, "block_bonus": 10.0},
+    },
+    7: {
+        "name": "高精准压制",
+        "description": "精准+60 vs 极高防御，验证精准对高防御方的压制效果",
+        "attacker": {"hit_bonus": 60.0, "crit_bonus": 40.0, "precision_bonus": 60.0},
+        "defender": {"dodge_bonus": 50.0, "parry_bonus": 50.0, "block_bonus": 20.0},
+    },
+    8: {
+        "name": "精准对比测试",
+        "description": "对比精准0 vs 精准30，验证差异",
+        "attacker": {"hit_bonus": 50.0, "crit_bonus": 50.0, "precision_bonus": 30.0},
+        "defender": {"dodge_bonus": 40.0, "parry_bonus": 40.0, "block_bonus": 15.0},
+    },
 }
 
 # ============================================================================
@@ -102,6 +120,7 @@ def create_test_mechas(
     # 命中加成（在基础命中上加成）
     hit_bonus = attacker_stats.get("hit_bonus", 0.0)
     crit_bonus = attacker_stats.get("crit_bonus", 0.0)
+    precision_bonus = attacker_stats.get("precision_bonus", 0.0)
 
     m_a = Mecha(
         instance_id="m_a", mecha_name="Attacker",
@@ -109,7 +128,7 @@ def create_test_mechas(
         final_max_en=100, current_en=100,
         final_mobility=100, final_armor=1000,
         final_hit=hit_bonus,
-        final_precision=0.0,
+        final_precision=precision_bonus,
         final_crit=crit_bonus,
         final_dodge=0.0, final_parry=0.0, final_block=0.0,
         # 备份驾驶员属性，供 MockPilot 使用
@@ -191,10 +210,16 @@ def run_simulation(
     print(f"  - 命中/暴击/防御数值为在基础值上的加成")
     print(f"  - 攻击方武器熟练度: 1000 (满值)")
     print(f"  - 防御方机体熟练度: 4000 (满值)")
-    print(f"  - 精准: 0 (无削减)")
 
     # 创建机体
     m_a, m_b = create_test_mechas(scenario["attacker"], scenario["defender"])
+
+    # 根据攻击方精准值显示说明
+    precision = m_a.final_precision
+    if precision > 0:
+        print(f"  - 精准: {precision:.0f} (削减躲闪/招架{precision * 0.66:.1f}%, 削减格挡{precision * 0.33:.1f}%)")
+    else:
+        print(f"  - 精准: 0 (无削减)")
 
     # 创建武器
     weapon = Weapon(
@@ -448,10 +473,14 @@ def main():
   3 - 高闪避场景 (30命中/30暴击 vs 50躲闪/30招架/20格挡)
   4 - 极端压制场景 (100命中/30暴击 vs 30躲闪/40招架/10格挡)
   5 - 边界条件场景 (10命中/5暴击 vs 40躲闪/30招架/20格挡)
+  6 - 精准削减检测 (50命中/50暴击/30精准 vs 30躲闪/40招架/10格挡)
+  7 - 高精准压制 (60命中/40暴击/60精准 vs 50躲闪/50招架/20格挡)
+  8 - 精准对比测试 (50命中/50暴击/30精准 vs 40躲闪/40招架/15格挡)
 
 示例:
   python sim_attack_table.py                # 运行所有场景 (默认 2000 次迭代)
   python sim_attack_table.py --scenario 1   # 只运行场景 1
+  python sim_attack_table.py --scenario 6   # 运行精准削减检测场景
   python sim_attack_table.py --iterations 5000  # 增加迭代次数到 5000
         """
     )

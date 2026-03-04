@@ -37,5 +37,50 @@
         "stat_defense": 50,
         "stat_reaction": 50,
         "innate_skills": []
+    },
+    {
+        "id": "subpilot_sayla",
+        "name": "赛拉·马斯",
+        "portrait_id": "p_sayla",
+        "type": "SUB",
+        "stat_shooting": 65,
+        "stat_melee": 45,
+        "stat_awakening": 50,
+        "stat_defense": 55,
+        "stat_reaction": 60,
+        "weapon_proficiency": 300,
+        "mecha_proficiency": 1200,
+        "innate_skills": ["skill_covering_fire"],
+        "contribution_rate": 0.25
+    },
+    {
+        "id": "subpilot_four",
+        "name": "四号·木下",
+        "portrait_id": "p_four",
+        "type": "SUB",
+        "stat_shooting": 50,
+        "stat_melee": 70,
+        "stat_awakening": 55,
+        "stat_defense": 50,
+        "stat_reaction": 58,
+        "weapon_proficiency": 400,
+        "mecha_proficiency": 1000,
+        "innate_skills": ["skill_melee_combo"],
+        "contribution_rate": 0.3
+    },
+    {
+        "id": "subpilot_haman",
+        "name": "哈曼·卡恩",
+        "portrait_id": "p_haman",
+        "type": "SUB",
+        "stat_shooting": 60,
+        "stat_melee": 65,
+        "stat_awakening": 80,
+        "stat_defense": 60,
+        "stat_reaction": 65,
+        "weapon_proficiency": 500,
+        "mecha_proficiency": 1500,
+        "innate_skills": ["skill_newtype_sync"],
+        "contribution_rate": 0.35
     }
 ]
