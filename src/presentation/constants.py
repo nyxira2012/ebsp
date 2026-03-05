@@ -1,4 +1,8 @@
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 class Channel(str, Enum):
     """
@@ -88,7 +92,10 @@ class TemplateTier(str, Enum):
 
 # ============ T3_Fallback 兜底文本常量 ============
 # 统一维护 T3 层的兜底文本，避免在 bidder.py 和 assembler.py 中重复定义
+# 注意：由于 AttackResult 是 str 的子类，字符串键可以正常工作
+# 类型注解使用 AttackResult 表明意图
 T3_FALLBACK_TEXTS: dict[str, list[str]] = {
+    # 使用字符串字面量作为键（兼容 AttackResult 枚举）
     "HIT": ["{defender} 被击中了。"],
     "CRIT": ["{defender} 遭受了沉重打击！"],
     "BLOCK": ["{defender} 挡住了攻击。"],

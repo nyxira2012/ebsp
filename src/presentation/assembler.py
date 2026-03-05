@@ -8,12 +8,15 @@ L3 动态丰满层 - 原子化组合 + DHL + SVI
 """
 
 import random
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .models import RawAttackEvent
 from .constants import Channel, T3_FALLBACK_TEXTS, T3_FALLBACK_FATAL
 from .template import ActionBone, ReactionBone
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 
 class DhlMapper:
@@ -41,6 +44,10 @@ class DhlMapper:
         """
         根据频道和攻击结果获取受击部位。
 
+        Args:
+            channel: 演出频道
+            attack_result: 攻击结果 (AttackResult 枚举值，继承自 str)
+
         Returns:
             部位名称，或 None（如果是 EVADE）
         """
@@ -49,6 +56,7 @@ class DhlMapper:
 
         # 优先级：FATAL > CRIT/PARRY/BLOCK > HIT
         # 致命频道优先使用致命部位
+        # 注意：使用字符串字面量进行运行时比较（AttackResult 继承自 str）
         if channel == Channel.FATAL:
             pool = cls._LOCATION_MAP["FATAL"]
         elif attack_result == "CRIT":
@@ -262,16 +270,12 @@ class TextAssembler:
         1. 优先使用传入的 bone 中的片段
         2. 变量注入
         3. 附加判定结果和伤害数值
+
+        注意：理论上 Bidder 已经保证了有骨架提供，bone 不应为 None
         """
-        if bone and bone.text_fragments:
-            base_text = random.choice(bone.text_fragments)
-        else:
-            # 理论上 Bidder 已经保证了有骨架提供，这里作为防御性兜底
-            # 使用 constants 中统一定义的兜底文本
-            if event.is_lethal or channel == Channel.FATAL:
-                base_text = T3_FALLBACK_FATAL
-            else:
-                base_text = T3_FALLBACK_TEXTS.get(event.attack_result, ["{defender} 受到了影响。"])[0]
+        # 断言 Bidder 已提供有效骨架
+        assert bone and bone.text_fragments, "Bidder should always provide a valid bone with text_fragments"
+        base_text = random.choice(bone.text_fragments)
 
         # 变量注入
         try:
@@ -280,6 +284,7 @@ class TextAssembler:
             pass
 
         # 统一附加判定结果和伤害信息
+        # 注意：使用字符串字面量作为键（AttackResult 继承自 str，可以正常匹配）
         result_map = {
             "CRIT": "暴击",
             "HIT": "命中",
@@ -288,7 +293,7 @@ class TextAssembler:
             "DODGE": "躲闪",
             "MISS": "未命中"
         }
-        result_name = result_map.get(event.attack_result, event.attack_result)
+        result_name = result_map.get(event.attack_result, str(event.attack_result))
         damage = event.damage
         
         # 根据是否致死选择图标

@@ -149,7 +149,7 @@ class AttackEventBuilder:
             weapon_tags=getattr(weapon, 'tags', []),
 
             # ── 判定结果 ──────────────────────────────────────────────
-            attack_result=result.value,
+            attack_result=result,
             damage=damage,
 
             # ── 战场状态 ──────────────────────────────────────────────

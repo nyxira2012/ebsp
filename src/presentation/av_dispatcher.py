@@ -6,11 +6,14 @@ L4 视听调度层 - 影视级调色
 - 语义化时间轴自适应
 """
 
-from typing import List, Optional, Callable, Tuple
+from typing import List, Optional, Callable, Tuple, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .models import RawAttackEvent, PresentationAttackEvent, DispatchPayload
 from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 
 @dataclass
@@ -33,6 +36,7 @@ class AVDispatcher:
     """
 
     # 摄像机选择规则表（优先级从高到低）
+    # 注意：使用字符串字面量进行运行时比较（AttackResult 继承自 str）
     CAMERA_RULES: List[CameraRule] = [
         CameraRule(
             priority=100,

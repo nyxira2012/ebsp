@@ -5,10 +5,16 @@ L1 绝对律令层 - 结局前置路由 (Outcome-First Routing)
 核心权重：结局（Result） > 意图（Intent） > 技能（Skill）
 """
 
+from typing import TYPE_CHECKING
 from .models import RawAttackEvent
 from .constants import Channel
 
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
+
+# 由于 AttackResult 是 str 的子类，我们可以使用字符串字面量进行运行时比较
+# 类型注解使用 TYPE_CHECKING 块中的 AttackResult
 class OutcomeRouter:
     """
     结局前置路由器。
@@ -21,6 +27,7 @@ class OutcomeRouter:
     """
 
     # 路由优先级表（数字越小优先级越高）
+    # 注意：使用字符串字面量进行运行时比较（AttackResult 继承自 str）
     _ROUTING_RULES = [
         # 一类优先级：致死判定
         (lambda e: e.is_lethal, Channel.FATAL),

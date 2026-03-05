@@ -7,12 +7,15 @@ L2 剧本解构层 - 动反双轨独立竞标 (Dual-Track Bidding)
 
 import random
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
 from .constants import Channel, MotionStyle, DamageMaterial, TemplateTier, MacroMotion, MOTION_STYLE_TO_MACRO, T3_FALLBACK_TEXTS, T3_FALLBACK_FATAL
 from .template import ActionBone, ReactionBone
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 logger = logging.getLogger(__name__)
 

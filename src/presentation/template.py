@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from .constants import TemplateTier, MotionStyle, Channel
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 @dataclass
 class TemplateConditions:
@@ -8,7 +11,7 @@ class TemplateConditions:
     Conditions required for a template to be selected.
     """
     motion_style: Optional[MotionStyle] = None  # 动作风格（MDDC v5.1）
-    result: Optional[str] = None  # MISS, DODGE, HIT, CRIT, BLOCK, PARRY
+    result: Optional["AttackResult"] = None  # MISS, DODGE, HIT, CRIT, BLOCK, PARRY
     weapon_type: Optional[str] = None
     required_tags: List[str] = field(default_factory=list)
     skill_id: Optional[str] = None  # For T1 Highlight templates
@@ -104,4 +107,4 @@ class ReactionBone:
     tier: TemplateTier = TemplateTier.T2_TACTICAL
     weight: float = 1.0               # 竞标权重
     tags: List[str] = field(default_factory=list)  # 额外标签
-    attack_result: Optional[str] = None  # 攻击结果 (BLOCK, PARRY 等)，None 表示通用
+    attack_result: Optional["AttackResult"] = None  # 攻击结果 (BLOCK, PARRY 等)，None 表示通用

@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from .constants import TemplateTier, MotionStyle, DamageMaterial, Channel
+
+if TYPE_CHECKING:
+    from ..models import AttackResult
 
 
 @dataclass
@@ -57,7 +60,7 @@ class RawAttackEvent:
     weapon_tags: List[str]         # Weapon Tags
 
     # Validation/Result
-    attack_result: str             # MISS/DODGE/PARRY/BLOCK/HIT/CRIT
+    attack_result: "AttackResult"   # MISS/DODGE/PARRY/BLOCK/HIT/CRIT
     damage: int                    # Final damage dealt
 
     # Context
