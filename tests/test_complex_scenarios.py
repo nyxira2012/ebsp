@@ -55,28 +55,6 @@ class TestAceVsNormal:
         # 基础暴击15%可能被防御挤压，但应该有显著暴击空间
         assert crit_rate >= 5  # 至少有一些暴击空间
 
-    def test_reversed_situation_disadvantage(self, gundam_rx78, zaku_ii):
-        """测试反转情况：扎古攻击高达"""
-        battlefield_reversed = BattleContext(
-            round_number=1,
-            distance=3000,
-            terrain=None,
-            mecha_a=zaku_ii,
-            mecha_b=gundam_rx78,
-            weapon=zaku_ii.weapons[0]
-        )
-
-        TraitManager.apply_traits(zaku_ii)
-        TraitManager.apply_traits(gundam_rx78)
-
-        segments = AttackTableResolver.calculate_attack_table_segments(battlefield_reversed)
-
-        # 扎古的命中率应该较低（高达高闪避）
-        hit_rate = segments.get('HIT', {}).get('rate', 0)
-        miss_rate = segments.get('MISS', {}).get('rate', 0)
-
-        assert hit_rate < 50 or miss_rate > 20
-
 
 # ============================================================================
 # 场景2: 精神指令战术

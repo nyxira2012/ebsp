@@ -876,5 +876,104 @@
                 }
             ]
         }
+    ],
+    "trait_newtype": [
+        {
+            "id": "trait_newtype",
+            "name": "新人类",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 15.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_focus": [
+        {
+            "id": "skill_focus",
+            "name": "专注",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 10.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_red_comet": [
+        {
+            "id": "skill_red_comet",
+            "name": "赤色彗星",
+            "hook": "HOOK_PRE_MOBILITY",
+            "operation": "add",
+            "value": 10.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_maneuver": [
+        {
+            "id": "skill_maneuver",
+            "name": "高机动",
+            "hook": "HOOK_PRE_MOBILITY",
+            "operation": "add",
+            "value": 10.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_high_mobility": [
+        {
+            "id": "skill_high_mobility",
+            "name": "超高机动",
+            "hook": "HOOK_PRE_DODGE_RATE",
+            "operation": "add",
+            "value": 12.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_precision_boost": [
+        {
+            "id": "skill_precision_boost",
+            "name": "精密强化",
+            "hook": "HOOK_PRE_PRECISION",
+            "operation": "add",
+            "value": 10.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_covering_fire": [
+        {
+            "id": "skill_covering_fire",
+            "name": "掩护射击",
+            "hook": "HOOK_PRE_HIT_RATE",
+            "operation": "add",
+            "value": 8.0,
+            "duration": -1,
+            "priority": 10
+        }
+    ],
+    "skill_melee_combo": [
+        {
+            "id": "skill_melee_combo",
+            "name": "近战连击",
+            "hook": "HOOK_PRE_DAMAGE_MULT",
+            "operation": "mul",
+            "value": 1.15,
+            "duration": -1,
+            "priority": 50
+        }
+    ],
+    "skill_newtype_sync": [
+        {
+            "id": "skill_newtype_sync",
+            "name": "新类型同步",
+            "hook": "HOOK_PRE_AWAKENING",
+            "operation": "add",
+            "value": 10.0,
+            "duration": -1,
+            "priority": 10
+        }
     ]
 }
