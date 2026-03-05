@@ -14,7 +14,13 @@
       "Bash(python3.12:*)",
       "Bash(/Users/dupidupi/.local/bin/python3:*)",
       "Bash(git:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(/Users/dupidupi/ebsp/.venv/bin/pyright:*)",
+      "Bash(/Users/dupidupi/ebsp/.venv/bin/pytest:*)",
+      "Bash(/Users/dupidupi/ebsp/.venv/bin/python:*)",
+      "Bash(.venv/bin/pyright:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(.venv/bin/python:*)"
     ]
   }
 }

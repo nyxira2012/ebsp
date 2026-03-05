@@ -11,6 +11,8 @@
     "**/.*"
   ],
   "typeCheckingMode": "standard",
-  "pythonVersion": "3.13",
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
   "stubPath": "src/typings"
 }

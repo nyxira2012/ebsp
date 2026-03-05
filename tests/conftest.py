@@ -17,6 +17,24 @@ sys.path.insert(0, str(project_root))
 # 以避免与 pytest 的输出捕获机制冲突
 
 # ============================================================================
+# 性能优化：测试环境降低 bcrypt 工作因子
+# ============================================================================
+
+@pytest.fixture(scope="session", autouse=True)
+def reduce_bcrypt_cost():
+    """
+    测试环境下降低 bcrypt 工作因子，加速测试
+
+    生产环境: ROUNDS=12 (约 300ms/次，用于防止暴力破解)
+    测试环境: ROUNDS=4  (约 1ms/次，速度提升约 256 倍)
+    """
+    import src.user.security
+    original_rounds = src.user.security.ROUNDS
+    src.user.security.ROUNDS = 4
+    yield
+    src.user.security.ROUNDS = original_rounds
+
+# ============================================================================
 # 导入项目模块
 # ============================================================================
 from src.models import (
@@ -853,3 +871,190 @@ def battlefield(gundam_rx78, zaku_ii):
         mecha_b=zaku_ii,
         weapon=gundam_rx78.weapons[0]  # 使用光束步枪
     )
+
+
+# ============================================================================
+# 数据库与用户系统 Fixtures
+# ==============================================================================
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
+from src.database.base import Base
+from src.database.models import User, GameSave
+
+@pytest.fixture(scope="session")
+async def async_db_engine():
+    """
+    异步内存数据库引擎 (Session 作用域)
+
+    在整个测试会话期间只创建一次引擎并初始化表结构。
+    使用 StaticPool 确保所有测试共享同一个内存数据库实例。
+    """
+    from sqlalchemy.pool import StaticPool
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    # 创建所有表 (仅执行一次)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield engine
+
+    # 会话结束时销毁
+    await engine.dispose()
+
+@pytest.fixture(autouse=True)
+async def db_cleanup(async_db_engine):
+    """
+    自动清理数据库 (针对每个测试)
+    确保测试之间没有任何残留数据，即使测试中使用了 commit。
+    """
+    from sqlalchemy import text
+    # 按照依赖的反序删除数据
+    async with async_db_engine.begin() as conn:
+        # SQLite 不支持 TRUNCATE，使用 DELETE
+        # 且必须按照外键约束的反向顺序清理，或者暂时禁用外键检查
+        await conn.execute(text("PRAGMA foreign_keys = OFF"))
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(text(f"DELETE FROM {table.name}"))
+        await conn.execute(text("PRAGMA foreign_keys = ON"))
+
+@pytest.fixture(scope="function")
+async def db_session(async_db_engine) -> AsyncSession:
+    """
+    异步数据库会话 (Function 作用域)
+    清理逻辑由 db_cleanup 自动处理，此处回归基础功能
+    """
+    async_session_maker = async_sessionmaker(
+        async_db_engine,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    async with async_session_maker() as session:
+        yield session
+        # 无需手动清理，db_cleanup 会负责
+        await session.rollback()
+
+@pytest.fixture
+def test_user_data():
+    """测试用户数据"""
+    from src.user.schemas import UserCreate
+    return UserCreate(
+        username="testuser",
+        password="testpass123",
+        email="test@example.com"
+    )
+
+@pytest.fixture
+def test_mecha_snapshot():
+    """测试用的 MechaSnapshot 对象"""
+    from src.models import MechaSnapshot
+    return MechaSnapshot(
+        instance_id="m_test_01",
+        mecha_name="TestMecha",
+        main_portrait="test_portrait",
+        model_asset="test_model",
+        final_max_hp=5000,
+        current_hp=5000,
+        final_max_en=100,
+        current_en=100,
+        final_armor=1000,
+        final_mobility=100,
+        final_hit=10.0,
+        final_precision=10.0,
+        final_crit=5.0,
+        final_dodge=10.0,
+        final_parry=10.0,
+        final_block=10.0,
+        block_reduction=500,
+        pilot_stats_backup={
+            "stat_shooting": 100,
+            "stat_melee": 100,
+            "stat_awakening": 100,
+            "stat_defense": 100,
+            "stat_reaction": 100,
+        }
+    )
+
+@pytest.fixture
+def test_save_data(test_mecha_snapshot):
+    """测试存档数据"""
+    from src.user.schemas import SaveData, SaveMetadata
+    return SaveData(
+        version="1.0",
+        mecha=test_mecha_snapshot.model_dump(mode='json'),
+        metadata=SaveMetadata(
+            summary="测试存档",
+            last_area="测试区域",
+            play_time=3600,
+        )
+    )
+
+# ============================================================================
+# FastAPI 测试客户端
+# ==============================================================================
+
+from httpx import AsyncClient, ASGITransport
+from src.api.presentation_api import app as fastapi_app
+import src.database.base  # 确保模块可以被引用
+
+@pytest.fixture(scope="session")
+async def test_app(async_db_engine):
+    """
+    提供一个配置好的 FastAPI 应用实例 (Session 作用域)
+    彻底接管初始化，防止 redundant 启动开销
+    """
+    import src.api.presentation_api as api_mod
+    from src import DataLoader
+
+    # 1. 注入测试数据库引擎和会话工厂
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    test_session_maker = async_sessionmaker(
+        async_db_engine,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    # 备份原始配置
+    original_engine = getattr(src.database.base, 'async_engine', None)
+    original_maker = getattr(src.database.base, 'AsyncSessionLocal', None)
+
+    # 覆盖全局配置
+    src.database.base.async_engine = async_db_engine
+    src.database.base.AsyncSessionLocal = test_session_maker
+
+    # 2. 手动初始化全局数据加载器 (仅一次)
+    if api_mod._loader is None:
+        loader = DataLoader(data_dir="data")
+        loader.load_all()
+        api_mod._loader = loader
+
+    # 3. 关键优化：清空 app 的 startup/shutdown 事件，
+    # 避免 AsyncClient 每次 context entry 都要重新运行 init_db 和 load_all
+    fastapi_app.router.on_startup.clear()
+    fastapi_app.router.on_shutdown.clear()
+
+    yield fastapi_app
+
+    # 恢复配置
+    src.database.base.async_engine = original_engine
+    src.database.base.AsyncSessionLocal = original_maker
+
+@pytest.fixture(scope="function")
+async def async_client(test_app):
+    """
+    FastAPI 异步测试客户端 (Function 作用域)
+    复用 session 级别的 test_app，避免重复启动开销
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app),
+        base_url="http://test"
+    ) as client:
+        yield client
+
