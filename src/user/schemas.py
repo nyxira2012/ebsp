@@ -48,42 +48,81 @@ class UserLogin(BaseModel):
     password: str = Field(..., description="密码")
 
 # ==============================================================================
-# 存档 DTO
+# 用户资产 DTO (JSONB Contracts)
 # ==============================================================================
 
-class SaveMetadata(BaseModel):
-    """存档元数据"""
-    summary: str = Field(default="", description="存档摘要")
-    last_area: str = Field(default="", description="最后所在区域")
-    play_time: int = Field(default=0, description="游戏时长（秒）")
+class MechaUpgrades(BaseModel):
+    """机体养成进度契约 (对应 UserMecha.upgrades JSONB 字段)"""
+    hp: int = 0
+    en: int = 0
+    armor: int = 0
+    mobility: int = 0
 
-class SaveData(BaseModel):
-    """完整存档数据结构"""
-    version: str = Field(default="1.0", description="存档版本")
-    mecha: Dict[str, Any] = Field(..., description="机体快照数据")
-    metadata: SaveMetadata = Field(default_factory=SaveMetadata, description="存档元数据")
+class PilotProgression(BaseModel):
+    """驾驶员养成进度契约 (对应 UserPilot.progression JSONB 字段)"""
+    level: int = 1
+    exp: int = 0
+    skill_points: int = 0
 
-class GameSaveCreate(BaseModel):
-    """创建存档请求模型"""
-    slot_id: int = Field(..., ge=1, le=3, description="存档位 (1-3)")
-    save_name: str = Field(..., min_length=1, max_length=100, description="存档名称")
-    save_data: SaveData = Field(..., description="存档数据")
+class EquipmentRandomStats(BaseModel):
+    """装备随机词条与强化属性契约"""
+    # 可以在这里预留随机词条槽位，或者附加属性加成
+    bonus_attack: int = 0
+    bonus_defense: int = 0
+    special_effects: list[str] = Field(default_factory=list)
 
-class GameSaveUpdate(BaseModel):
-    """更新存档请求模型"""
-    save_name: Optional[str] = Field(None, min_length=1, max_length=100, description="存档名称")
-    is_deployed: Optional[bool] = Field(None, description="是否设为出战存档")
-    save_data: Optional[SaveData] = Field(None, description="存档数据")
+# ==============================================================================
+# DB 读取模型 (Response DTOs)
+# ==============================================================================
 
-class GameSaveResponse(BaseModel):
-    """存档响应模型"""
+class UserMechaDB(BaseModel):
     id: int
     user_id: int
-    slot_id: int
-    save_name: str
-    is_deployed: bool
-    save_data: SaveData
+    mech_id: str
+    nickname: str
+    upgrades: MechaUpgrades
+    created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class UserPilotDB(BaseModel):
+    id: int
+    user_id: int
+    pilot_id: str
+    progression: PilotProgression
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class UserEquipmentDB(BaseModel):
+    id: int
+    user_id: int
+    equipment_id: str
+    enhancement_level: int
+    random_stats: EquipmentRandomStats
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class UserSquadDB(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    is_active: bool
+    mecha_ids: list[int]  # List of user_mechas.id
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class BattleRecordDB(BaseModel):
+    id: int
+    user_id: int
+    snapshot_data: Dict[str, Any]
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -54,79 +54,117 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False,
     )
 
-    # 关系: 用户的游戏存档
-    saves: Mapped[list["GameSave"]] = relationship(
-        "GameSave",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+    # 关系: 用户的资产
+    mechas: Mapped[list["UserMecha"]] = relationship(
+        "UserMecha", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    pilots: Mapped[list["UserPilot"]] = relationship(
+        "UserPilot", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    equipments: Mapped[list["UserEquipment"]] = relationship(
+        "UserEquipment", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    squads: Mapped[list["UserSquad"]] = relationship(
+        "UserSquad", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    battle_records: Mapped[list["BattleRecord"]] = relationship(
+        "BattleRecord", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}', status='{self.status}')>"
 
 # ==============================================================================
-# 游戏存档表 (GameSaves)
+# 用户资产表 (User Assets - Mixed Relational Architecture)
 # ==============================================================================
 
-class GameSave(Base, TimestampMixin):
-    """游戏存档模型
-
-    存储用户的游戏进度快照，支持多存档位
+class UserMecha(Base, TimestampMixin):
+    """用户机体资产表
+    
+    使用 JSONB 存储不固定的养成维度的进度（如血量改造、涂装等）。
     """
-    __tablename__ = "game_saves"
+    __tablename__ = "user_mechas"
 
-    # 主键
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
-    # 外键: 所属用户
     user_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
+    mech_id: Mapped[str] = mapped_column(String(50))  # 对应 mechas.json
+    nickname: Mapped[str] = mapped_column(String(100), default="")
+    
+    # 养成数据 (JSONB)
+    # Default: {"hp": 0, "en": 0, "armor": 0, "mobility": 0}
+    upgrades: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 
-    # 存档元数据
-    slot_id: Mapped[int] = mapped_column(
-        Integer,
-        default=1,
-        nullable=False,
+    user: Mapped["User"] = relationship("User", back_populates="mechas")
+
+class UserPilot(Base, TimestampMixin):
+    """用户驾驶员资产表"""
+    __tablename__ = "user_pilots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    save_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
+    pilot_id: Mapped[str] = mapped_column(String(50))  # 对应 pilots.json
+    
+    # 养成数据 (等级、经验、技能点等)
+    progression: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    user: Mapped["User"] = relationship("User", back_populates="pilots")
+
+class UserEquipment(Base, TimestampMixin):
+    """用户装备资产表"""
+    __tablename__ = "user_equipments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    is_deployed: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
+    equipment_id: Mapped[str] = mapped_column(String(50))  # 对应 equipments.json/weapons.json
+    enhancement_level: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # 随机词条与强化数据
+    random_stats: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    user: Mapped["User"] = relationship("User", back_populates="equipments")
+
+class UserSquad(Base, TimestampMixin):
+    """用户编队表"""
+    __tablename__ = "user_squads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
+    name: Mapped[str] = mapped_column(String(100), default="小队 A")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # 出战机体的 user_mechas.id 列表
+    mecha_ids: Mapped[list] = mapped_column(JSON, default=list)
 
-    # 存档数据 (JSON 快照)
-    save_data: Mapped[Dict[str, Any]] = mapped_column(
-        JSON,
-        nullable=False,
+    user: Mapped["User"] = relationship("User", back_populates="squads")
+
+# ==============================================================================
+# 录像持久化表 (Replays)
+# ==============================================================================
+
+class BattleRecord(Base, TimestampMixin):
+    """战斗录像表
+    
+    存储完整计算后的 MechaSnapshot 序列化 JSON，以支撑绝对回放，不受平衡性改版的影响。
+    """
+    __tablename__ = "battle_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
+    
+    # 完整的 Snapshot Dictionary (或整个战报上下文)
+    snapshot_data: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    # 关系: 所属用户
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="saves",
-    )
-
-    def __repr__(self) -> str:
-        return f"<GameSave(id={self.id}, user_id={self.user_id}, slot_id={self.slot_id}, name='{self.save_name}')>"
-
-    @property
-    def version(self) -> str:
-        """获取存档版本号"""
-        return self.save_data.get("version", "1.0")
-
-    @property
-    def metadata_summary(self) -> Dict[str, Any]:
-        """获取存档元数据摘要"""
-        return self.save_data.get("metadata", {})
+    user: Mapped["User"] = relationship("User", back_populates="battle_records")
 
 # ==============================================================================
 # 复合索引 (可选优化)

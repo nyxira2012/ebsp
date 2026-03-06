@@ -874,13 +874,16 @@ def battlefield(gundam_rx78, zaku_ii):
 
 
 # ============================================================================
-# 数据库与用户系统 Fixtures
-# ==============================================================================
+# 数据库相关的 Fixtures
+# ============================================================================
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 from src.database.base import Base
-from src.database.models import User, GameSave
+from src.database.models import User, UserMecha, UserPilot, UserEquipment, UserSquad, BattleRecord
+from src.database.base import AsyncSessionLocal, async_engine
+from src.user.schemas import UserCreate
+from passlib.context import CryptContext
 
 @pytest.fixture(scope="session")
 async def async_db_engine():

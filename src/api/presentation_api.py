@@ -19,7 +19,7 @@ from src.database import init_db, close_db
 from src.database.session import get_async_session
 from src.database.models import User
 from src.api import user_api
-from src.user.repository import GameSaveRepository
+from src.user.repository import UserAssetRepository
 from src.user.dependencies import get_optional_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,23 +115,32 @@ async def simulate_battle(
         mecha_a = MechaFactory.create_mecha_snapshot(config_a, weapon_configs=loader.equipments)
         mecha_b = MechaFactory.create_mecha_snapshot(config_b, weapon_configs=loader.equipments)
 
-        # 如果用户已登录，尝试加载存档覆盖
+        # 如果用户已登录，尝试加载出战小队阵容覆盖
         if current_user is not None:
-            deployed_save = await GameSaveRepository.get_deployed(session, current_user.id)
+            active_squad = await UserAssetRepository.get_active_squad(session, current_user.id)
 
-            if deployed_save is not None:
+            if active_squad is not None and len(active_squad.mecha_ids) > 0:
                 try:
-                    saved_mecha = GameSaveRepository.to_mecha_snapshot(deployed_save)
-
-                    # 根据请求覆盖对应机体
-                    if req.use_user_save_for_a:
-                        mecha_a = saved_mecha
-                    if req.use_user_save_for_b:
-                        mecha_b = saved_mecha
+                    # 获取工厂
+                    from src.core.factory import SnapshotFactory
+                    factory = SnapshotFactory(loader, UserAssetRepository())
+                    
+                    # 取出战小队的第一台和第二台机体进行覆盖
+                    # 实际业务中应配合请求参数选择出战序号，此处作为平滑过渡
+                    user_mechas = active_squad.mecha_ids
+                    
+                    if req.use_user_save_for_a and len(user_mechas) > 0:
+                        mecha_a = await factory.create_combat_snapshot(session, current_user.id, user_mechas[0])
+                    
+                    if req.use_user_save_for_b and len(user_mechas) > 1:
+                        mecha_b = await factory.create_combat_snapshot(session, current_user.id, user_mechas[1])
+                    elif req.use_user_save_for_b and len(user_mechas) > 0:
+                        # 兜底：如果选了B但只有一个机甲，用那个
+                        mecha_b = await factory.create_combat_snapshot(session, current_user.id, user_mechas[0])
 
                 except ValueError as e:
-                    # 存档数据无效，忽略并使用默认配置
-                    print(f"⚠️ 存档数据无效，使用默认配置: {e}")
+                    # 养成数据无效，忽略并使用默认配置
+                    print(f"⚠️ 玩家出战数据无效，使用默认配置: {e}")
 
         # 执行战斗模拟
         sim = BattleSimulator(mecha_a, mecha_b, enable_presentation=True)

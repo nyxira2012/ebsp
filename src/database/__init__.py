@@ -14,7 +14,7 @@ from .base import (
     SoftDeleteMixin,
 )
 
-from .models import User, GameSave
+from .models import User, UserMecha, UserPilot, UserEquipment, UserSquad, BattleRecord
 from .session import get_async_session, create_session, ensure_session
 
 __all__ = [
@@ -28,7 +28,11 @@ __all__ = [
     "SoftDeleteMixin",
     # ORM 模型
     "User",
-    "GameSave",
+    "UserMecha",
+    "UserPilot",
+    "UserEquipment",
+    "UserSquad",
+    "BattleRecord",
     # 会话管理
     "get_async_session",
     "create_session",

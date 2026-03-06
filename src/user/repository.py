@@ -15,8 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from typing import Optional, List
 from datetime import datetime, timezone
 
-from src.database.models import User, GameSave
-from src.user.schemas import UserCreate, UserResponse, GameSaveCreate, GameSaveResponse, SaveData
+from src.database.models import User
+from src.user.schemas import UserCreate, UserResponse
 from src.user.security import hash_password, verify_password
 from src.models import MechaSnapshot
 
@@ -123,243 +123,120 @@ class UserRepository:
         return user
 
 # ==============================================================================
-# 游戏存档 Repository
+# 用户资产 Repository (User Assets - Mixed Relational Architecture)
 # ==============================================================================
 
-class GameSaveRepository:
-    """游戏存档数据访问类"""
+from src.database.models import UserMecha, UserPilot, UserEquipment, UserSquad, BattleRecord
+
+class UserAssetRepository:
+    """用户资产数据访问类 (替代了旧的 GameSaveRepository)"""
+
+    # --- Mecha (机体) 系列操作 ---
 
     @staticmethod
-    async def create(
-        session: AsyncSession,
-        user_id: int,
-        save_data: GameSaveCreate,
-    ) -> GameSave:
-        """
-        创建新存档
-
-        Args:
-            session: 数据库会话
-            user_id: 用户 ID
-            save_data: 存档数据
-
-        Returns:
-            创建的存档对象
-
-        Raises:
-            ValueError: 存档位已被占用
-        """
-        # 检查存档位是否已被占用
-        existing = await GameSaveRepository.get_by_slot(session, user_id, save_data.slot_id)
-        if existing:
-            raise ValueError(f"存档位 {save_data.slot_id} 已被占用")
-
-        # 创建新存档
-        db_save = GameSave(
+    async def create_user_mecha(
+        session: AsyncSession, user_id: int, mech_id: str, nickname: str = ""
+    ) -> UserMecha:
+        db_mecha = UserMecha(
             user_id=user_id,
-            slot_id=save_data.slot_id,
-            save_name=save_data.save_name,
-            save_data=save_data.save_data.model_dump(),
-            is_deployed=False,
+            mech_id=mech_id,
+            nickname=nickname,
+            upgrades={"hp": 0, "en": 0, "armor": 0, "mobility": 0}
         )
-
-        session.add(db_save)
+        session.add(db_mecha)
         await session.flush()
-        await session.refresh(db_save)
-        return db_save
+        await session.refresh(db_mecha)
+        return db_mecha
 
     @staticmethod
-    async def get_by_id(session: AsyncSession, save_id: int) -> Optional[GameSave]:
-        """
-        根据 ID 获取存档
-
-        Args:
-            session: 数据库会话
-            save_id: 存档 ID
-
-        Returns:
-            存档对象，不存在返回 None
-        """
+    async def get_user_mecha(session: AsyncSession, user_mecha_id: int) -> Optional[UserMecha]:
         result = await session.execute(
-            select(GameSave).where(GameSave.id == save_id)
+            select(UserMecha).where(UserMecha.id == user_mecha_id)
         )
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_by_slot(session: AsyncSession, user_id: int, slot_id: int) -> Optional[GameSave]:
-        """
-        获取用户指定存档位的存档
-
-        Args:
-            session: 数据库会话
-            user_id: 用户 ID
-            slot_id: 存档位 (1-3)
-
-        Returns:
-            存档对象，不存在返回 None
-        """
+    async def list_user_mechas(session: AsyncSession, user_id: int) -> List[UserMecha]:
         result = await session.execute(
-            select(GameSave).where(
-                and_(GameSave.user_id == user_id, GameSave.slot_id == slot_id)
-            )
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def list_by_user(session: AsyncSession, user_id: int) -> List[GameSave]:
-        """
-        获取用户所有存档
-
-        按存档位 (slot_id) 升序排列
-
-        Args:
-            session: 数据库会话
-            user_id: 用户 ID
-
-        Returns:
-            存档对象列表
-        """
-        result = await session.execute(
-            select(GameSave)
-            .where(GameSave.user_id == user_id)
-            .order_by(GameSave.slot_id)
+            select(UserMecha).where(UserMecha.user_id == user_id)
         )
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_deployed(session: AsyncSession, user_id: int) -> Optional[GameSave]:
-        """
-        获取用户的出战存档
+    async def update_mecha_upgrades(
+        session: AsyncSession, user_mecha_id: int, upgrades: dict
+    ) -> Optional[UserMecha]:
+        db_mecha = await UserAssetRepository.get_user_mecha(session, user_mecha_id)
+        if not db_mecha:
+            return None
+        
+        db_mecha.upgrades = upgrades
+        db_mecha.updated_at = datetime.now(timezone.utc)
+        
+        await session.flush()
+        await session.refresh(db_mecha)
+        return db_mecha
 
-        Args:
-            session: 数据库会话
-            user_id: 用户 ID
+    # --- Squad (编队) 系列操作 ---
 
-        Returns:
-            出战存档对象，未设置返回 None
-        """
+    @staticmethod
+    async def create_user_squad(
+        session: AsyncSession, user_id: int, name: str, mecha_ids: List[int]
+    ) -> UserSquad:
+        db_squad = UserSquad(
+            user_id=user_id,
+            name=name,
+            mecha_ids=mecha_ids,
+            is_active=False
+        )
+        session.add(db_squad)
+        await session.flush()
+        await session.refresh(db_squad)
+        return db_squad
+
+    @staticmethod
+    async def get_active_squad(session: AsyncSession, user_id: int) -> Optional[UserSquad]:
         result = await session.execute(
-            select(GameSave).where(
-                and_(GameSave.user_id == user_id, GameSave.is_deployed == True)
+            select(UserSquad).where(
+                and_(UserSquad.user_id == user_id, UserSquad.is_active == True)
             )
         )
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def update(
-        session: AsyncSession,
-        save_id: int,
-        save_name: Optional[str] = None,
-        is_deployed: Optional[bool] = None,
-        save_data: Optional[SaveData] = None,
-    ) -> Optional[GameSave]:
-        """
-        更新存档
-
-        Args:
-            session: 数据库会话
-            save_id: 存档 ID
-            save_name: 新存档名称（可选）
-            is_deployed: 是否设为出战（可选）
-            save_data: 新存档数据（可选）
-
-        Returns:
-            更新后的存档对象，不存在则返回 None
-        """
-        db_save = await GameSaveRepository.get_by_id(session, save_id)
-        if not db_save:
-            return None
-
-        # 更新字段
-        if save_name is not None:
-            db_save.save_name = save_name
-        if is_deployed is not None:
-            db_save.is_deployed = is_deployed
-        if save_data is not None:
-            db_save.save_data = save_data.model_dump()
-
-        # 使用 datetime.now(timezone.utc) 替代已弃用的 datetime.utcnow()
-        db_save.updated_at = datetime.now(timezone.utc)
-        await session.flush()
-        await session.refresh(db_save)
-        return db_save
-
-    @staticmethod
-    async def set_deployed(session: AsyncSession, user_id: int, save_id: int) -> Optional[GameSave]:
-        """
-        设置指定存档为出战存档
-
-        会自动取消该用户其他存档的出战状态。
-        使用单条 UPDATE 语句实现，比循环更高效。
-
-        Args:
-            session: 数据库会话
-            user_id: 用户 ID
-            save_id: 存档 ID
-
-        Returns:
-            更新后的存档对象，不存在返回 None
-        """
-        # 使用一条 UPDATE 语句取消用户所有存档的出战状态
+    async def set_active_squad(session: AsyncSession, user_id: int, squad_id: int) -> Optional[UserSquad]:
+        # 清除该用户所有其他出战小队的状态
         await session.execute(
-            update(GameSave)
-            .where(and_(GameSave.user_id == user_id, GameSave.is_deployed == True))
-            .values(is_deployed=False)
+            update(UserSquad)
+            .where(and_(UserSquad.user_id == user_id, UserSquad.is_active == True))
+            .values(is_active=False)
         )
+        
+        # 将选中编队设为 Active
+        result = await session.execute(
+            select(UserSquad).where(UserSquad.id == squad_id)
+        )
+        db_squad = result.scalar_one_or_none()
+        
+        if db_squad:
+            db_squad.is_active = True
+            db_squad.updated_at = datetime.now(timezone.utc)
+            await session.flush()
+            await session.refresh(db_squad)
+            
+        return db_squad
 
-        # 设置目标存档为出战
-        db_save = await GameSaveRepository.update(session, save_id, is_deployed=True)
-        return db_save
-
+    # --- Battle Records (回放) 系列操作 ---
+    
     @staticmethod
-    async def delete(session: AsyncSession, save_id: int) -> bool:
-        """
-        删除存档
-
-        Args:
-            session: 数据库会话
-            save_id: 存档 ID
-
-        Returns:
-            是否删除成功
-        """
-        db_save = await GameSaveRepository.get_by_id(session, save_id)
-        if not db_save:
-            return False
-
-        await session.delete(db_save)
-        return True
-
-    @staticmethod
-    def to_mecha_snapshot(save: GameSave) -> MechaSnapshot:
-        """
-        从存档数据还原 MechaSnapshot 对象
-
-        通过 Pydantic 反序列化后，使用 TraitManager 重新注入运行时状态（Effects）。
-        这确保了从存档加载的机体拥有完整的技能效果，可以参与战斗计算。
-
-        Args:
-            save: 存档对象
-
-        Returns:
-            MechaSnapshot 运行时对象，包含完整的 effects 列表
-
-        Raises:
-            ValueError: 存档数据无效
-        """
-        from src.skills import TraitManager
-
-        try:
-            mecha_data = save.save_data.get("mecha", {})
-
-            # 使用 model_validate 进行 Pydantic 反序列化
-            mecha = MechaSnapshot.model_validate(mecha_data)
-
-            # 通过 TraitManager 重新注入运行时状态
-            # 将 skills 列表中的技能 ID 转换为实际的 Effect 对象
-            TraitManager.apply_traits(mecha)
-
-            return mecha
-
-        except Exception as e:
-            raise ValueError(f"存档数据无效: {e}")
+    async def create_battle_record(
+        session: AsyncSession, user_id: int, snapshot_data: dict
+    ) -> BattleRecord:
+        record = BattleRecord(
+            user_id=user_id,
+            snapshot_data=snapshot_data
+        )
+        session.add(record)
+        await session.flush()
+        await session.refresh(record)
+        return record

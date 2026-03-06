@@ -1,7 +1,7 @@
 """
 用户领域模块
 
-提供用户和存档管理的统一导出接口
+提供用户和资产管理的统一导出接口
 """
 
 from .security import hash_password, verify_password
@@ -11,13 +11,13 @@ from .schemas import (
     UserLogin,
     Token,
     TokenData,
-    GameSaveCreate,
-    GameSaveUpdate,
-    GameSaveResponse,
-    SaveData,
-    SaveMetadata,
+    UserMechaDB,
+    UserPilotDB,
+    UserEquipmentDB,
+    UserSquadDB,
+    BattleRecordDB,
 )
-from .repository import UserRepository, GameSaveRepository
+from .repository import UserRepository, UserAssetRepository
 from .auth import create_access_token, decode_access_token, SECRET_KEY, ALGORITHM
 from .dependencies import get_current_user, get_optional_user
 
@@ -31,14 +31,14 @@ __all__ = [
     "UserLogin",
     "Token",
     "TokenData",
-    "GameSaveCreate",
-    "GameSaveUpdate",
-    "GameSaveResponse",
-    "SaveData",
-    "SaveMetadata",
+    "UserMechaDB",
+    "UserPilotDB",
+    "UserEquipmentDB",
+    "UserSquadDB",
+    "BattleRecordDB",
     # Repository
     "UserRepository",
-    "GameSaveRepository",
+    "UserAssetRepository",
     # Auth
     "create_access_token",
     "decode_access_token",
