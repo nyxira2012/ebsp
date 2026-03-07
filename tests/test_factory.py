@@ -241,3 +241,163 @@ class TestMechaFactory:
         assert snapshot.sub_pilot_contribution_rate == 0.0
         assert snapshot.sub_pilot_stats_backup == {}
         assert snapshot.sub_portrait is None
+
+
+# ============================================================================
+# 扩展测试：覆盖 factory.py 中的更多分支
+# ============================================================================
+
+class TestMechaFactoryExtended:
+    """覆盖 factory.py 中之前未覆盖的分支"""
+
+    @pytest.fixture
+    def base_conf(self):
+        return MechaConfig(
+            id="m_ext", name="ExtMecha", portrait_id="p_ext",
+            init_hp=3000, init_en=120, init_armor=800, init_mobility=90,
+            init_hit=10.0, init_precision=5.0, init_crit=3.0,
+            init_dodge=8.0, init_parry=5.0, init_block=5.0, init_block_red=200,
+            slots=["WEAPON", "EQUIP"]
+        )
+
+    @pytest.fixture
+    def pilot_conf(self):
+        return MechaConfig.__class__  # placeholder, override in tests
+
+    def test_upgrade_bonuses_dict_path(self, base_conf):
+        """upgrade_bonuses 字典路径：明确指定各属性加成"""
+        from src.models import PilotConfig
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        bonuses = {"hp": 500, "en": 20, "armor": 100, "mobility": 10}
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, upgrade_bonuses=bonuses
+        )
+
+        assert snapshot.final_max_hp == 3000 + 500
+        assert snapshot.final_max_en == 120 + 20
+        assert snapshot.final_armor == 800 + 100
+        assert snapshot.final_mobility == 90 + 10
+
+    def test_upgrade_bonuses_partial_dict(self, base_conf):
+        """upgrade_bonuses 部分键：缺失键默认为 0"""
+        from src.models import PilotConfig
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, upgrade_bonuses={"hp": 1000}
+        )
+
+        assert snapshot.final_max_hp == 3000 + 1000
+        assert snapshot.final_max_en == 120  # 无 en 加成
+        assert snapshot.final_armor == 800   # 无 armor 加成
+
+    def test_equipment_defense_stats_branching(self, base_conf):
+        """装备属性叠加：dodge / parry / block / precision / crit 分支"""
+        from src.models import PilotConfig
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        # 一个装备包含所有防御和暴击属性
+        full_equip = EquipmentConfig(
+            id="e_full", name="Full Equip", type="EQUIP",
+            stat_modifiers={
+                "final_dodge": 5.0,
+                "final_parry": 3.0,
+                "final_block": 2.0,
+                "final_precision": 4.0,
+                "final_crit": 6.0,
+            }
+        )
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, equipments=[full_equip]
+        )
+
+        # base + equip
+        assert snapshot.final_dodge == pytest.approx(8.0 + 5.0)
+        assert snapshot.final_parry == pytest.approx(5.0 + 3.0)
+        assert snapshot.final_block == pytest.approx(5.0 + 2.0)
+        assert snapshot.final_precision == pytest.approx(5.0 + 4.0)
+        assert snapshot.final_crit == pytest.approx(3.0 + 6.0)
+
+    def test_equipment_en_regen_stat_branching(self, base_conf):
+        """装备属性叠加：final_en_regen_rate 和 final_en_regen_fixed 分支"""
+        from src.models import PilotConfig
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        regen_equip = EquipmentConfig(
+            id="e_regen", name="EN Regen Equip", type="EQUIP",
+            stat_modifiers={
+                "final_en_regen_rate": 2.5,
+                "final_en_regen_fixed": 5,
+            }
+        )
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, equipments=[regen_equip]
+        )
+
+        assert snapshot.final_en_regen_rate == pytest.approx(0.0 + 2.5)
+        assert snapshot.final_en_regen_fixed == 0 + 5
+
+    def test_fixed_weapon_loading_via_weapon_configs(self, base_conf):
+        """fixed_weapons：从 mecha_conf 加载内置武器"""
+        from src.models import PilotConfig
+        # 机体带内置武器 ID
+        base_conf.fixed_weapons = ["w_built_in"]
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        built_in_weapon = EquipmentConfig(
+            id="w_built_in", name="内置光束炮", type="WEAPON",
+            weapon_type=WeaponType.SHOOTING,
+            weapon_power=1500, weapon_range_min=500, weapon_range_max=5000,
+            weapon_en_cost=20
+        )
+        weapon_configs = {"w_built_in": built_in_weapon}
+
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, weapon_configs=weapon_configs
+        )
+
+        assert len(snapshot.weapons) == 1
+        assert snapshot.weapons[0].name == "内置光束炮"
+        assert snapshot.weapons[0].final_power == 1500
+
+    def test_fixed_weapon_missing_from_weapon_configs(self, base_conf):
+        """fixed_weapons：weapon_configs 中不存在时不报错，武器列表为空"""
+        from src.models import PilotConfig
+        base_conf.fixed_weapons = ["w_nonexistent"]
+        pilot = PilotConfig(
+            id="p_ext", name="Pilot", portrait_id="p_ext",
+            stat_shooting=100, stat_melee=100, stat_reaction=100,
+            stat_awakening=100, stat_defense=100
+        )
+        # weapon_configs 不含该 ID
+        snapshot = MechaFactory.create_mecha_snapshot(
+            base_conf, pilot, weapon_configs={"other_weapon": None}
+        )
+
+        assert len(snapshot.weapons) == 0
+
+    def test_no_pilot_returns_empty_stats(self, base_conf):
+        """无驾驶员时 pilot_stats_backup 为空"""
+        snapshot = MechaFactory.create_mecha_snapshot(base_conf, None)
+        assert snapshot.pilot_stats_backup == {}
+
+    def test_validate_slot_fixed_always_passes(self):
+        """FIXED 槽位验证：任何装备都通过"""
+        equip = EquipmentConfig(id="e_any", name="Any", type="EQUIP")
+        assert MechaFactory._validate_equipment_slot(equip, "FIXED", "") is True

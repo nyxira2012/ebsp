@@ -10,9 +10,15 @@ from src.skills import (
     cb_learning,
     cb_gn_recover,
     cb_miracle_hit,
-    cb_instinct_dodge
+    cb_instinct_dodge,
+    cb_auto_repair,
+    cb_ablat,
+    cb_vampirism,
+    cb_rage_will,
+    cb_regen_hp,
+    _restore_en,
 )
-from src.models import AttackResult, BattleContext
+from src.models import AttackResult, BattleContext, WeaponType
 
 
 class TestCbPotential:
@@ -172,3 +178,201 @@ class TestCbInstinctDodge:
         assert event.skill_id == "spirit_instinct"
         assert event.triggered is True
         assert event.effect_text == "本能闪避"
+
+
+# ============================================================================
+# 优先级 2 — 之前未覆盖的回调函数测试
+# ============================================================================
+
+class TestCbAutoRepair:
+    """自动修复回调测试: 受到伤害后回复 20% HP"""
+
+    def test_repairs_20_percent_of_damage(self):
+        """回复造成伤害的 20%"""
+        owner = MagicMock()
+        owner.current_hp = 3000
+        owner.final_max_hp = 5000
+
+        result = cb_auto_repair(1000, None, owner)
+
+        # heal = int(1000 * 0.2) = 200
+        assert owner.current_hp == 3200
+        assert result == 1000  # 伤害数值本身不变
+
+    def test_repair_does_not_exceed_max_hp(self):
+        """回复不超过最大 HP"""
+        owner = MagicMock()
+        owner.current_hp = 4900
+        owner.final_max_hp = 5000
+
+        result = cb_auto_repair(5000, None, owner)
+
+        # heal = int(5000 * 0.2) = 1000，min(5000, 4900+1000) = 5000
+        assert owner.current_hp == 5000
+        assert result == 5000
+
+    def test_repair_with_zero_damage(self):
+        """零伤害时不回复"""
+        owner = MagicMock()
+        owner.current_hp = 2000
+        owner.final_max_hp = 5000
+
+        result = cb_auto_repair(0, None, owner)
+
+        assert owner.current_hp == 2000
+        assert result == 0
+
+
+class TestCbAblat:
+    """烧蚀装甲回调测试: 对特定武器类型减少 200 点伤害"""
+
+    def test_reduces_shooting_damage(self):
+        """对射击武器减少 200 伤害"""
+        ctx = MagicMock()
+        ctx.weapon.weapon_type = WeaponType.SHOOTING
+
+        result = cb_ablat(1000, ctx, None)
+        assert result == 800
+
+    def test_reduces_melee_damage(self):
+        """对格斗武器减少 200 伤害"""
+        ctx = MagicMock()
+        ctx.weapon.weapon_type = WeaponType.MELEE
+
+        result = cb_ablat(500, ctx, None)
+        assert result == 300
+
+    def test_does_not_go_below_zero(self):
+        """伤害不低于 0"""
+        ctx = MagicMock()
+        ctx.weapon.weapon_type = WeaponType.SHOOTING
+
+        result = cb_ablat(100, ctx, None)
+        assert result == 0
+
+    def test_no_reduction_for_awakening_weapon(self):
+        """觉醒武器不减少伤害"""
+        ctx = MagicMock()
+        ctx.weapon.weapon_type = WeaponType.AWAKENING
+
+        result = cb_ablat(1000, ctx, None)
+        assert result == 1000
+
+    def test_no_weapon_in_ctx(self):
+        """ctx.weapon 为 None 时不减少伤害"""
+        ctx = MagicMock()
+        ctx.weapon = None
+
+        result = cb_ablat(1000, ctx, None)
+        assert result == 1000
+
+
+class TestCbVampirism:
+    """吸血回调测试: 回复造成伤害的 10% HP"""
+
+    def test_lifesteals_10_percent(self):
+        """回复伤害的 10%"""
+        owner = MagicMock()
+        owner.current_hp = 2000
+        owner.final_max_hp = 5000
+
+        result = cb_vampirism(1000, None, owner)
+
+        # heal = int(1000 * 0.1) = 100
+        assert owner.current_hp == 2100
+        assert result == 1000
+
+    def test_lifesteal_does_not_exceed_max(self):
+        """回复不超过最大 HP"""
+        owner = MagicMock()
+        owner.current_hp = 4980
+        owner.final_max_hp = 5000
+
+        result = cb_vampirism(2000, None, owner)
+
+        # heal = 200，min(5000, 4980+200) = 5000
+        assert owner.current_hp == 5000
+
+    def test_lifesteal_zero_damage(self):
+        """零伤害不回复"""
+        owner = MagicMock()
+        owner.current_hp = 1000
+        owner.final_max_hp = 5000
+
+        result = cb_vampirism(0, None, owner)
+
+        assert owner.current_hp == 1000
+        assert result == 0
+
+
+class TestCbRageWill:
+    """气魄回调测试: 造成伤害时气力+3"""
+
+    def test_increases_will_by_3(self):
+        """造成伤害时气力+3"""
+        owner = MagicMock()
+
+        result = cb_rage_will(1500, None, owner)
+
+        owner.modify_will.assert_called_once_with(3)
+        assert result == 1500  # 伤害值不变
+
+    def test_still_calls_will_on_zero_damage(self):
+        """零伤害时也触发气力增加"""
+        owner = MagicMock()
+
+        cb_rage_will(0, None, owner)
+        owner.modify_will.assert_called_once_with(3)
+
+
+class TestCbRegenHp:
+    """再生回调测试: 每回合回复 5% HP"""
+
+    def test_heals_5_percent_of_max_hp(self):
+        """回复最大 HP 的 5%"""
+        owner = MagicMock()
+        owner.max_hp = 5000
+        owner.final_max_hp = 5000
+        owner.current_hp = 3000
+
+        result = cb_regen_hp(0, None, owner)
+
+        # heal = int(5000 * 0.05) = 250
+        assert owner.current_hp == 3250
+        assert result == 0
+
+    def test_regen_does_not_exceed_max_hp(self):
+        """回复不超过最大 HP"""
+        owner = MagicMock()
+        owner.max_hp = 5000
+        owner.final_max_hp = 5000
+        owner.current_hp = 4900
+
+        cb_regen_hp(0, None, owner)
+
+        # heal = 250，min(5000, 4900+250) = 5000
+        assert owner.current_hp == 5000
+
+
+class TestRestoreEn:
+    """_restore_en 辅助函数测试"""
+
+    def test_restores_en_below_max(self):
+        """EN 未满时正常回复"""
+        owner = MagicMock()
+        owner.max_en = 100
+        owner.current_en = 60
+
+        _restore_en(owner, 15)
+
+        assert owner.current_en == 75
+
+    def test_restores_en_caps_at_max(self):
+        """EN 已满时不超过上限"""
+        owner = MagicMock()
+        owner.max_en = 100
+        owner.current_en = 90
+
+        _restore_en(owner, 30)
+
+        assert owner.current_en == 100

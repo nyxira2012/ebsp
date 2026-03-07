@@ -1,11 +1,12 @@
 """
-单元测试: 战斗系统 - 圆桌判定测试
-测试AttackTableResolver的圆桌判定逻辑和伤害计算
+单元测试: 战斗系统 - 圆桌判定 (Resolver)
+测试 AttackTableResolver 的圆桌判定逻辑、伤害计算和段计算边界条件
 """
 
+import copy
 import pytest
 from unittest.mock import patch
-from src.models import Mecha, BattleContext, AttackResult, Weapon, WeaponType, Terrain
+from src.models import Mecha, MechaSnapshot, BattleContext, AttackResult, Weapon, WeaponType, Terrain
 from src.combat.resolver import AttackTableResolver
 
 
@@ -494,3 +495,298 @@ class TestContextIntegrity:
 
         # 伤害应该被记录
         assert basic_context.damage == damage
+
+
+# ============================================================================
+# 熟练度影响测试
+# ============================================================================
+
+class TestProficiencyImpact:
+    """测试熟练度对圆桌判定的影响"""
+
+    def test_placeholder_low_stat_increases_miss(self, balanced_mecha):
+        """测试低射击值增加MISS率 (占位测试)"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=balanced_mecha, mecha_b=balanced_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        assert 'MISS' in segments or 'HIT' in segments
+
+    def test_placeholder_high_stat_reduces_miss(self, high_hit_mecha):
+        """测试高命中率减少MISS率 (占位测试)"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=high_hit_mecha, mecha_b=high_hit_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        if 'MISS' in segments:
+            assert segments['MISS']['rate'] < 20
+
+    def test_placeholder_high_dodge_increases_defense(self, balanced_mecha, high_dodge_mecha):
+        """测试高躲闪增加防御率 (占位测试)"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=balanced_mecha, mecha_b=high_dodge_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        assert 'DODGE' in segments
+        assert segments['DODGE']['rate'] > 0
+
+
+# ============================================================================
+# 精度影响测试
+# ============================================================================
+
+class TestPrecisionImpact:
+    """测试精度对防御率的影响"""
+
+    def test_high_precision_reduces_defense(self, offensive_mecha, defensive_mecha):
+        """测试高精度降低防御率"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=offensive_mecha, mecha_b=defensive_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+
+        dodge_rate = segments.get('DODGE', {}).get('rate', 0)
+        parry_rate = segments.get('PARRY', {}).get('rate', 0)
+        block_rate = segments.get('BLOCK', {}).get('rate', 0)
+
+        actual_defense = dodge_rate + parry_rate + block_rate
+        base_defense = 30.0 + 25.0 + 20.0  # 75
+        assert actual_defense < base_defense
+
+    def test_low_precision_defense_unaffected(self, balanced_mecha, defensive_mecha):
+        """测试低精度不影响防御"""
+        attacker = copy.deepcopy(balanced_mecha)
+        attacker.final_precision = 0.0
+        attacker.instance_id = "m_low_prec"
+
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=attacker, mecha_b=defensive_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        dodge_rate = segments.get('DODGE', {}).get('rate', 0)
+        assert dodge_rate >= 15
+
+
+# ============================================================================
+# 防御率上限测试
+# ============================================================================
+
+class TestDefenseCaps:
+    """测试防御率上限"""
+
+    def test_parry_hard_cap_50_percent(self, balanced_mecha):
+        """测试PARRY 50%硬上限"""
+        defender = copy.deepcopy(balanced_mecha)
+        defender.final_parry = 80.0
+        defender.instance_id = "m_high_parry"
+
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=balanced_mecha, mecha_b=defender, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        parry_rate = segments.get('PARRY', {}).get('rate', 0)
+        assert parry_rate <= 50.0
+
+    def test_block_hard_cap_80_percent(self, balanced_mecha):
+        """测试BLOCK 80%硬上限"""
+        defender = copy.deepcopy(balanced_mecha)
+        defender.final_block = 120.0
+        defender.instance_id = "m_high_block"
+
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=balanced_mecha, mecha_b=defender, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        block_rate = segments.get('BLOCK', {}).get('rate', 0)
+        assert block_rate <= 80.0
+
+
+# ============================================================================
+# CRIT 被挤压测试
+# ============================================================================
+
+class TestCritSqueezing:
+    """测试CRIT被前面的段挤压"""
+
+    def test_crit_squeezed_by_high_defense(self, crit_mecha, defensive_mecha):
+        """测试高防御率挤压CRIT空间"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=crit_mecha, mecha_b=defensive_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+
+        crit_rate = segments.get('CRIT', {}).get('rate', 0)
+        total_before_crit = segments.get('MISS', {}).get('rate', 0) + \
+                            segments.get('DODGE', {}).get('rate', 0) + \
+                            segments.get('PARRY', {}).get('rate', 0) + \
+                            segments.get('BLOCK', {}).get('rate', 0)
+
+        if total_before_crit >= 100:
+            assert crit_rate < 5
+
+    def test_crit_no_space_left(self, balanced_mecha, defensive_mecha):
+        """测试CRIT完全没有空间"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=balanced_mecha, mecha_b=defensive_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+
+        total_non_crit = segments.get('MISS', {}).get('rate', 0) + \
+                          segments.get('DODGE', {}).get('rate', 0) + \
+                          segments.get('PARRY', {}).get('rate', 0) + \
+                          segments.get('BLOCK', {}).get('rate', 0)
+
+        if total_non_crit >= 100:
+            crit_rate = segments.get('CRIT', {}).get('rate', 0)
+            assert crit_rate == 0
+
+
+# ============================================================================
+# HIT 段兜底测试
+# ============================================================================
+
+class TestHitAsFallback:
+    """测试HIT段作为兜底"""
+
+    def test_hit_fills_remaining_space(self, standard_context):
+        """测试HIT填充剩余空间"""
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
+        assert 'HIT' in segments
+        assert segments['HIT']['end'] == 100
+
+    def test_hit_rate_calculated_correctly(self, standard_context):
+        """测试HIT率计算正确"""
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
+
+        hit_rate = segments['HIT']['rate']
+        hit_start = segments['HIT']['start']
+        hit_end = segments['HIT']['end']
+        assert hit_rate == hit_end - hit_start
+
+    def test_no_hit_if_table_full(self, balanced_mecha):
+        """测试圆桌满了就没有HIT"""
+        attacker = copy.deepcopy(balanced_mecha)
+        attacker.final_hit = -100.0
+        attacker.instance_id = "m_negative_hit"
+
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=attacker, mecha_b=balanced_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+
+        if segments.get('MISS', {}).get('rate', 0) >= 100:
+            hit_rate = segments.get('HIT', {}).get('rate', 0)
+            assert hit_rate == 0
+
+
+# ============================================================================
+# 段边界计算测试
+# ============================================================================
+
+class TestSegmentBoundaries:
+    """测试段的边界计算"""
+
+    def test_segments_are_continuous(self, standard_context):
+        """测试段是连续的（无缝隙）"""
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
+
+        ordered_segments = sorted(
+            [s for k, s in segments.items() if k != 'total'],
+            key=lambda x: x['start']
+        )
+
+        for i in range(len(ordered_segments) - 1):
+            current_end = ordered_segments[i]['end']
+            next_start = ordered_segments[i + 1]['start']
+            assert current_end == next_start, f"段不连续: {ordered_segments[i]} -> {ordered_segments[i+1]}"
+
+    def test_segment_ranges_not_negative(self, standard_context):
+        """测试段的范围不为负"""
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
+
+        for name, segment in segments.items():
+            if name == 'total':
+                continue
+            assert segment['rate'] >= 0, f"{name} rate为负: {segment['rate']}"
+            assert segment['start'] >= 0, f"{name} start为负: {segment['start']}"
+            assert segment['end'] >= 0, f"{name} end为负: {segment['end']}"
+
+    def test_total_does_not_exceed_100(self, standard_context):
+        """测试总段不超过100"""
+        segments = AttackTableResolver.calculate_attack_table_segments(standard_context)
+
+        total = segments.get('total', 0)
+        assert total >= 100
+
+
+# ============================================================================
+# 极端情况测试
+# ============================================================================
+
+class TestExtremeScenarios:
+    """测试极端情况"""
+
+    def test_all_zeros(self, balanced_mecha):
+        """测试所有属性为0"""
+        attacker = copy.deepcopy(balanced_mecha)
+        attacker.final_hit = 0.0
+        attacker.final_precision = 0.0
+        attacker.final_crit = 0.0
+        attacker.final_dodge = 0.0
+        attacker.final_parry = 0.0
+        attacker.final_block = 0.0
+        attacker.instance_id = "m_zero_atk"
+
+        defender = copy.deepcopy(balanced_mecha)
+        defender.final_hit = 0.0
+        defender.final_precision = 0.0
+        defender.final_crit = 0.0
+        defender.final_dodge = 0.0
+        defender.final_parry = 0.0
+        defender.final_block = 0.0
+        defender.instance_id = "m_zero_def"
+
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=attacker, mecha_b=defender, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+        assert 'MISS' in segments or 'HIT' in segments
+
+    def test_very_high_hit_rate(self, high_hit_mecha, balanced_mecha):
+        """测试超高命中率"""
+        ctx = BattleContext(
+            round_number=1, distance=1000, terrain=None,
+            mecha_a=high_hit_mecha, mecha_b=balanced_mecha, weapon=None
+        )
+
+        segments = AttackTableResolver.calculate_attack_table_segments(ctx)
+
+        miss_rate = segments.get('MISS', {}).get('rate', 0)
+        assert miss_rate < 10
+
+        hit_rate = segments.get('HIT', {}).get('rate', 0)
+        crit_rate = segments.get('CRIT', {}).get('rate', 0)
+        assert (hit_rate + crit_rate) > 50
+

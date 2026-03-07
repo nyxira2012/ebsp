@@ -59,11 +59,15 @@ cover/
 *.mo
 *.pot
 
-# Django stuff:
-*.log
+# SQLite / 数据库文件 (本地运行时数据，不提交)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+db/
+
+# Django stuff (legacy):
 local_settings.py
-db.sqlite3
-db.sqlite3-journal
 
 # Flask stuff:
 instance/
@@ -140,6 +144,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .envrc
 .venv
 env/

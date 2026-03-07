@@ -2,6 +2,114 @@
 
 ---
 
+## 2026-03-05 用户系统：数据库集成、身份认证与存档同步
+
+> **项目快照**：代码文件 45 个（7911 行）| 设计文档 9 个（2516 行）
+
+### 逻辑变化与核心思路
+
+1. **用户数据库基础设施的完整构建**
+   - **逻辑变化**：新增 `src/database/` 模块，实现了基于 SQLAlchemy 的异步数据层。包含 `base.py`（引擎与会话管理）、`models.py`（User 与 GameSave ORM 映射）、`session.py`（FastAPI 依赖注入）。采用 `aiosqlite` 作为 SQLite 异步驱动，确保 FastAPI 事件循环不被阻塞。
+   - **设计思路**：贯彻"代码级完美适配"（Agnostic Code）原则——所有数据库逻辑使用 SQLAlchemy 抽象层编写，确保后期迁移到 PostgreSQL 时无需修改一行业务代码。例如使用 `sqlalchemy.JSON` 存储战斗快照，这种通用类型在 SQLite 和 PostgreSQL 中均原生支持。
+   - **测试隔离性**：在测试配置中使用 `StaticPool` 强制所有会话共享同一个内存数据库实例，解决了异步 SQLite 测试中"不同 Session 连接到不同内存库"的经典陷阱。
+
+2. **身份认证系统的 JWT 化**
+   - **逻辑变化**：在 `src/user/security.py` 中实现了基于 bcrypt 的密码哈希（生产环境 12 轮，测试环境 4 轮加速）和基于 `python-jose` 的 JWT 签发/验证。采用 `HS256` 算法 + `SECRET_KEY` 签名，Token 有效期 30 分钟。在 `src/user/auth.py` 中实现了 `get_current_user` 依赖注入函数，用于保护需要登录的 API 端点。
+   - **设计思路**：选择 JWT 而非 Session Cookie，主要考虑前后端分离架构（Next.js + FastAPI）的跨域限制。Session Cookie 依赖浏览器的同源策略，在开发环境（localhost:3000 → localhost:8000）和生产环境（不同域名）都会遇到 CORS 问题。JWT 通过 `Authorization: Bearer <token>` 头部传递，彻底规避 Cookie 跨域陷阱。
+   - **可选用户模式**：在 `src/user/dependencies.py` 中实现了 `get_optional_user`，允许 API 端点"既支持匿名用户，也支持登录用户"。这为 `/battle/simulate` 端点提供了灵活性——未登录玩家使用默认机体配置，登录玩家可加载自己的存档覆盖。
+
+3. **Repository 模式与业务模型的无缝集成**
+   - **逻辑变化**：在 `src/user/repository.py` 中实现了 `GameSaveRepository` 类，封装了所有存档的 CRUD 操作。关键方法包括：
+     - `save_mecha_snapshot()`：将 `MechaSnapshot` 通过 `model_dump(mode='json')` 序列化为 JSON 存储
+     - `to_mecha_snapshot()`：通过 `MechaSnapshot.model_validate(data)` 反序列化为业务对象
+     - `get_deployed()`：获取用户的"当前出战"存档
+   - **设计思路**：充分复用 `src/models.py` 中已有的 Pydantic 模型作为 DTO（数据传输对象），数据库仅作为"透明存储层"。存档表中的 `save_data` 字段不仅存储机体数据，还包含版本号和元数据（`{"version": "1.0", "mecha": {...}, "metadata": {...}}`），为未来的模型迁移预留空间。
+
+4. **用户 API 的模块化挂载**
+   - **逻辑变化**：新增 `src/api/user_api.py`，实现了 `/api/register`、`/api/login`、`/api/saves`（CRUD）、`/api/deploy`（设置出战存档）等端点。通过 `app.include_router(user_api.router, prefix="/api")` 挂载到主应用，实现了路由的模块化管理。
+   - **设计思路**：保持 `presentation_api.py` 的简洁性，用户相关逻辑完全隔离在独立模块中。API 端点采用 RESTful 风格设计，如 `GET /api/saves` 获取存档列表、`POST /api/saves` 创建存档、`DELETE /api/saves/{slot_id}` 删除存档。
+
+5. **战斗 API 的用户集成**
+   - **逻辑变化**：在 `src/api/presentation_api.py` 的 `/battle/simulate` 端点中集成了用户存档加载逻辑。新增 `use_user_save_for_a` 和 `use_user_save_for_b` 参数，允许玩家选择使用自己的存档覆盖默认机体配置。
+   - **设计思路**：实现"战斗即服务"（Battle as a Service）——玩家可以在单机模式下调整机体配置，保存为出战存档，然后在 PvP 或 Boss 挑战中调用该配置。这为未来的"机体配置分享"和"排行榜"功能预留了接口。
+
+6. **测试基础设施的性能优化**
+   - **逻辑变化**：在 `tests/conftest.py` 中新增 `reduce_bcrypt_cost` fixture，将测试环境下的 bcrypt 工作因子从 12 降到 4，速度提升约 256 倍（300ms → 1ms）。新增 `test_app` 和 `async_client` fixture，实现了 FastAPI 测试客户端的会话级复用，避免了每次测试都重新 `init_db` 和 `load_all`。
+   - **设计思路**：测试的执行速度直接影响开发效率。bcrypt 是密码哈希的必要开销，但在测试中这种"真·安全"毫无意义。通过动态调整工作因子，在保证测试逻辑不变的前提下，大幅缩短测试时间。同时，通过清空 FastAPI 的 `on_startup` 和 `on_shutdown` 事件，避免 AsyncClient 每次进入上下文都重新初始化数据库和数据加载器。
+
+7. **虚拟环境的规范化配置**
+   - **逻辑变化**：更新 `.claude/settings.local.json`，将虚拟环境路径（`.venv/bin/*`）加入权限白名单。更新 `pyrightconfig.json`，配置 `venvPath` 和 `venv` 字段，确保 Pyright 能正确识别虚拟环境中的类型存根。
+   - **设计思路**：从"全局 Python"迁移到"虚拟环境"是 Python 项目的标准实践。通过配置工具链的权限和路径，确保所有命令（`pyright`、`pytest`、`python`）都在虚拟环境中执行，避免"系统 Python vs 项目 Python"的版本混淆。
+
+8. **依赖清单化与环境模板**
+   - **逻辑变化**：新增 `requirements.txt`，列举了所有生产依赖（`fastapi`、`uvicorn`、`sqlalchemy`、`aiosqlite`、`pydantic`、`passlib`、`python-jose`、`pytest` 等）。新增 `.env.example`，提供了环境变量模板（`SECRET_KEY`、`DATABASE_URL`、`ACCESS_TOKEN_EXPIRE_MINUTES`）。
+   - **设计思路**：依赖清单是项目"可复制性"的基础——新开发者只需 `pip install -r requirements.txt` 即可获得完全一致的开发环境。环境变量模板则明确了"哪些配置需要保密或可变"（如 `SECRET_KEY`），避免将敏感信息提交到代码库。
+
+**技术要点**
+- **StaticPool 的必要性**：异步 SQLite 内存数据库的每个连接都是独立的内存实例，必须使用 `poolclass=StaticPool` 强制所有连接共享同一个内存库，否则测试 A 写入的数据，测试 B 无法读取
+- **bcrypt 工作因子的安全/性能权衡**：12 轮（约 300ms）适合生产环境防止暴力破解，4 轮（约 1ms）适合测试环境加速执行，通过 `@pytest.fixture(autouse=True)` 在测试开始时自动切换
+- **JWT 的 Token 过期策略**：`ACCESS_TOKEN_EXPIRE_MINUTES=30` 平衡了安全性和用户体验——太短（如 5 分钟）需要频繁登录，太长（如 7 天）增加 Token 泄露的风险
+- **FastAPI 依赖注入的链式传递**：`Depends(get_async_session)` → `Depends(get_current_user)` → `Depends(get_optional_user)`，每一层都依赖下一层的返回值，形成了清晰的依赖链
+- **Pydantic 的 `mode='json'` 序列化**：`model_dump(mode='json')` 会将所有复杂类型（如 datetime、Enum）转换为 JSON 兼容的字符串，确保存入数据库后能正确还原
+
+**后续计划**
+1. 实现存档的"版本迁移"逻辑，当 `save_data['version']` 不匹配当前版本时，自动执行数据升级（如 v1.0 → v1.1 添加新字段）
+2. 扩展 `Users` 表，支持 `status`（active/banned）、`deleted_at`（软删除）等字段，为用户管理后台预留接口
+3. 实现存档的"导出/导入"功能，允许玩家分享自己的机体配置（通过 JSON 文件或 Base64 编码）
+4. 编写用户系统的性能测试，验证 1000 个并发用户同时请求 `/battle/simulate` 时的响应时间（目标：<100ms p95）
+
+---
+
+## 2026-03-07 物品与养成系统设计文档
+
+> **项目快照**：代码文件 45 个（7911 行）| 设计文档 11 个（3296 行）
+
+### 逻辑变化与核心思路
+
+1. **物品系统设计文档（Doc 8）**
+   - **逻辑变化**：新增 `docs/8.item_design.md`（218 行），定义了装备与物品系统的完整设计。
+   - **设计思路**：采用**双轴独立评定**体系——装等（ilvl）控制数值深度，稀有度（颜色）评定潜力宽度。ilvl=1 的新手装备 roll 出满词条+技能照样是橙色传说，避免了"低等级装备无价值"的问题。
+   - **核心机制**：
+     - **词条分档制（Tiered Affixes）**：每件装备 3 个属性槽 + 1 个技能槽，独立 roll 出 T0~T4 五个档位。T4 顶级词条仅 1% 概率，技能槽 0.5% 概率
+     - **颜色判定**：`颜色分 = 已 roll 属性数 + (有技能 ? +2 : 0)`，技能直接跳两级颜色体现其珍贵
+     - **数据库存储**：`UserEquipment.random_stats` JSONB 仅存储 ilvl、词条 ID 和档位，具体数值运行时由配置+公式还原，极度紧凑
+
+2. **养成系统设计文档（Doc 9）**
+   - **逻辑变化**：新增 `docs/9.growth_system.md`（738 行），定义了五大养成轴的完整成长曲线。
+   - **设计思路**：追求**极其漫长但节奏顺滑**的游戏期。总战力 = f(机体) + f(装备) + f(机师) + f(副驾驶) + f(母舰) + f(熟练度)，每条轴遵循收益递减、消耗递增的对数级增长规律。
+   - **五大养成轴**：
+     - **机体改造**：6 项底盘属性独立改造至 20 级，改造费用指数增长（1.35^n），触顶后研发新机体
+     - **装备强化**：+0~+100，分段递减成功率（+96~+100 仅 10%），失败回退，满级装备可合成/洗练
+     - **机师成长**：等级（多项式经验曲线）+ 击坠数（解锁 Ace Bonus）+ 觉醒突破
+     - **副驾驶**：碎片招募 + 强化至 Lv5 + 立绘更换
+     - **母舰**：货舱/修复/能量/航行/通讯五大模块纯信用点升级
+
+3. **测试代码大规模重构**
+   - **逻辑变化**：删除 7 个冗余测试文件，扩展现有测试文件覆盖 `factory.py`、`skill_callbacks.py` 等模块的更多分支。净减少约 732 行测试代码。
+   - **设计思路**：
+     - **删除冗余**：`test_complex_scenarios.py`、`test_event_manager_isolation.py`、`test_presentation_showcase.py`、`test_resolver_coverage.py`、`test_skill_event_system.py`、`test_trait_system_pytest.py`、`test_weapon_tags_debug.py` 的功能已被其他测试覆盖
+     - **增强覆盖**：`test_factory.py` 新增 160 行测试，覆盖 `upgrade_bonuses` 字典路径、装备防御属性分支、`fixed_weapons` 加载等之前未覆盖的代码路径
+     - **技能回调测试**：`test_skill_callbacks.py` 新增 8 个测试类，覆盖 `cb_auto_repair`、`cb_ablat`、`cb_vampirism`、`cb_rage_will`、`cb_regen_hp`、`_restore_en` 等回调函数
+
+4. **配置文件更新与数据库清理**
+   - **逻辑变化**：更新 `.gitignore` 完善数据库文件忽略规则（`*.db`、`*.db-journal`、`*.db-wal`、`*.db-shm`、`db/`），删除本地 `db/ebsp.db` 文件。
+   - **设计思路**：本地数据库文件不应提交到版本控制，通过 `.gitignore` 确保所有 SQLite 相关文件都被忽略。更新 devlog skill 添加 git 提交确认流程，确保日志更新后必须确认提交。
+
+**技术要点**
+- 词条分档概率：T0（空槽）39%、T1（低档）35%、T2（中档）18%、T3（高档）7%、T4（顶级）1%
+- 改造费用公式：`段位 n 的费用 = base_cost × (1.35 ^ n)`，段位 20 费用是段位 1 的 404 倍
+- 经验曲线公式：`exp_to_next_level(level) = int(100 × (level ^ 1.8))`，Lv 50→51 需要 110,000 EXP
+- 装备强化成功率：+0→+30 为 100%，+96→+100 为 10%（失败降 3 级）
+- 日均信用点净收入 ~50,000 Cr（假设 500 场/天，每场 3-5 秒），母舰满级需 ~310 天纯投入
+
+**后续计划**
+1. 实现 `src/database/models.py` 中 `UserSubPilot` 和 `UserMothership` 表定义
+2. 扩展 `SnapshotFactory.create_combat_snapshot()` 聚合管线，集成机体改造、装备强化、副驾驶等养成数据
+3. 实现 `data/affixes.json`、`data/sub_pilots.json`、`data/upgrade_costs.json` 等配置文件
+4. 编写养成系统的模拟器（`sim/sim_progression.py`），验证从新手期到终局的时间线（预期 12-18 个月）
+
+---
+
 ## 2026-03-03 演出系统降级匹配锁链与架构精简：从精确匹配到兜底保障
 
 > **项目快照**：代码文件 33 个（5799 行）| 设计文档 7 个（2300 行）

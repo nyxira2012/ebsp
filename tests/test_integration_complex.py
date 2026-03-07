@@ -1,17 +1,18 @@
 """
 复杂集成测试套件
-测试多回合战斗、复杂技能组合、状态持续性、边界条件组合等高复杂度场景
+测试多回合战斗、复杂技能组合、状态持续性、边界条件组合、
+王牌vs普通驾驶员、精神指令战术、极端条件战斗等高复杂度场景
 
 运行方式:
-    pytest tests/test-integration-complex.py -v
-    pytest tests/test-integration-complex.py::TestMultiRoundBattle -v
-    pytest tests/test-integration-complex.py -m "integration" -v
+    pytest tests/test_integration_complex.py -v
+    pytest tests/test_integration_complex.py::TestMultiRoundBattle -v
+    pytest tests/test_integration_complex.py -m "integration" -v
 """
 
 import pytest
 from unittest.mock import patch, Mock
 from src.models import Mecha, Pilot, Weapon, WeaponType, BattleContext, Effect, Terrain, AttackResult
-from src.skills import SkillRegistry, EffectManager, TraitManager
+from src.skills import SkillRegistry, EffectManager, TraitManager, SpiritCommands
 from src.combat.engine import BattleSimulator
 from src.combat.resolver import AttackTableResolver
 
@@ -980,3 +981,344 @@ class TestEngineCoverage:
         # EN 消耗应该被减少：30 * 0.5 = 15
         # 初始 50 - 15 = 35
         assert attacker.current_en == 35
+
+
+# ============================================================================
+# 场景测试：王牌驾驶员 vs 普通驾驶员
+# ============================================================================
+
+class TestAceVsNormal:
+    """场景：王牌驾驶员碾压普通驾驶员"""
+
+    def test_ace_advantage_in_hit_rate(self, battlefield):
+        """测试王牌驾驶员命中优势"""
+        TraitManager.apply_traits(battlefield.get_attacker())
+        TraitManager.apply_traits(battlefield.get_defender())
+
+        segments = AttackTableResolver.calculate_attack_table_segments(battlefield)
+
+        miss_rate = segments.get('MISS', {}).get('rate', 0)
+        assert miss_rate < 20
+
+        hit_rate = segments.get('HIT', {}).get('rate', 0)
+        crit_rate = segments.get('CRIT', {}).get('rate', 0)
+        assert (hit_rate + crit_rate) > 50
+
+    def test_ace_higher_crit_chance(self, battlefield):
+        """测试王牌驾驶员高暴击率"""
+        TraitManager.apply_traits(battlefield.get_attacker())
+
+        segments = AttackTableResolver.calculate_attack_table_segments(battlefield)
+
+        crit_rate = segments.get('CRIT', {}).get('rate', 0)
+        assert crit_rate >= 5
+
+
+# ============================================================================
+# 场景测试：精神指令战术
+# ============================================================================
+
+class TestSpiritTactics:
+    """场景：精神指令战术运用"""
+
+    def test_strike_guarantees_hit(self, gundam_rx78, zaku_ii):
+        """测试必中战术"""
+        SpiritCommands.activate_strike(gundam_rx78)
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        final_hit = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", 25.0, ctx)
+        assert final_hit >= 90
+
+    def test_valor_double_damage(self, gundam_rx78, zaku_ii):
+        """测试热血战术"""
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        final_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, ctx)
+        assert final_mult >= 2.0
+
+    def test_focus_improves_both_offense_and_defense(self, gundam_rx78, zaku_ii):
+        """测试集中战术（攻防一体）"""
+        SpiritCommands.activate_focus(gundam_rx78)
+
+        assert len(gundam_rx78.effects) >= 2
+
+        ctx_atk = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+        hit_bonus = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", 25.0, ctx_atk)
+        assert hit_bonus > 25.0
+
+        ctx_def = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=zaku_ii, mecha_b=gundam_rx78,
+            weapon=zaku_ii.weapons[0]
+        )
+        dodge_bonus = SkillRegistry.process_hook("HOOK_PRE_DODGE_RATE", 15.0, ctx_def)
+        assert dodge_bonus > 15.0
+
+
+# ============================================================================
+# 场景测试：多回合状态管理
+# ============================================================================
+
+class TestMultiRoundCombatScenarios:
+    """场景：多回合战斗状态管理"""
+
+    def test_effect_duration_across_rounds(self, gundam_rx78, zaku_ii):
+        """测试效果持续多回合"""
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        valor_effect = None
+        for eff in gundam_rx78.effects:
+            if "valor" in eff.id.lower():
+                valor_effect = eff
+                break
+
+        if valor_effect:
+            initial_duration = valor_effect.duration
+            EffectManager.tick_effects(gundam_rx78)
+            assert valor_effect.duration == initial_duration - 1
+
+            EffectManager.tick_effects(gundam_rx78)
+            assert valor_effect not in gundam_rx78.effects
+
+    def test_will_changes_throughout_battle(self, gundam_rx78, zaku_ii):
+        """测试气力在战斗中的变化"""
+        initial_will_attacker = gundam_rx78.current_will
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        result, _ = AttackTableResolver.resolve_attack(ctx)
+
+        if result is AttackResult.HIT:
+            assert gundam_rx78.current_will > initial_will_attacker
+
+    def test_en_consumption_and_management(self, gundam_rx78, zaku_ii):
+        """测试EN消耗和管理"""
+        initial_en = gundam_rx78.current_en
+        weapon = gundam_rx78.weapons[0]
+        en_cost = weapon.en_cost
+
+        assert gundam_rx78.can_attack(weapon)
+        gundam_rx78.consume_en(en_cost)
+        assert gundam_rx78.current_en == initial_en - en_cost
+
+    def test_low_hp_effects_triggering(self, gundam_rx78, zaku_ii):
+        """测试低HP效果触发"""
+        gundam_rx78.current_hp = int(gundam_rx78.final_max_hp * 0.25)
+
+        low_hp_effect = Effect(
+            id="berserk_mode", name="狂暴模式",
+            hook="HOOK_PRE_DAMAGE_MULT",
+            operation="mul", value=1.5,
+            duration=-1, priority=60,
+            conditions=[{"type": "hp_threshold", "val": 0.3, "op": "<"}]
+        )
+        gundam_rx78.effects.append(low_hp_effect)
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, ctx)
+        assert damage_mult >= 1.5
+
+
+# ============================================================================
+# 场景测试：极端条件战斗
+# ============================================================================
+
+class TestExtremeCombat:
+    """场景：极端条件下的战斗"""
+
+    def test_zero_en_cannot_attack(self, gundam_rx78, zaku_ii):
+        """测试EN不足无法攻击"""
+        gundam_rx78.current_en = 0
+        weapon = gundam_rx78.weapons[0]
+        assert not gundam_rx78.can_attack(weapon)
+
+    def test_zero_hp_defeated(self, gundam_rx78, zaku_ii):
+        """测试HP归零被击败"""
+        zaku_ii.current_hp = 0
+        assert not zaku_ii.is_alive()
+
+    def test_max_will_bonus(self, gundam_rx78, zaku_ii):
+        """测试最大气力加成"""
+        from src.config import Config
+        gundam_rx78.current_will = Config.WILL_MAX
+        gundam_rx78.modify_will(10)
+        assert gundam_rx78.current_will == Config.WILL_MAX
+
+    def test_out_of_range_penalty(self, gundam_rx78, zaku_ii):
+        """测试射程外惩罚"""
+        ctx = BattleContext(
+            round_number=1, distance=10000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        weapon = gundam_rx78.weapons[0]
+        hit_modifier = weapon.get_hit_modifier_at_distance(ctx.distance)
+        assert hit_modifier < 0
+
+
+# ============================================================================
+# 场景测试：复杂组合战术
+# ============================================================================
+
+class TestComplexComboTactics:
+    """场景：复杂组合战术"""
+
+    def test_spirit_combo_strike_plus_valor(self, gundam_rx78, zaku_ii):
+        """测试必中+热血组合"""
+        SpiritCommands.activate_strike(gundam_rx78)
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        hit_rate = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", 25.0, ctx)
+        assert hit_rate >= 90
+
+        damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, ctx)
+        assert damage_mult >= 2.0
+
+    def test_trait_plus_spirit_synergy(self, gundam_rx78, zaku_ii):
+        """测试特性+精神指令协同"""
+        TraitManager.apply_traits(gundam_rx78)
+        trait_count = len(gundam_rx78.effects)
+
+        SpiritCommands.activate_focus(gundam_rx78)
+        assert len(gundam_rx78.effects) > trait_count
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        final_hit = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", 25.0, ctx)
+        assert final_hit > 25.0
+
+    def test_multi_stage_combo(self, gundam_rx78, zaku_ii):
+        """测试多阶段组合战术"""
+        SpiritCommands.activate_focus(gundam_rx78)
+
+        ctx_r1 = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+        hit_r1 = SkillRegistry.process_hook("HOOK_PRE_HIT_RATE", 25.0, ctx_r1)
+
+        EffectManager.tick_effects(gundam_rx78)
+
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        ctx_r2 = BattleContext(
+            round_number=2, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        damage_r2 = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, ctx_r2)
+        assert damage_r2 >= 2.0
+
+
+# ============================================================================
+# 场景测试：完整战斗流程模拟
+# ============================================================================
+
+class TestFullBattleSimulation:
+    """场景：完整战斗流程模拟"""
+
+    def test_three_round_battle(self, gundam_rx78, zaku_ii):
+        """测试三回合完整战斗"""
+        TraitManager.apply_traits(gundam_rx78)
+        TraitManager.apply_traits(zaku_ii)
+
+        SpiritCommands.activate_strike(gundam_rx78)
+
+        ctx_r1 = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        result_r1, damage_r1 = AttackTableResolver.resolve_attack(ctx_r1)
+
+        if result_r1 in (AttackResult.HIT, AttackResult.CRIT):
+            zaku_ii.take_damage(damage_r1)
+
+        ctx_r2 = BattleContext(
+            round_number=2, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        result_r2, damage_r2 = AttackTableResolver.resolve_attack(ctx_r2)
+
+        if result_r2 in (AttackResult.HIT, AttackResult.CRIT):
+            zaku_ii.take_damage(damage_r2)
+
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        ctx_r3 = BattleContext(
+            round_number=3, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        result_r3, damage_r3 = AttackTableResolver.resolve_attack(ctx_r3)
+
+        if result_r3 in (AttackResult.HIT, AttackResult.CRIT):
+            zaku_ii.take_damage(damage_r3)
+
+        assert zaku_ii.current_hp < zaku_ii.final_max_hp
+
+    def test_clutch_final_attack(self, gundam_rx78, zaku_ii):
+        """测试绝境反击"""
+        gundam_rx78.current_hp = int(gundam_rx78.final_max_hp * 0.1)
+        gundam_rx78.current_will = 150
+
+        clutch_effect = Effect(
+            id="clutch_berserk", name="绝境爆发",
+            hook="HOOK_PRE_DAMAGE_MULT",
+            operation="mul", value=2.0,
+            duration=-1, priority=60,
+            conditions=[{"type": "hp_threshold", "val": 0.2, "op": "<"}]
+        )
+        gundam_rx78.effects.append(clutch_effect)
+
+        SpiritCommands.activate_valor(gundam_rx78)
+
+        ctx = BattleContext(
+            round_number=1, distance=3000, terrain=None,
+            mecha_a=gundam_rx78, mecha_b=zaku_ii,
+            weapon=gundam_rx78.weapons[0]
+        )
+
+        damage_mult = SkillRegistry.process_hook("HOOK_PRE_DAMAGE_MULT", 1.0, ctx)
+        assert damage_mult >= 4.0

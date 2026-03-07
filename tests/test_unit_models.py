@@ -345,3 +345,139 @@ class TestEdgeCases:
         )
         assert mecha.can_attack(weapon) is False
 
+
+# ============================================================================
+# get_effective_armor 防御公式测试 (models.py L352-356)
+# ============================================================================
+
+class TestGetEffectiveArmor:
+    """防御减免核心公式测试: (装甲 + 守备*1.5) * 气力%"""
+
+    def test_base_armor_full_will(self, basic_mecha):
+        """满气力(100)时防御值 = 装甲 + 守备*1.5"""
+        basic_mecha.pilot_stats_backup = {"stat_defense": 100}
+        basic_mecha.final_armor = 1000
+
+        result = basic_mecha.get_effective_armor(100)
+        # (1000 + 100*1.5) * (100/100) = 1150
+        assert result == 1150
+
+    def test_half_will_halves_armor(self, basic_mecha):
+        """气力50时防御减半"""
+        basic_mecha.pilot_stats_backup = {"stat_defense": 100}
+        basic_mecha.final_armor = 1000
+
+        result = basic_mecha.get_effective_armor(50)
+        # (1000 + 150) * 0.5 = 575
+        assert result == 575
+
+    def test_zero_will_zero_armor(self, basic_mecha):
+        """气力0时防御为0"""
+        basic_mecha.pilot_stats_backup = {"stat_defense": 200}
+        basic_mecha.final_armor = 2000
+
+        result = basic_mecha.get_effective_armor(0)
+        assert result == 0
+
+    def test_high_will_amplifies_armor(self, basic_mecha):
+        """高气力时防御值计算"""
+        basic_mecha.pilot_stats_backup = {"stat_defense": 150}
+        basic_mecha.final_armor = 2000
+
+        result = basic_mecha.get_effective_armor(150)
+        # (2000 + 150*1.5) * 1.5 = 2225 * 1.5 = 3337
+        assert result == 3337
+
+    def test_zero_defense_stat(self, basic_mecha):
+        """无守备驾驶员时仅靠装甲"""
+        basic_mecha.pilot_stats_backup = {}  # 无守备键
+        basic_mecha.final_armor = 1200
+
+        result = basic_mecha.get_effective_armor(100)
+        # (1200 + 0) * 1.0 = 1200
+        assert result == 1200
+
+    def test_pure_armor_no_pilot(self, basic_mecha):
+        """驾驶员数据为空时返回纯装甲值"""
+        basic_mecha.pilot_stats_backup = {}
+        basic_mecha.final_armor = 800
+
+        result = basic_mecha.get_effective_armor(100)
+        assert result == 800
+
+
+# ============================================================================
+# get_pilot_stat 测试 (models.py L349-350)
+# ============================================================================
+
+class TestGetPilotStat:
+    """get_pilot_stat 辅助方法测试"""
+
+    def test_get_existing_stat(self, basic_mecha):
+        """获取已存在的属性"""
+        basic_mecha.pilot_stats_backup = {"stat_shooting": 150, "stat_melee": 80}
+        assert basic_mecha.get_pilot_stat("stat_shooting") == 150
+        assert basic_mecha.get_pilot_stat("stat_melee") == 80
+
+    def test_get_missing_stat_returns_zero(self, basic_mecha):
+        """获取不存在的属性返回0"""
+        basic_mecha.pilot_stats_backup = {}
+        assert basic_mecha.get_pilot_stat("stat_shooting") == 0
+        assert basic_mecha.get_pilot_stat("nonexistent_stat") == 0
+
+
+# ============================================================================
+# BattleContext.set_attacker 和 get_defender edge paths 测试
+# ============================================================================
+
+class TestBattleContextSetAttacker:
+    """BattleContext.set_attacker 和 get_attacker/get_defender 分支覆盖"""
+
+    def _make_mecha(self, iid: str) -> Mecha:
+        return Mecha(
+            instance_id=iid, mecha_name=iid, main_portrait="img",
+            final_max_hp=1000, current_hp=1000, final_max_en=100, current_en=100,
+            final_armor=1000, final_mobility=100,
+            final_hit=0.0, final_precision=0.0, final_crit=0.0,
+            final_dodge=0.0, final_parry=0.0, final_block=0.0
+        )
+
+    def test_set_attacker_to_mecha_a(self):
+        """set_attacker 设为 mecha_a 后 initiative_holder == mecha_a"""
+        a = self._make_mecha("m_a")
+        b = self._make_mecha("m_b")
+        ctx = BattleContext(round_number=1, distance=1000, mecha_a=a, mecha_b=b)
+        ctx.set_attacker(a)
+        assert ctx.initiative_holder == a
+
+    def test_set_attacker_to_mecha_b(self):
+        """set_attacker 设为 mecha_b 后 initiative_holder == mecha_b"""
+        a = self._make_mecha("m_a")
+        b = self._make_mecha("m_b")
+        ctx = BattleContext(round_number=1, distance=1000, mecha_a=a, mecha_b=b)
+        ctx.set_attacker(b)
+        assert ctx.initiative_holder == b
+
+    def test_set_attacker_invalid_raises(self):
+        """set_attacker 传入不属于上下文的机体抛出 ValueError"""
+        a = self._make_mecha("m_a")
+        b = self._make_mecha("m_b")
+        stranger = self._make_mecha("m_stranger")
+        ctx = BattleContext(round_number=1, distance=1000, mecha_a=a, mecha_b=b)
+        with pytest.raises(ValueError):
+            ctx.set_attacker(stranger)
+
+    def test_get_attacker_via_initiative_holder(self):
+        """weapon 不在任何机体 weapons 中时，通过 initiative_holder 回退"""
+        a = self._make_mecha("m_a")
+        ctx = BattleContext(
+            round_number=1, distance=1000,
+            mecha_a=a, mecha_b=None,
+            initiative_holder=a
+        )
+        assert ctx.get_attacker() == a
+
+    def test_get_defender_returns_none_when_no_mecha(self):
+        """get_defender 在 mecha_a/mecha_b 均为 None 时返回 None"""
+        ctx = BattleContext(round_number=1, distance=1000, mecha_a=None, mecha_b=None)
+        assert ctx.get_defender() is None

@@ -1,20 +1,196 @@
 """
-EventManager 实例隔离与向后兼容测试
+事件系统测试套件
 
 验证：
-1. EventManager 实例状态完全隔离（多战斗并行支持）
-2. 类级别调用向后兼容（旧代码无需修改）
-3. BattleContext 正确绑定和路由 EventManager
-4. AttackEventBuilder 正确构建 RawAttackEvent
+1. TriggerEvent / BuffState 数据模型
+2. EventManager 基本功能（回调注册、统计数据）
+3. EventManager 实例状态完全隔离（多战斗并行支持）
+4. 类级别调用向后兼容（旧代码无需修改）
+5. BattleContext 正确绑定和路由 EventManager
+6. AttackEventBuilder 正确构建 RawAttackEvent
 """
 
 import pytest
 from unittest.mock import MagicMock
 
 from src.skill_system.event_manager import EventManager
-from src.models import TriggerEvent, BattleContext, AttackResult
+from src.models import TriggerEvent, BuffState, BattleContext, AttackResult
 from src.presentation.event_builder import AttackEventBuilder
 from src.presentation.models import RawAttackEvent
+
+
+# ============================================================================
+# TriggerEvent 数据模型测试
+# ============================================================================
+
+class TestTriggerEvent:
+    """TriggerEvent 测试"""
+
+    def test_create_event(self):
+        """测试事件创建"""
+        event = TriggerEvent(
+            skill_id="test",
+            owner=None,
+            hook_name="TEST",
+            effect_text="测试效果",
+            old_value=100,
+            new_value=130,
+            probability=0.5,
+            triggered=True
+        )
+        assert event.skill_id == "test"
+        assert event.triggered == True
+
+    def test_event_frozen(self):
+        """测试事件不可变性"""
+        event = TriggerEvent(
+            skill_id="test",
+            owner=None,
+            hook_name="TEST",
+            effect_text="测试",
+            old_value=100,
+            new_value=130,
+            triggered=True
+        )
+        with pytest.raises(Exception):
+            event.skill_id = "modified"
+
+
+# ============================================================================
+# BuffState 数据模型测试
+# ============================================================================
+
+class TestBuffState:
+    """BuffState 测试"""
+
+    def test_is_expired(self):
+        """测试过期检查"""
+        buff = BuffState(skill_id="test", duration=0)
+        assert buff.is_expired()
+
+        buff2 = BuffState(skill_id="test", charges=0)
+        assert buff2.is_expired()
+
+        buff3 = BuffState(skill_id="test", duration=5, charges=3)
+        assert not buff3.is_expired()
+
+    def test_tick(self):
+        """测试持续时间减少"""
+        buff = BuffState(skill_id="test", duration=3)
+        buff.tick()
+        assert buff.duration == 2
+
+        buff2 = BuffState(skill_id="test", charges=5)
+        buff2.tick()
+        assert buff2.charges == 4
+
+    def test_tick_permanent_buff(self):
+        """测试永久 buff (-1) 的 tick"""
+        buff = BuffState(skill_id="permanent", duration=-1, charges=-1)
+        buff.tick()
+        assert buff.duration == -1
+        assert buff.charges == -1
+
+
+# ============================================================================
+# EventManager 基本功能测试
+# ============================================================================
+
+class TestEventManagerBasic:
+    """EventManager 基本功能测试"""
+
+    def setup_method(self):
+        """每个测试前清空统计数据"""
+        EventManager.clear_statistics()
+
+    def test_register_callback(self):
+        """测试回调注册"""
+        calls = []
+
+        def callback(event):
+            calls.append(event)
+
+        EventManager.register_callback(callback)
+
+        event = TriggerEvent(
+            skill_id="test",
+            owner=None,
+            hook_name="TEST",
+            effect_text="测试",
+            old_value=100,
+            new_value=130,
+            triggered=True
+        )
+
+        EventManager.publish_event(event)
+
+        assert len(calls) == 1
+        assert calls[0].skill_id == "test"
+
+    def test_statistics(self):
+        """测试统计数据"""
+        EventManager.clear_statistics()
+
+        event1 = TriggerEvent(
+            skill_id="test", owner=None, hook_name="TEST",
+            effect_text="成功", old_value=100, new_value=130,
+            probability=0.5, triggered=True
+        )
+        EventManager.publish_event(event1)
+
+        event2 = TriggerEvent(
+            skill_id="test", owner=None, hook_name="TEST",
+            effect_text="失败", old_value=100, new_value=100,
+            probability=0.5, triggered=False
+        )
+        EventManager.publish_event(event2)
+
+        stats = EventManager.get_statistics("test")
+        assert stats["attempts"] == 2
+        assert stats["success"] == 1
+
+    def test_multiple_skills_statistics(self):
+        """测试多个技能的统计"""
+        EventManager.clear_statistics()
+
+        for i in range(3):
+            EventManager.publish_event(TriggerEvent(
+                skill_id="skill_a", owner=None, hook_name="TEST",
+                effect_text=f"a{i}", old_value=0, new_value=0, triggered=True
+            ))
+
+        for i in range(2):
+            EventManager.publish_event(TriggerEvent(
+                skill_id="skill_b", owner=None, hook_name="TEST",
+                effect_text=f"b{i}", old_value=0, new_value=0, triggered=True
+            ))
+
+        all_stats = EventManager.get_statistics()
+        assert len(all_stats) == 2
+        assert all_stats["skill_a"]["attempts"] == 3
+        assert all_stats["skill_b"]["attempts"] == 2
+
+    def test_failed_event_not_called(self):
+        """测试失败事件不触发回调"""
+        calls = []
+
+        def callback(event):
+            calls.append(event)
+
+        EventManager.register_callback(callback)
+
+        event = TriggerEvent(
+            skill_id="test", owner=None, hook_name="TEST",
+            effect_text="失败", old_value=100, new_value=100, triggered=False
+        )
+
+        EventManager.publish_event(event)
+
+        assert len(calls) == 0
+
+        stats = EventManager.get_statistics("test")
+        assert stats["attempts"] == 1
+        assert stats["success"] == 0
 
 
 class TestEventManagerIsolation:
