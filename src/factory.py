@@ -255,7 +255,8 @@ class MechaFactory:
         equipments: List[EquipmentConfig] | None = None,
         weapon_configs: dict | None = None,
         upgrade_level: int = 0,
-        sub_pilot_conf: Optional[SubPilotConfig] = None
+        sub_pilot_conf: Optional[SubPilotConfig] = None,
+        upgrade_bonuses: Dict[str, int] | None = None
     ) -> MechaSnapshot:
         """Create a MechaSnapshot from configuration with optional enhancements.
 
@@ -263,8 +264,12 @@ class MechaFactory:
             mecha_conf: Mecha configuration object.
             pilot_conf: Optional pilot configuration for stat backup.
             equipments: Optional list of equipment to apply modifiers.
-            upgrade_level: Upgrade level for stat bonuses (default: 0).
+            weapon_configs: Optional dict of weapon configs keyed by ID.
+            upgrade_level: Legacy upgrade level (deprecated, use upgrade_bonuses).
             sub_pilot_conf: Optional sub-pilot configuration.
+            upgrade_bonuses: Per-attribute upgrade bonuses dict.
+                Keys: "hp", "en", "armor", "mobility". Values: flat bonus amounts.
+                If provided, overrides upgrade_level.
 
         Returns:
             Fully configured MechaSnapshot ready for combat.
@@ -279,15 +284,24 @@ class MechaFactory:
         # 聚合技能（支持副驾驶）
         skills = MechaFactory._aggregate_skills(pilot_conf, equipments, sub_pilot_conf)
 
-        # Apply upgrade bonuses
-        hp_bonus = upgrade_level * 200
-        armor_bonus = upgrade_level * 20
+        # Apply upgrade bonuses (new dict-based system takes priority over legacy upgrade_level)
+        if upgrade_bonuses is not None:
+            hp_bonus = upgrade_bonuses.get("hp", 0)
+            en_bonus = upgrade_bonuses.get("en", 0)
+            armor_bonus = upgrade_bonuses.get("armor", 0)
+            mobility_bonus = upgrade_bonuses.get("mobility", 0)
+        else:
+            # Legacy fallback: single upgrade_level applies fixed scaling
+            hp_bonus = upgrade_level * 200
+            en_bonus = 0
+            armor_bonus = upgrade_level * 20
+            mobility_bonus = 0
 
         # Calculate base stats
         base_hp = mecha_conf.init_hp + hp_bonus
-        base_en = mecha_conf.init_en
+        base_en = mecha_conf.init_en + en_bonus
         base_armor = mecha_conf.init_armor + armor_bonus
-        base_mobility = mecha_conf.init_mobility
+        base_mobility = mecha_conf.init_mobility + mobility_bonus
         base_hit = mecha_conf.init_hit
         base_en_regen_rate = mecha_conf.init_en_regen_rate
         base_en_regen_fixed = mecha_conf.init_en_regen_fixed
