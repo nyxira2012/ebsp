@@ -10,8 +10,10 @@
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
+from enum import Enum
+from src.models import UserMothershipData
 
 # ==============================================================================
 # 用户 DTO
@@ -101,7 +103,20 @@ class UserEquipmentDB(BaseModel):
     user_id: int
     equipment_id: str
     enhancement_level: int
+    is_locked: bool
+    is_equipped: bool
     random_stats: EquipmentRandomStats
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class UserItemDB(BaseModel):
+    id: int
+    user_id: int
+    item_id: str
+    item_type: str
+    quantity: int
     created_at: datetime
     updated_at: datetime
 
@@ -139,3 +154,68 @@ class TokenData(BaseModel):
     """Token 数据模型"""
     username: Optional[str] = None
     user_id: Optional[int] = None
+
+# ==============================================================================
+# 背包与道具 DTO (Inventory)
+# ==============================================================================
+
+class InventoryStatus(BaseModel):
+    """背包状态"""
+    current: int      # 当前占用格数
+    capacity: int     # 容量上限
+    available: int    # 剩余可用格数
+
+class AddResult(Enum):
+    """添加结果"""
+    SUCCESS = "success"
+    OVERFLOW = "overflow"
+
+class EquipmentData(BaseModel):
+    """待添加的装备数据"""
+    equipment_id: str
+    enhancement_level: int = 0
+    random_stats: Dict[str, Any] = Field(default_factory=dict)
+
+class ItemData(BaseModel):
+    """待添加的材料数据"""
+    item_id: str
+    item_type: str = "material"
+    quantity: int = 1
+
+
+# ==============================================================================
+# 母舰 DTO (Mothership)
+# ==============================================================================
+
+class UserMothershipDB(BaseModel):
+    id: int
+    user_id: int
+    data: UserMothershipData
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class MothershipCatalogItem(BaseModel):
+    id: str
+    name: str
+    generation: int
+    tier: str
+    engine_level: int
+    hp_regen_per_min: int
+    en_regen_per_min: int
+    region_level: int
+    cargo_capacity: int
+    emergency_extraction_tax: float
+    price: int
+    sell_price_ratio: float
+    required_chapter: Optional[int] = None
+    required_achievement: Optional[str] = None
+    owned: bool
+    current: bool
+
+class MothershipPurchaseRequest(BaseModel):
+    mothership_id: str
+
+class MothershipSwitchRequest(BaseModel):
+    mothership_id: str

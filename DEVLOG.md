@@ -2,6 +2,62 @@
 
 ---
 
+## 2026-03-08 母舰、PVE 与库存系统：核心玩法闭环
+
+> **项目快照**：代码文件 60 个（8970 行）| 设计文档 12 个（4653 行）
+
+### 逻辑变化与核心思路
+
+1. **母舰系统完整实现（Doc 11）**
+   - **逻辑变化**：新增 `src/pve/services.py` 实现母舰集成服务层，定义 `MothershipConfig` 和 `RegionConfig` 数据模型。母舰作为玩家的"移动基地"，提供货舱容量（`cargo_capacity`）、区域准入（`region_level`）和商店刷新上限（`shop_ilvl_limit`）三大核心能力。
+   - **设计思路**：母舰系统采用**能力提供者模式**（Provider Pattern）——`IMothershipProvider` 接口定义 `get_max_capacity()` 抽象方法，`DatabaseMothershipProvider` 从数据库和静态配置中查询玩家拥有的母舰，返回其中 `cargo_capacity` 的最大值。这种设计允许在母舰系统未完成时使用 `MockMothershipProvider` 进行测试，实现了"延迟依赖"的架构原则。
+   - **区域准入逻辑**：`validate_region_entry()` 方法判断母舰是否具备进入指定区域的能力（`mothership.region_level >= region.min_region_level`）。这为未来的"区域探索限制"和"内容解锁节奏"预留了接口。
+   - **PVE 锁定机制**：`is_pve_session_active()` 方法检查玩家是否处于活跃的 PVE 探索节点中，按 Doc 11 设定，处于活跃状态则阻断购舰与切换舰队，防止"战斗中作弊"。
+
+2. **PVE 系统设计文档（Doc 10）**
+   - **逻辑变化**：新增 `docs/10.pve_system.md`（691 行），定义了 PVE 探索系统的完整设计。
+   - **设计思路**：采用**节点制探索**（Node-based Exploration）——玩家选择母舰出征，在不同区域节点间移动，遭遇敌人、资源点或事件。每个节点有独立的回合限制（`turn_limit`）和回合消耗（`turn_cost`），玩家需要在资源耗尽前完成探索或撤离。
+   - **核心机制**：
+     - **母舰出征**：玩家选择母舰和编队，消耗 `turn_cost` 进入节点，战斗继承上次状态（HP/EN 不回满）
+     - **战利品结算**：击败敌人获得装备和材料，若货舱溢出则触发超载处理流程（玩家必须丢弃部分物品）
+     - **区域解锁**：母舰的 `region_level` 决定可进入的区域等级，区域等级越高，敌人和奖励越强
+
+3. **库存系统完整实现（Doc 12）**
+   - **逻辑变化**：新增 `src/user/inventory.py` 实现背包服务层，`src/api/inventory_api.py` 实现 REST API 端点。数据库新增 `UserEquipment` 和 `UserItem` 两张表，分别存储不可堆叠装备（每件 1 格）和可堆叠材料（每类 1 格）。
+   - **设计思路**：采用**分类堆叠规则**（Category-based Stacking）——装备独立存储（因为具有独立的随机词条和强化等级），材料按 `item_id` 唯一约束合并数量。容量计算逻辑：`占用格子 = 离舱装备数 + 材料种类数`。
+   - **超载处理流程**：`finalize_overload()` 端点实现三步验证——（1）显式验证丢弃列表的合法性（数量匹配、权属校验）（2）执行物理删除（3）尝试添加新资产，若依然溢出则报错拦截。这防止了客户端作弊直接跳过清理流程。
+   - **容量管控**：`can_add()` 方法在添加资产前预计算所需格子数（`calculate_required_slots()`），若超过剩余空间则返回 `AddResult.OVERFLOW`。这种"预检查"机制避免了"部分添加后失败"的数据一致性问题。
+
+4. **数据库模型扩展**
+   - **逻辑变化**：`src/database/models.py` 新增 `UserMothership`、`UserEquipment`、`UserItem`、`UserPilot`、`UserSquad` 五张表，实现玩家资产的完整持久化。
+   - **设计思路**：采用**混合关系型架构**（Hybrid Relational Architecture）——核心资产（机体、装备、材料）使用独立表存储，支持复杂的查询和索引；游戏快照（战斗状态、编队配置）使用 JSON 字段存储，保持灵活性。例如 `UserEquipment.random_stats` 存储 `{"attack": 15, "crit_rate": 5}`，具体数值由运行时配置+公式还原。
+   - **级联删除与关系映射**：使用 `ForeignKey("users.id", ondelete="CASCADE")` 确保用户删除时所有关联资产自动清理，避免孤儿数据。`relationship()` 配置 `lazy="selectin"` 预加载关联数据，避免 N+1 查询问题。
+
+5. **API 层扩展与用户系统集成**
+   - **逻辑变化**：`src/api/user_api.py` 新增 `/api/mothership` 路由组，实现母舰购买、列表查询、当前出战切换等端点。`src/api/inventory_api.py` 新增 `/api/inventory` 路由组，实现状态查询、物品列表、超载处理等端点。
+   - **设计思路**：保持 API 的**模块化与职责单一**——每个路由组对应一个业务领域（用户、母舰、库存），通过 `app.include_router()` 挂载到主应用。端点采用 RESTful 风格设计，如 `GET /api/mothership` 获取拥有的母舰列表，`POST /api/mothership/purchase` 购买新母舰。
+
+6. **Google Style 文档规范补充**
+   - **逻辑变化**：根据技术审计报告，为 `inventory.py`、`inventory_api.py`、`models.py` 中的所有类和方法补充了完整的 Google Style 文档字符串。包含模块级业务背景说明、类 Attributes 列表、方法 Args/Returns/Raises 说明、使用示例等。
+   - **设计思路**：文档是代码的"第二接口"，特别是库存系统这种涉及复杂业务规则（容量计算、堆叠规则、超载处理）的模块，清晰的文档能大幅降低维护成本。例如 `get_occupancy()` 方法的文档明确说明了"已装备装备不计入容量"这一关键规则。
+
+7. **类型检查修复**
+   - **逻辑变化**：修复 `src/pve/services.py` 缺少 `AsyncSession` 导入、`src/user/service.py` 类型注解 `any` → `Any` 的类型错误。
+   - **设计思路**：保持类型系统的完整性是大型 Python 项目的基础，pyright 的严格检查能提前发现大量潜在 bug（如方法拼写错误、参数类型不匹配）。所有新增代码必须通过 pyright 检查才能提交。
+
+**技术要点**
+- **唯一约束与堆叠**：`UserItem` 表的 `UniqueConstraint("user_id", "item_id")` 确保同类材料自动合并，应用层只需 `quantity += new_quantity`
+- **容量预计算**：`calculate_required_slots()` 方法通过 `new_item_ids - existing_item_ids` 差集运算，高效统计新增材料种类数
+- **安全验证三步法**：超载处理端点先验证丢弃列表数量（`existing_count != len(unique_discard_ids)` 报错），再执行删除，最后添加新资产，确保原子性
+- **Google Style 文档结构**：模块文档（业务背景）→ 类文档（用途说明）→ 方法文档（Args/Returns/Raises/Example），层次清晰
+
+**后续计划**
+1. 实现断线保护机制（P2 优先级）：超载处理时将待确认物品存入 `pending_rewards` 临时表，设置超时清理，防止玩家断线后战利品丢失
+2. 补充 API 层集成测试（P3 优先级）：目前 API 测试覆盖率仅 37-67%，需要覆盖更多业务场景（如超载处理、母舰购买）
+3. 实现邮件系统作为超载处理的回退方案：若玩家长时间未处理超载，将物品通过邮件系统发送，确保资产不丢失
+
+---
+
 ## 2026-03-05 用户系统：数据库集成、身份认证与存档同步
 
 > **项目快照**：代码文件 45 个（7911 行）| 设计文档 9 个（2516 行）

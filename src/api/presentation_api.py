@@ -13,23 +13,24 @@ from src.factory import MechaFactory
 from src.combat.engine import BattleSimulator
 from src.presentation.renderer import JSONRenderer
 from src import DataLoader
+from src.api.context import set_loader, get_loader
 
 # 数据库与用户系统
 from src.database import init_db, close_db
 from src.database.session import get_async_session
 from src.database.models import User
-from src.api import user_api
+from src.api import user_api, inventory_api
 from src.user.repository import UserAssetRepository
 from src.user.dependencies import get_optional_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 app = FastAPI(title="EBSP Combat Presentation API")
 
-# 挂载用户路由
+# 挂载路由
 app.include_router(user_api.router, prefix="/api")
+app.include_router(inventory_api.router, prefix="/api")
 
-# 全局数据加载器（服务启动时初始化）
-_loader: DataLoader | None = None
+# 全局状态管理由 src.api.context 负责
 
 # ==============================================================================
 # 请求模型
@@ -57,9 +58,10 @@ async def startup_event():
     print("✅ 数据库初始化完成")
 
     # 2. 加载游戏配置数据
-    _loader = DataLoader(data_dir="data")
-    _loader.load_all()
-    print(f"✅ 数据加载完成: {len(_loader.mechas)} 机体, {len(_loader.equipments)} 装备")
+    loader = DataLoader(data_dir="data")
+    loader.load_all()
+    set_loader(loader)
+    print(f"✅ 数据加载完成: {len(loader.mechas)} 机体, {len(loader.equipments)} 装备")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -71,11 +73,7 @@ async def shutdown_event():
 # 辅助函数
 # ==============================================================================
 
-def get_loader() -> DataLoader:
-    """获取全局数据加载器"""
-    if _loader is None:
-        raise RuntimeError("数据加载器未初始化")
-    return _loader
+# get_loader 已移至 src.api.context
 
 # ==============================================================================
 # API 路由

@@ -212,6 +212,46 @@ class SubPilotConfig(BaseModel):
     # 贡献率（0.0-1.0，默认0.3表示30%）
     contribution_rate: float = 0.3
 
+class MothershipConfig(BaseModel):
+    """静态配置：定义在 data/motherships.json"""
+    id: str                    # 母舰 ID，如 "corvette_alpha"
+    name: str                  # 母舰名称
+    generation: int            # 代际 1-6
+    tier: str                  # 稀有度/档次
+
+    # 核心属性：会话寿命与探索表现 (PVE Session Lifespan Hooks)
+    engine_level: int          # 航行引擎等级 (决定微观地图单步跨越格数)
+    hp_regen_per_min: int      # HP 恢复速率 (数值/分钟)
+    en_regen_per_min: int      # EN 恢复速率 (数值/分钟)
+    region_level: int          # 可进入区域等级 1-6
+
+    # 产出管道与经济约束 (Production Pipeline Hooks)
+    cargo_capacity: int        # 永久货舱总容量 (挂钩战后超载强抛结算)
+    emergency_extraction_tax: float # 紧急干预撤回税率 (PVE中途逃离时的临时收益没收率，如0.7为丢弃70%)
+
+    # 购买信息
+    price: int                 # 购买价格（信用点）
+    sell_price_ratio: float = 0.3  # 出售回收比例
+
+    # 前置条件
+    required_chapter: Optional[int] = None    # 需通关章节
+    required_achievement: Optional[str] = None  # 需达成成就
+
+class UserMothershipData(BaseModel):
+    """存储在 user_motherships 表的 data JSONB 字段中"""
+    owned_ids: List[str]       # 已拥有的母舰 ID 列表
+    current_id: str            # 当前启用的母舰 ID
+    switch_count_today: int = 0  # 今日切换次数
+    last_switch_date: Optional[str] = None # 最近一次切换日期 (YYYY-MM-DD)
+
+class RegionConfig(BaseModel):
+    """PVE 大区域静态配置 (Macro-Region Selection)"""
+    id: str
+    name: str
+    min_region_level: int    # 需要的母舰核心等级下限
+    base_ilvl: int           # 该区域基础掉落装等
+    description: str = ""
+
 # ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic
 # ============================================================================

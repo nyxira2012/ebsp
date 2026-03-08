@@ -172,6 +172,40 @@ def temp_data_dir():
     with open(mechas_file, 'w', encoding='utf-8') as f:
         json.dump(mechas_data, f, ensure_ascii=False, indent=2)
 
+    # 4. motherships.json (MothershipConfig)
+    motherships_data = [
+        {
+            "id": "light_corvette",
+            "name": "轻型巡逻舰",
+            "generation": 1,
+            "tier": "N",
+            "engine_level": 1,
+            "hp_regen_per_min": 5,
+            "en_regen_per_min": 10,
+            "region_level": 1,
+            "cargo_capacity": 50,
+            "emergency_extraction_tax": 0.7,
+            "price": 0,
+            "sell_price_ratio": 0.3
+        }
+    ]
+    motherships_file = temp_path / "motherships.json"
+    with open(motherships_file, 'w', encoding='utf-8') as f:
+        json.dump(motherships_data, f, ensure_ascii=False, indent=2)
+
+    # 5. regions.json (RegionConfig)
+    regions_data = [
+        {
+            "id": "region_1",
+            "name": "地球低轨道",
+            "min_region_level": 1,
+            "base_ilvl": 10
+        }
+    ]
+    regions_file = temp_path / "regions.json"
+    with open(regions_file, 'w', encoding='utf-8') as f:
+        json.dump(regions_data, f, ensure_ascii=False, indent=2)
+
     yield temp_path
 
     # 清理临时目录
@@ -210,6 +244,7 @@ class TestDataLoaderInitialization:
         assert len(loader.pilots) == 0
         assert len(loader.weapons) == 0
         assert len(loader.mechas) == 0
+        assert len(loader.motherships) == 0
 
 
 # ============================================================================
@@ -436,6 +471,7 @@ class TestLoadAll:
         assert len(loader.pilots) == 3
         assert len(loader.weapons) == 3
         assert len(loader.mechas) == 3
+        assert len(loader.motherships) == 1
 
     def test_load_all_dependencies_order(self, loader):
         """测试加载顺序（依赖关系）"""
@@ -446,6 +482,7 @@ class TestLoadAll:
         assert len(loader.pilots) == 3
         assert len(loader.equipments) == 3
         assert len(loader.mechas) == 3
+        assert len(loader.motherships) == 1
 
 
 # ============================================================================
@@ -504,6 +541,12 @@ class TestEdgeCases:
             "weapon_anim_id": "test_anim"
         }]
         (temp_data_dir / "equipments.json").write_text(json.dumps(equipments_data), encoding='utf-8')
+
+        motherships_data = []
+        (temp_data_dir / "motherships.json").write_text(json.dumps(motherships_data), encoding='utf-8')
+
+        regions_data = []
+        (temp_data_dir / "regions.json").write_text(json.dumps(regions_data), encoding='utf-8')
 
         mechas_file = temp_data_dir / "mechas.json"
         with open(mechas_file, 'w', encoding='utf-8') as f:

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
-    WeaponType # 导入用于校验或转换
+    WeaponType, MothershipConfig, RegionConfig # 导入用于校验或转换
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -33,6 +33,8 @@ class DataLoader:
         self.sub_pilots: Dict[str, SubPilotConfig] = {}
         self.equipments: Dict[str, EquipmentConfig] = {} # 包含武器和装备
         self.mechas: Dict[str, MechaConfig] = {}
+        self.motherships: Dict[str, MothershipConfig] = {}
+        self.regions: Dict[str, RegionConfig] = {}
 
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
@@ -53,6 +55,12 @@ class DataLoader:
 
         # 3. 加载机体配置
         self._load_from_json("mechas.json", MechaConfig, self.mechas)
+        
+        # 4. 加载母舰配置
+        self._load_from_json("motherships.json", MothershipConfig, self.motherships)
+        
+        # 5. 加载大区域配置
+        self._load_from_json("regions.json", RegionConfig, self.regions)
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
         """通用的 JSON 加载方法"""
@@ -125,6 +133,16 @@ class DataLoader:
         if mecha_id not in self.mechas:
             raise KeyError(f"机体配置不存在: {mecha_id}")
         return self.mechas[mecha_id]
+
+    def get_mothership_config(self, mothership_id: str) -> MothershipConfig:
+        if mothership_id not in self.motherships:
+            raise KeyError(f"母舰配置不存在: {mothership_id}")
+        return self.motherships[mothership_id]
+
+    def get_region_config(self, region_id: str) -> RegionConfig:
+        if region_id not in self.regions:
+            raise KeyError(f"大区域配置不存在: {region_id}")
+        return self.regions[region_id]
 
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""

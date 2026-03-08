@@ -1033,10 +1033,13 @@ async def test_app(async_db_engine):
     src.database.base.AsyncSessionLocal = test_session_maker
 
     # 2. 手动初始化全局数据加载器 (仅一次)
-    if api_mod._loader is None:
+    from src.api.context import set_loader, get_loader
+    try:
+        get_loader()
+    except RuntimeError:
         loader = DataLoader(data_dir="data")
         loader.load_all()
-        api_mod._loader = loader
+        set_loader(loader)
 
     # 3. 关键优化：清空 app 的 startup/shutdown 事件，
     # 避免 AsyncClient 每次 context entry 都要重新运行 init_db 和 load_all

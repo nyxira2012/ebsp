@@ -11,6 +11,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, update
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.exc import IntegrityError
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -55,6 +56,10 @@ class UserRepository:
             session.add(db_user)
             await session.flush()
             await session.refresh(db_user)
+            
+            # --- 初始化默认母舰 ---
+            await MothershipRepository.create_default(session, db_user.id)
+            
             return db_user
         except IntegrityError:
             await session.rollback()
@@ -126,7 +131,88 @@ class UserRepository:
 # 用户资产 Repository (User Assets - Mixed Relational Architecture)
 # ==============================================================================
 
-from src.database.models import UserMecha, UserPilot, UserEquipment, UserSquad, BattleRecord
+from src.database.models import UserMecha, UserPilot, UserEquipment, UserSquad, BattleRecord, UserMothership
+
+class MothershipRepository:
+    """母舰数据访问类"""
+
+    @staticmethod
+    async def get_by_user_id(session: AsyncSession, user_id: int, for_update: bool = False) -> Optional[UserMothership]:
+        stmt = select(UserMothership).where(UserMothership.user_id == user_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def create_default(session: AsyncSession, user_id: int) -> UserMothership:
+        """为新用户初始化默认母舰"""
+        db_mothership = UserMothership(
+            user_id=user_id,
+            data={
+                "owned_ids": ["light_corvette"],
+                "current_id": "light_corvette",
+                "switch_count_today": 0,
+                "last_switch_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            }
+        )
+        session.add(db_mothership)
+        await session.flush()
+        await session.refresh(db_mothership)
+        return db_mothership
+
+    @staticmethod
+    async def purchase_mothership(session: AsyncSession, user_id: int, new_mothership_id: str, cost: int) -> Optional[UserMothership]:
+        # 使用行锁防止并发购买导致的数据覆盖
+        db_mothership = await MothershipRepository.get_by_user_id(session, user_id, for_update=True)
+        if not db_mothership:
+            return None
+        
+        # NOTE: 扣除信用点等逻辑应当在上层 Service 的事务中处理
+        data = dict(db_mothership.data)
+        if new_mothership_id not in data.get("owned_ids", []):
+            data.setdefault("owned_ids", []).append(new_mothership_id)
+        
+        data["current_id"] = new_mothership_id
+        db_mothership.data = data
+        
+        # 触发 sqlalchemy JSON 更新
+        flag_modified(db_mothership, "data")
+        
+        await session.flush()
+        await session.refresh(db_mothership)
+        return db_mothership
+
+    @staticmethod
+    async def switch_mothership(session: AsyncSession, user_id: int, target_id: str) -> Optional[UserMothership]:
+        # 使用行锁防止并发切换绕过次数限制
+        db_mothership = await MothershipRepository.get_by_user_id(session, user_id, for_update=True)
+        if not db_mothership:
+            return None
+            
+        data = dict(db_mothership.data)
+        if target_id not in data.get("owned_ids", []):
+            raise ValueError(f"玩家未拥有该母舰: {target_id}")
+            
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if data.get("last_switch_date") != today_str:
+            data["switch_count_today"] = 0
+            data["last_switch_date"] = today_str
+            
+        if data.get("switch_count_today", 0) >= 3:
+            raise ValueError("今日切换母舰次数已达上限")
+            
+        data["current_id"] = target_id
+        data["switch_count_today"] = data.get("switch_count_today", 0) + 1
+        
+        db_mothership.data = data
+        
+        # 触发 sqlalchemy JSON 更新
+        flag_modified(db_mothership, "data")
+
+        await session.flush()
+        await session.refresh(db_mothership)
+        return db_mothership
 
 class UserAssetRepository:
     """用户资产数据访问类 (替代了旧的 GameSaveRepository)"""

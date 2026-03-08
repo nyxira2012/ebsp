@@ -1,0 +1,23 @@
+[
+    {
+        "id": "abandoned_station",
+        "name": "废弃空间站",
+        "min_region_level": 1,
+        "base_ilvl": 10,
+        "description": "初期探索区域：地球低轨道的一个死寂设施"
+    },
+    {
+        "id": "orbital_elevator",
+        "name": "轨道电梯",
+        "min_region_level": 2,
+        "base_ilvl": 20,
+        "description": "中期核心要塞：连接宇宙与地球的咽喉"
+    },
+    {
+        "id": "orbital_graveyard",
+        "name": "宇宙墓场",
+        "min_region_level": 3,
+        "base_ilvl": 30,
+        "description": "暗礁宙域：埋葬了无数战舰残骸的危险地带"
+    }
+]
