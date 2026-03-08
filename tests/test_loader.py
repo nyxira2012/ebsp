@@ -206,6 +206,23 @@ def temp_data_dir():
     with open(regions_file, 'w', encoding='utf-8') as f:
         json.dump(regions_data, f, ensure_ascii=False, indent=2)
 
+    # 6. affixes.json (AffixConfig)
+    affixes_data = [
+        {
+            "id": "stat_hit",
+            "type": "stat",
+            "target": "final_hit",
+            "base_value": 2.0,
+            "ilvl_scale": 0.2,
+            "min_ilvl": 1,
+            "weight": 1000,
+            "slot_tags": ["WEAPON"]
+        }
+    ]
+    affixes_file = temp_path / "affixes.json"
+    with open(affixes_file, 'w', encoding='utf-8') as f:
+        json.dump(affixes_data, f, ensure_ascii=False, indent=2)
+
     yield temp_path
 
     # 清理临时目录
@@ -547,6 +564,9 @@ class TestEdgeCases:
 
         regions_data = []
         (temp_data_dir / "regions.json").write_text(json.dumps(regions_data), encoding='utf-8')
+
+        affixes_data = []
+        (temp_data_dir / "affixes.json").write_text(json.dumps(affixes_data), encoding='utf-8')
 
         mechas_file = temp_data_dir / "mechas.json"
         with open(mechas_file, 'w', encoding='utf-8') as f:

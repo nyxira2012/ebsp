@@ -1,0 +1,84 @@
+[
+    {
+        "id": "stat_hit_rate",
+        "type": "stat",
+        "target": "final_hit",
+        "base_value": 2.0,
+        "ilvl_scale": 0.2,
+        "min_ilvl": 1,
+        "weight": 1000,
+        "slot_tags": [
+            "WEAPON",
+            "EQUIP"
+        ]
+    },
+    {
+        "id": "stat_crit_rate",
+        "type": "stat",
+        "target": "final_crit",
+        "base_value": 1.0,
+        "ilvl_scale": 0.1,
+        "min_ilvl": 10,
+        "weight": 500,
+        "slot_tags": [
+            "WEAPON"
+        ]
+    },
+    {
+        "id": "stat_max_hp",
+        "type": "stat",
+        "target": "init_hp",
+        "base_value": 100.0,
+        "ilvl_scale": 15.0,
+        "min_ilvl": 1,
+        "weight": 1000,
+        "slot_tags": [
+            "EQUIP"
+        ]
+    },
+    {
+        "id": "stat_armor",
+        "type": "stat",
+        "target": "init_armor",
+        "base_value": 50.0,
+        "ilvl_scale": 5.0,
+        "min_ilvl": 5,
+        "weight": 800,
+        "slot_tags": [
+            "EQUIP"
+        ]
+    },
+    {
+        "id": "stat_mobility",
+        "type": "stat",
+        "target": "init_mobility",
+        "base_value": 5.0,
+        "ilvl_scale": 1.0,
+        "min_ilvl": 5,
+        "weight": 600,
+        "slot_tags": [
+            "WEAPON",
+            "EQUIP"
+        ]
+    },
+    {
+        "id": "skill_auto_repair",
+        "type": "skill",
+        "skill_id": "auto_repair",
+        "min_ilvl": 20,
+        "weight": 100,
+        "slot_tags": [
+            "EQUIP"
+        ]
+    },
+    {
+        "id": "skill_sniper",
+        "type": "skill",
+        "skill_id": "sniper_stance",
+        "min_ilvl": 30,
+        "weight": 50,
+        "slot_tags": [
+            "WEAPON"
+        ]
+    }
+]

@@ -66,12 +66,21 @@ class PilotProgression(BaseModel):
     exp: int = 0
     skill_points: int = 0
 
+class AffixEntry(BaseModel):
+    """词条槽对象"""
+    id: str       # 词条 ID，关联 data/affixes.json
+    t: int        # 档位 1~4
+
 class EquipmentRandomStats(BaseModel):
-    """装备随机词条与强化属性契约"""
-    # 可以在这里预留随机词条槽位，或者附加属性加成
-    bonus_attack: int = 0
-    bonus_defense: int = 0
-    special_effects: list[str] = Field(default_factory=list)
+    """装备随机词条与强化属性契约 (参考 Doc 8)"""
+    ilvl: int = 0
+    affixes: List[AffixEntry] = Field(default_factory=list, max_length=3)
+    skill: Optional[str] = None  # 抽中的技能 ID
+
+    @property
+    def color(self) -> int:
+        """根据物品词条和技能数即时计算颜色分以标识稀有度 (Doc 8)"""
+        return min(4, len(self.affixes) + (2 if self.skill else 0))
 
 # ==============================================================================
 # DB 读取模型 (Response DTOs)
@@ -105,6 +114,8 @@ class UserEquipmentDB(BaseModel):
     enhancement_level: int
     is_locked: bool
     is_equipped: bool
+    equipped_mecha_id: Optional[int] = None
+    equipped_slot_idx: Optional[int] = None
     random_stats: EquipmentRandomStats
     created_at: datetime
     updated_at: datetime

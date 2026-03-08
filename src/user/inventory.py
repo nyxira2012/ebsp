@@ -10,13 +10,17 @@
 设计参考：Doc 12 背包与货舱系统设计
 """
 
-from typing import List, Tuple, Dict, Any, Optional
+import asyncio
+from typing import List, Tuple, Dict, Any, Optional, TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, insert
 
 from src.database.models import UserEquipment, UserMothership, UserItem
 from src.user.schemas import InventoryStatus, AddResult, EquipmentData, ItemData
 from src.user.repository import MothershipRepository
+
+if TYPE_CHECKING:
+    from src.loader import DataLoader
 
 class IMothershipProvider:
     """母舰能力提供者接口。
@@ -132,7 +136,7 @@ class InventoryService:
         self,
         session: AsyncSession,
         mothership_provider: Optional[IMothershipProvider] = None,
-        loader: Optional[Any] = None
+        loader: Optional["DataLoader"] = None
     ):
         """初始化库存服务。
 
@@ -180,18 +184,23 @@ class InventoryService:
         Returns:
             int: 当前占用的格子总数
         """
-        # 1. 离舱装备数量
-        stmt_equip = select(func.count(UserEquipment.id)).where(
-            UserEquipment.user_id == user_id,
-            UserEquipment.is_equipped == False
-        )
-        equip_count = (await self.session.execute(stmt_equip)).scalar() or 0
+        # 并行查询装备数量和材料种类数
+        async def get_equip_count() -> int:
+            stmt = select(func.count(UserEquipment.id)).where(
+                UserEquipment.user_id == user_id,
+                UserEquipment.is_equipped == False
+            )
+            return (await self.session.execute(stmt)).scalar() or 0
 
-        # 2. 材料种类数量 (Distinct item_id)
-        stmt_item = select(func.count(func.distinct(UserItem.item_id))).where(
-            UserItem.user_id == user_id
+        async def get_item_count() -> int:
+            stmt = select(func.count(func.distinct(UserItem.item_id))).where(
+                UserItem.user_id == user_id
+            )
+            return (await self.session.execute(stmt)).scalar() or 0
+
+        equip_count, item_count = await asyncio.gather(
+            get_equip_count(), get_item_count()
         )
-        item_count = (await self.session.execute(stmt_item)).scalar() or 0
 
         return equip_count + item_count
 
@@ -318,13 +327,18 @@ class InventoryService:
                 key = (item.item_id, item.item_type)
                 merged_items[key] = merged_items.get(key, 0) + item.quantity
 
+            # 批量查询现有物品（避免 N+1 问题）
+            item_ids = [item_id for (item_id, _) in merged_items.keys()]
+            stmt = select(UserItem).where(UserItem.user_id == user_id, UserItem.item_id.in_(item_ids))
+            existing_items = (await self.session.execute(stmt)).scalars().all()
+            existing_dict = {item.item_id: item for item in existing_items}
+
+            # 处理合并逻辑
             for (item_id, item_type), quantity in merged_items.items():
-                # 检查数据库中是否存在
-                stmt = select(UserItem).where(UserItem.user_id == user_id, UserItem.item_id == item_id)
-                db_item = (await self.session.execute(stmt)).scalar_one_or_none()
+                db_item = existing_dict.get(item_id)
                 if db_item:
                     db_item.quantity += quantity
-                    db_item.item_type = item_type # 更新类型（以最后一次为准或保持一致）
+                    db_item.item_type = item_type  # 更新类型（以最后一次为准或保持一致）
                 else:
                     self.session.add(UserItem(
                         user_id=user_id,

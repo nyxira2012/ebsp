@@ -152,6 +152,12 @@ class UserEquipment(Base, TimestampMixin):
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_equipped: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # 挂载的机体与槽位 (独立资产映射，不使用级联删除，业务层强制卸载)
+    equipped_mecha_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("user_mechas.id"), nullable=True, index=True
+    )
+    equipped_slot_idx: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # 随机词条与强化数据
     random_stats: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 

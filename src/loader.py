@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
-    WeaponType, MothershipConfig, RegionConfig # 导入用于校验或转换
+    WeaponType, MothershipConfig, RegionConfig, AffixConfig # 导入用于校验或转换
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -35,6 +35,7 @@ class DataLoader:
         self.mechas: Dict[str, MechaConfig] = {}
         self.motherships: Dict[str, MothershipConfig] = {}
         self.regions: Dict[str, RegionConfig] = {}
+        self.affixes: Dict[str, AffixConfig] = {}
 
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
@@ -61,11 +62,18 @@ class DataLoader:
         
         # 5. 加载大区域配置
         self._load_from_json("regions.json", RegionConfig, self.regions)
+        
+        # 6. 加载词条属性配置 (Doc 8)
+        self._load_from_json("affixes.json", AffixConfig, self.affixes)
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
         """通用的 JSON 加载方法"""
         file_path = self.data_dir / filename
-        if not file_path.exists():
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw_data = json.load(f)
+        except FileNotFoundError:
             # 根据文件类型抛出相应的错误消息
             if "pilots" in filename:
                 raise FileNotFoundError(f"驾驶员数据文件不存在: {file_path}")
@@ -75,10 +83,9 @@ class DataLoader:
                 raise FileNotFoundError(f"机体数据文件不存在: {file_path}")
             else:
                 raise FileNotFoundError(f"配置文件不存在: {file_path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"配置文件格式错误: {file_path}, 错误: {e}") from e
 
-        with open(file_path, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-            
         # Pydantic 2.x 使用 model_validate, 1.x 使用 parse_obj
         # 考虑到当前环境，使用通用的转换方式
         for item in raw_data:
@@ -143,6 +150,11 @@ class DataLoader:
         if region_id not in self.regions:
             raise KeyError(f"大区域配置不存在: {region_id}")
         return self.regions[region_id]
+
+    def get_affix_config(self, affix_id: str) -> AffixConfig:
+        if affix_id not in self.affixes:
+            raise KeyError(f"词条配置不存在: {affix_id}")
+        return self.affixes[affix_id]
 
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""

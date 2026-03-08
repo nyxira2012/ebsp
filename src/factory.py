@@ -65,11 +65,15 @@ class MechaFactory:
         if pilot_conf and pilot_conf.innate_skills:
             skills.extend(pilot_conf.innate_skills)
 
-        # 2. 装备被动技能
+        # 2. 装备被动技能 (包括原厂固有和随机技能)
         if equipments:
             for equip in equipments:
                 if equip.passive_skills:
                     skills.extend(equip.passive_skills)
+                    
+        # 2.5. 装备随机技能
+        # 注意: 此时技能名和结构需要由调用方预先整合或者稍后改造
+        # 但如果是通过 _aggregate_skills 的参数传进去，建议直接在 create_mecha_snapshot 补充
 
         # 3. 副驾驶技能（如果存在）
         if sub_pilot_conf and hasattr(sub_pilot_conf, 'innate_skills'):
@@ -180,7 +184,9 @@ class MechaFactory:
         base_en: int = 0,
         base_armor: int = 0,
         base_en_regen_rate: float = 0.0,
-        base_en_regen_fixed: int = 0
+        base_en_regen_fixed: int = 0,
+        equipment_random_stats: List[Dict[str, Any]] | None = None,
+        affix_configs: Dict[str, Any] | None = None
     ) -> tuple[int, int, int, float, float, float, float, float, float, float, float, int, List[WeaponSnapshot]]:
         """Apply equipment stat modifiers and collect weapons.
 
@@ -214,20 +220,20 @@ class MechaFactory:
         if not equipments:
             return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
 
-        for equip in equipments:
+        for i, equip in enumerate(equipments):
             # Collect weapons
             if equip.type == "WEAPON":
                 weapons.append(MechaFactory.create_weapon_snapshot(equip))
 
-            # Apply stat modifiers
+            # Apply base stat modifiers
             for stat_name, value in equip.stat_modifiers.items():
-                if stat_name == "final_max_hp":
+                if stat_name == "final_max_hp" or stat_name == "init_hp":
                     final_hp += int(value)
-                elif stat_name == "final_max_en":
+                elif stat_name == "final_max_en" or stat_name == "init_en":
                     final_en += int(value)
-                elif stat_name == "final_armor":
+                elif stat_name == "final_armor" or stat_name == "init_armor":
                     final_armor += int(value)
-                elif stat_name == "final_mobility":
+                elif stat_name == "final_mobility" or stat_name == "init_mobility":
                     final_mobility += float(value)
                 elif stat_name == "final_hit":
                     final_hit += value
@@ -246,6 +252,49 @@ class MechaFactory:
                 elif stat_name == "final_en_regen_fixed":
                     final_en_regen_fixed += int(value)
 
+            # Apply random stat affixes (Doc 8)
+            if equipment_random_stats and i < len(equipment_random_stats) and affix_configs:
+                r_stats = equipment_random_stats[i]
+                if r_stats:
+                    ilvl = r_stats.get("ilvl", 0)
+                    affixes = r_stats.get("affixes", [])
+                    tier_multipliers = {1: 0.70, 2: 0.85, 3: 1.00, 4: 1.15}
+                    
+                    for affix_entry in affixes:
+                        affix_id = affix_entry.get("id")
+                        t = affix_entry.get("t")
+                        if affix_id in affix_configs and t in tier_multipliers:
+                            affix = affix_configs[affix_id]
+                            if affix.type == "stat" and affix.target:
+                                val = affix.base_value + ilvl * affix.ilvl_scale * tier_multipliers[t]
+                                
+                                # Inject into local vars matching stat names
+                                target = affix.target
+                                if target == "final_max_hp" or target == "init_hp":
+                                    final_hp += int(val)
+                                elif target == "final_max_en" or target == "init_en":
+                                    final_en += int(val)
+                                elif target == "final_armor" or target == "init_armor":
+                                    final_armor += int(val)
+                                elif target == "final_mobility" or target == "init_mobility":
+                                    final_mobility += float(val)
+                                elif target == "final_hit":
+                                    final_hit += val
+                                elif target == "final_dodge":
+                                    final_dodge += val
+                                elif target == "final_parry":
+                                    final_parry += val
+                                elif target == "final_block":
+                                    final_block += val
+                                elif target == "final_precision":
+                                    final_precision += val
+                                elif target == "final_crit":
+                                    final_crit += val
+                                elif target == "final_en_regen_rate":
+                                    final_en_regen_rate += val
+                                elif target == "final_en_regen_fixed":
+                                    final_en_regen_fixed += int(val)
+
         return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
 
     @staticmethod
@@ -256,7 +305,9 @@ class MechaFactory:
         weapon_configs: dict | None = None,
         upgrade_level: int = 0,
         sub_pilot_conf: Optional[SubPilotConfig] = None,
-        upgrade_bonuses: Dict[str, int] | None = None
+        upgrade_bonuses: Dict[str, int] | None = None,
+        equipment_random_stats: List[Dict[str, Any]] | None = None,
+        affix_configs: Dict[str, Any] | None = None
     ) -> MechaSnapshot:
         """Create a MechaSnapshot from configuration with optional enhancements.
 
@@ -283,6 +334,14 @@ class MechaFactory:
 
         # 聚合技能（支持副驾驶）
         skills = MechaFactory._aggregate_skills(pilot_conf, equipments, sub_pilot_conf)
+        
+        # 加上装备产生的随机技能
+        if equipment_random_stats:
+            for r_stats in equipment_random_stats:
+                if r_stats and r_stats.get("skill"):
+                    r_skill = r_stats.get("skill")
+                    if r_skill not in skills:
+                        skills.append(r_skill)
 
         # Apply upgrade bonuses (new dict-based system takes priority over legacy upgrade_level)
         if upgrade_bonuses is not None:
@@ -312,7 +371,8 @@ class MechaFactory:
          final_en_regen_rate, final_en_regen_fixed, weapons) = (
             MechaFactory._apply_equipment_modifiers(
                 equipments, base_mobility, base_hit, base_hp, base_en, base_armor,
-                base_en_regen_rate, base_en_regen_fixed
+                base_en_regen_rate, base_en_regen_fixed,
+                equipment_random_stats, affix_configs
             )
         )
 

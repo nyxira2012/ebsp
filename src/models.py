@@ -252,6 +252,24 @@ class RegionConfig(BaseModel):
     base_ilvl: int           # 该区域基础掉落装等
     description: str = ""
 
+class AffixConfig(BaseModel):
+    """装备/武器随机词条配置 (data/affixes.json)
+    根据 Doc 8：分 stat 和 skill 两类词条。
+    """
+    id: str
+    type: str                  # "stat" 或 "skill"
+    min_ilvl: int = 1          # 获取门槛 ilvl
+    weight: int = 1000         # 抽取权重
+    slot_tags: List[str] = []      # 可用槽位标识，如 ["WEAPON", "EQUIP"]
+    
+    # === type="stat" 时特有字段 ===
+    target: Optional[str] = None   # 加成目标属性名，如 "final_hit", "final_crit", "init_hp"
+    base_value: float = 0.0        # 基础数值
+    ilvl_scale: float = 0.0        # 每装等加成系数
+    
+    # === type="skill" 时特有字段 ===
+    skill_id: Optional[str] = None # 绑定的被动技能 ID
+
 # ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic
 # ============================================================================

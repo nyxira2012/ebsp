@@ -312,6 +312,19 @@ class UserAssetRepository:
             
         return db_squad
 
+# --- Equipment (装备) 系列操作 ---
+
+    @staticmethod
+    async def get_equipments_by_mecha(
+        session: AsyncSession, user_mecha_id: int
+    ) -> List[UserEquipment]:
+        result = await session.execute(
+            select(UserEquipment).where(UserEquipment.equipped_mecha_id == user_mecha_id)
+        )
+        return list(result.scalars().all())
+
+    # --- Battle Records
+
     # --- Battle Records (回放) 系列操作 ---
     
     @staticmethod

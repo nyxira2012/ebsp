@@ -85,13 +85,27 @@ class SnapshotFactory:
         # ── Step 5: 委托 MechaFactory 组装快照 ──
         # TODO: 未来从 DB 查询装配的驾驶员、外挂装备、副驾驶等
         #   pilot_conf = self.static_db.get_pilot(user_pilot_db.pilot_id)
-        #   equipments = [self.static_db.get_equipment(e.equipment_id) for e in user_equips]
+        
+        user_equips = await self.user_repo.get_equipments_by_mecha(session, user_mecha_id)
+        # 过滤掉为 None 的情况，防止边界异常导致未装配完整的装备混入，并按装配槽位排序
+        user_equips = [eq for eq in user_equips if eq.equipped_slot_idx is not None]
+        user_equips.sort(key=lambda x: x.equipped_slot_idx)
+        
+        equipments_configs = []
+        equipments_random_stats = []
+        for u_eq in user_equips:
+            if hasattr(self.static_db, 'equipments') and u_eq.equipment_id in self.static_db.equipments:
+                equipments_configs.append(self.static_db.equipments[u_eq.equipment_id])
+                equipments_random_stats.append(u_eq.random_stats)
+
         mecha = MechaFactory.create_mecha_snapshot(
             mecha_conf=base_config,
             pilot_conf=None,           # TODO: 接入用户驾驶员
-            equipments=None,           # TODO: 接入用户装备
+            equipments=equipments_configs,
             weapon_configs=weapon_configs,
             upgrade_bonuses=upgrade_bonuses,
+            equipment_random_stats=equipments_random_stats,
+            affix_configs=self.static_db.affixes if hasattr(self.static_db, 'affixes') else None
         )
 
         # 覆盖实例 ID 和昵称（来自用户数据）

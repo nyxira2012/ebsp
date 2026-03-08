@@ -6,11 +6,14 @@
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, Any
+from typing import Optional, TYPE_CHECKING
 
 from src.user.repository import MothershipRepository
 from src.pve.services import MothershipIntegrationService
 from src.database.models import User
+
+if TYPE_CHECKING:
+    from src.loader import DataLoader
 
 class MothershipService:
     """母舰相关业务逻辑"""
@@ -20,7 +23,7 @@ class MothershipService:
         session: AsyncSession,
         user: User,
         mothership_id: str,
-        loader: Any  # 传入 Data组件 loader
+        loader: "DataLoader"  # 静态数据加载器
     ):
         """购买母舰的完整业务流"""
         

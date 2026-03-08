@@ -220,3 +220,39 @@ async def finalize_overload(
     await session.commit()
     return {"status": "success"}
 
+
+@router.post("/debug/generate-item")
+async def debug_generate_item(
+    equipment_id: str,
+    base_ilvl: int = 1,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    调试接口：测试装备词条随机构建并入库（Doc 8）
+    """
+    from src.core.item_generator import EquipmentGenerator
+    loader = get_loader()
+    generator = EquipmentGenerator(loader)
+    try:
+        random_stats = generator.generate_equipment(equipment_id, base_ilvl)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    service = InventoryService(session, loader=loader)
+    equip_data = EquipmentData(
+        equipment_id=equipment_id,
+        enhancement_level=0,
+        random_stats=random_stats
+    )
+    result = await service.add_assets(current_user.id, add_equipments=[equip_data], add_items=[])
+    
+    if result == AddResult.OVERFLOW:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="货舱空间不足，无法放入新生成的装备"
+        )
+        
+    await session.commit()
+    return {"status": "success", "generated_stats": random_stats}
+
