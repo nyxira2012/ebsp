@@ -187,38 +187,48 @@ class MechaFactory:
         base_en_regen_fixed: int = 0,
         equipment_random_stats: List[Dict[str, Any]] | None = None,
         affix_configs: Dict[str, Any] | None = None
-    ) -> tuple[int, int, int, float, float, float, float, float, float, float, float, int, List[WeaponSnapshot]]:
+    ) -> tuple[Dict[str, float], List[WeaponSnapshot]]:
         """Apply equipment stat modifiers and collect weapons.
 
-        Args:
-            equipments: List of equipment configurations.
-            base_mobility: Base mobility value.
-            base_hit: Base hit rate value.
-            base_hp: Base HP value.
-            base_en: Base EN value.
-            base_armor: Base armor value.
-            base_en_regen_rate: Base EN regeneration rate (percentage).
-            base_en_regen_fixed: Base EN regeneration fixed value.
-
         Returns:
-            Tuple of (hp, en, armor, mobility, hit, dodge, parry, block, precision, crit, en_regen_rate, en_regen_fixed, weapons).
+            Tuple of (stats_dict, weapons).
         """
-        weapons = []
-        final_hp = base_hp
-        final_en = base_en
-        final_armor = base_armor
-        final_mobility = float(base_mobility)
-        final_hit = base_hit
-        final_dodge = 0.0
-        final_parry = 0.0
-        final_block = 0.0
-        final_precision = 0.0
-        final_crit = 0.0
-        final_en_regen_rate = base_en_regen_rate
-        final_en_regen_fixed = base_en_regen_fixed
+        # 别名路由表：用于处理早期设计留下的同义词
+        ALIAS_MAP = {
+            "init_hp": "final_max_hp",
+            "init_en": "final_max_en",
+            "init_armor": "final_armor",
+            "init_mobility": "final_mobility",
+            "init_hit": "final_hit",
+            "init_dodge": "final_dodge",
+            "init_parry": "final_parry",
+            "init_block": "final_block",
+            "init_precision": "final_precision",
+            "init_crit": "final_crit",
+            "init_en_regen_rate": "final_en_regen_rate",
+            "init_en_regen_fixed": "final_en_regen_fixed"
+        }
+
+        # 统一状态容器
+        stats: dict[str, float] = {
+            "final_max_hp": float(base_hp),
+            "final_max_en": float(base_en),
+            "final_armor": float(base_armor),
+            "final_mobility": float(base_mobility),
+            "final_hit": float(base_hit),
+            "final_dodge": 0.0,
+            "final_parry": 0.0,
+            "final_block": 0.0,
+            "final_precision": 0.0,
+            "final_crit": 0.0,
+            "final_en_regen_rate": float(base_en_regen_rate),
+            "final_en_regen_fixed": float(base_en_regen_fixed),
+        }
+
+        weapons: List[WeaponSnapshot] = []
 
         if not equipments:
-            return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
+            return stats, weapons
 
         for i, equip in enumerate(equipments):
             # Collect weapons
@@ -227,30 +237,11 @@ class MechaFactory:
 
             # Apply base stat modifiers
             for stat_name, value in equip.stat_modifiers.items():
-                if stat_name == "final_max_hp" or stat_name == "init_hp":
-                    final_hp += int(value)
-                elif stat_name == "final_max_en" or stat_name == "init_en":
-                    final_en += int(value)
-                elif stat_name == "final_armor" or stat_name == "init_armor":
-                    final_armor += int(value)
-                elif stat_name == "final_mobility" or stat_name == "init_mobility":
-                    final_mobility += float(value)
-                elif stat_name == "final_hit":
-                    final_hit += value
-                elif stat_name == "final_dodge":
-                    final_dodge += value
-                elif stat_name == "final_parry":
-                    final_parry += value
-                elif stat_name == "final_block":
-                    final_block += value
-                elif stat_name == "final_precision":
-                    final_precision += value
-                elif stat_name == "final_crit":
-                    final_crit += value
-                elif stat_name == "final_en_regen_rate":
-                    final_en_regen_rate += value
-                elif stat_name == "final_en_regen_fixed":
-                    final_en_regen_fixed += int(value)
+                target_key = ALIAS_MAP.get(stat_name, stat_name)
+                if target_key in stats:
+                    stats[target_key] += float(value)
+                else:
+                    stats[target_key] = float(value)
 
             # Apply random stat affixes (Doc 8)
             if equipment_random_stats and i < len(equipment_random_stats) and affix_configs:
@@ -267,35 +258,14 @@ class MechaFactory:
                             affix = affix_configs[affix_id]
                             if affix.type == "stat" and affix.target:
                                 val = affix.base_value + ilvl * affix.ilvl_scale * tier_multipliers[t]
-                                
-                                # Inject into local vars matching stat names
-                                target = affix.target
-                                if target == "final_max_hp" or target == "init_hp":
-                                    final_hp += int(val)
-                                elif target == "final_max_en" or target == "init_en":
-                                    final_en += int(val)
-                                elif target == "final_armor" or target == "init_armor":
-                                    final_armor += int(val)
-                                elif target == "final_mobility" or target == "init_mobility":
-                                    final_mobility += float(val)
-                                elif target == "final_hit":
-                                    final_hit += val
-                                elif target == "final_dodge":
-                                    final_dodge += val
-                                elif target == "final_parry":
-                                    final_parry += val
-                                elif target == "final_block":
-                                    final_block += val
-                                elif target == "final_precision":
-                                    final_precision += val
-                                elif target == "final_crit":
-                                    final_crit += val
-                                elif target == "final_en_regen_rate":
-                                    final_en_regen_rate += val
-                                elif target == "final_en_regen_fixed":
-                                    final_en_regen_fixed += int(val)
+                                target_key = ALIAS_MAP.get(affix.target, affix.target)
+                                if target_key:
+                                    if target_key in stats:
+                                        stats[target_key] += float(val)
+                                    else:
+                                        stats[target_key] = float(val)
 
-        return final_hp, final_en, final_armor, final_mobility, final_hit, final_dodge, final_parry, final_block, final_precision, final_crit, final_en_regen_rate, final_en_regen_fixed, weapons
+        return stats, weapons
 
     @staticmethod
     def create_mecha_snapshot(
@@ -338,9 +308,9 @@ class MechaFactory:
         # 加上装备产生的随机技能
         if equipment_random_stats:
             for r_stats in equipment_random_stats:
-                if r_stats and r_stats.get("skill"):
+                if r_stats:
                     r_skill = r_stats.get("skill")
-                    if r_skill not in skills:
+                    if isinstance(r_skill, str) and r_skill not in skills:
                         skills.append(r_skill)
 
         # Apply upgrade bonuses (new dict-based system takes priority over legacy upgrade_level)
@@ -365,15 +335,11 @@ class MechaFactory:
         base_en_regen_rate = mecha_conf.init_en_regen_rate
         base_en_regen_fixed = mecha_conf.init_en_regen_fixed
 
-        # Apply equipment modifiers (returns all modified stats)
-        (final_hp, final_en, final_armor, final_mobility, final_hit,
-         final_dodge, final_parry, final_block, final_precision, final_crit,
-         final_en_regen_rate, final_en_regen_fixed, weapons) = (
-            MechaFactory._apply_equipment_modifiers(
-                equipments, base_mobility, base_hit, base_hp, base_en, base_armor,
-                base_en_regen_rate, base_en_regen_fixed,
-                equipment_random_stats, affix_configs
-            )
+        # Apply equipment modifiers (returns stats_dict and weapons)
+        stats_dict, weapons = MechaFactory._apply_equipment_modifiers(
+            equipments, base_mobility, base_hit, base_hp, base_en, base_armor,
+            base_en_regen_rate, base_en_regen_fixed,
+            equipment_random_stats, affix_configs
         )
 
         # Load fixed weapons from mecha configuration
@@ -382,27 +348,34 @@ class MechaFactory:
                 if weapon_configs and weapon_id in weapon_configs:
                     weapons.append(MechaFactory.create_weapon_snapshot(weapon_configs[weapon_id]))
 
+        # Finalize precision, crit, dodge, parry, block from base config + equipment stats
+        final_precision = mecha_conf.init_precision + stats_dict.get("final_precision", 0)
+        final_crit = mecha_conf.init_crit + stats_dict.get("final_crit", 0)
+        final_dodge = mecha_conf.init_dodge + stats_dict.get("final_dodge", 0)
+        final_parry = mecha_conf.init_parry + stats_dict.get("final_parry", 0)
+        final_block = mecha_conf.init_block + stats_dict.get("final_block", 0)
+
         # Construct snapshot
         return MechaSnapshot(
             instance_id=mecha_conf.id,
             mecha_name=mecha_conf.name,
             main_portrait=mecha_conf.portrait_id,
             model_asset=mecha_conf.model_asset,
-            final_max_hp=int(final_hp),
-            current_hp=int(final_hp),
-            final_max_en=int(final_en),
-            current_en=int(final_en),
-            final_armor=int(final_armor),
-            final_mobility=int(final_mobility),
-            final_hit=final_hit,
-            final_precision=mecha_conf.init_precision + final_precision,
-            final_crit=mecha_conf.init_crit + final_crit,
-            final_dodge=mecha_conf.init_dodge + final_dodge,
-            final_parry=mecha_conf.init_parry + final_parry,
-            final_block=mecha_conf.init_block + final_block,
+            final_max_hp=int(stats_dict.get("final_max_hp", base_hp)),
+            current_hp=int(stats_dict.get("final_max_hp", base_hp)),
+            final_max_en=int(stats_dict.get("final_max_en", base_en)),
+            current_en=int(stats_dict.get("final_max_en", base_en)),
+            final_armor=int(stats_dict.get("final_armor", base_armor)),
+            final_mobility=int(stats_dict.get("final_mobility", base_mobility)),
+            final_hit=stats_dict.get("final_hit", base_hit),
+            final_precision=final_precision,
+            final_crit=final_crit,
+            final_dodge=final_dodge,
+            final_parry=final_parry,
+            final_block=final_block,
             block_reduction=mecha_conf.init_block_red,
-            final_en_regen_rate=final_en_regen_rate,
-            final_en_regen_fixed=final_en_regen_fixed,
+            final_en_regen_rate=stats_dict.get("final_en_regen_rate", base_en_regen_rate),
+            final_en_regen_fixed=int(stats_dict.get("final_en_regen_fixed", base_en_regen_fixed)),
             pilot_stats_backup=pilot_stats_backup,
             sub_pilot_stats_backup=sub_pilot_stats_backup,
             sub_pilot_contribution_rate=contribution_rate,

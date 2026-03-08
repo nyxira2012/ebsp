@@ -2,6 +2,59 @@
 
 ---
 
+## 2026-03-08 PVE 核心系统实现与测试覆盖扩展
+
+> **项目快照**：代码文件 67 个（4709 行）| 设计文档 14 个（11034 行）
+
+### 逻辑变化与核心思路
+
+1. **PVE 核心系统完整实现（Doc 10 Phase 1-2）**
+   - **逻辑变化**：新增 `src/pve/` 模块下 9 个核心文件（约 2500 行），实现了 PVE 探索系统的完整服务层。包含 `battle_bridge.py`（战斗桥接层）、`exploration.py`（探索逻辑）、`session_manager.py`（会话管理）、`reward_controller.py`（收益控制器）、`models.py`（数据模型）、`schemas.py`（API Schema）、`enums.py`（枚举定义）、`repository.py`（仓库层）和 `services.py`（服务层扩展）。
+   - **设计思路**：采用**分层架构**（Layered Architecture）——桥接层负责连接战斗引擎与 PVE 系统，会话管理器负责状态持久化与恢复，收益控制器负责战利品的临时存储与最终入库。这种分层确保了各模块职责单一，便于单元测试与未来扩展。
+   - **战斗桥接层**：`BattleBridge` 类负责将 PVE 实体状态转换为战斗引擎所需的 `Mecha` 对象，战斗结束后再将结果转换回 PVE 状态。支持基于现实时间的 HP/EN 恢复补偿机制。
+   - **收益幂等性**：`RewardController.finalize()` 实现双层幂等校验——应用层软校验 + 数据库唯一索引硬拦截，彻底杜绝”双倍奖励”漏洞。
+
+2. **PVE 完整测试覆盖（7 个测试文件）**
+   - **逻辑变化**：新增 `tests/test_pve_*.py` 系列 7 个测试文件，覆盖核心模块、地图生成器、仓库层、收益控制器、服务层和会话管理器。
+   - **设计思路**：测试文件与源码模块一一对应，确保每个关键逻辑都有独立验证。使用 pytest 的 mock 机制拦截随机数和数据库调用，保证测试结果的确定性与执行速度。
+
+3. **战斗引擎增强（`get_result()` 方法）**
+   - **逻辑变化**：`src/combat/engine.py` 新增 `get_result()` 方法，返回结构化的战斗结果（胜负、回合数、双方 HP/EN 状态）。
+   - **设计思路**：PVE 系统需要战斗引擎提供标准化的结算接口，而非依赖内部状态。新增方法封装了胜负判定逻辑（存活优先、HP 次之、平局兜底），为外部系统提供清晰的数据契约。
+
+4. **数据库模型扩展（PVE 幂等性支持）**
+   - **逻辑变化**：`src/database/models.py` 扩展 `PveSession` 表，新增 `current_layer`、`session_data`（完整状态 JSON Blob）、`idempotency_key` 和 `expires_at`（断线保护 TTL）字段。新增 `PveRewardLedger` 表用于记录收益发放流水，通过 `session_id` 唯一约束实现硬幂等防线。
+   - **设计思路**：`session_data` 字段存储完整的会话状态（地图图、实体状态、待领取奖励），支持断线重连时 100% 还原。`expires_at` 字段配合定时清理任务，自动回收超时的会话数据，防止 DB 膨胀。
+
+5. **PVE 系统文档扩展（战争迷雾与数据裁剪）**
+   - **逻辑变化**：`docs/10.pve_system.md` 新增 §8 章节，详细定义了战争迷雾机制与前端数据裁剪策略。
+   - **设计思路**：采用**视图模型分离**（View Model Separation）原则——服务端保持完整地图数据（Domain Model），下发给客户端时通过 `PveSessionFogView` 过滤敏感信息。这防止了玩家通过抓包实现”开图透视”。
+
+6. **用户系统文档更新（幂等性双轨制防御）**
+   - **逻辑变化**：`docs/7.user_system_implementation.md` 将幂等性章节重构为”双轨制防御体系”，分离 API 级通用幂等与业务级流水幂等两种模式。
+   - **设计思路**：API 级幂等使用通用 `idempotency_keys` 表 + 装饰器，适用于所有接口防连点。业务级幂等使用流水表唯一索引，适用于 P0 级资产变动（PVE 收益提现、商店购买、抽卡）。两者组合形成”软拦截 + 硬防线”的双重保护。
+
+7. **工厂架构重构（消除 13 元组债务）**
+   - **逻辑变化**：`src/factory.py` 的 `_apply_equipment_modifiers` 方法重构，移除 13 元组返回值和百行 if-elif 硬编码。采用字典累加容器（`stats_dict`）和别名路由表（`ALIAS_MAP`）统一处理基础数值修正与随机词条计算。
+   - **设计思路**：贯彻”最小有效改动”原则——对外保持完全兼容，内部实现彻底解耦。返回值简化为 `(Dict, List[WeaponSnapshot])`，新增属性只需在 `stats` 字典中添加键值对，无需修改函数签名。
+
+8. **装备生成测试大幅扩展（479 个用例）**
+   - **逻辑变化**：`tests/core/test_item_generator.py` 从 29 行扩展到 463 行，新增覆盖 ilvl 浮动、词条档位权重、技能槽概率、词条不重复、颜色分计算等核心逻辑。
+   - **设计思路**：使用 `pytest.mark.parametrize` 进行数据驱动测试，单个测试函数验证数十种组合。mock `random.uniform` 和 `random.randint` 确保测试结果可预测。
+
+**技术要点**
+- **双层幂等防线**：应用层查询 `PveRewardLedger` + DB 唯一索引抛 `IntegrityError`，确保极高并发下也不会重复发奖
+- **状态无损流转**：`session_data` JSON Blob 存储完整会话状态，支持任意后端节点接管会话（水平扩展友好）
+- **视图数据裁剪**：前端只获得”已探索区域 + 已触发事件”，暗雷位置和未探索节点信息完全隐藏
+- **别名路由表**：`ALIAS_MAP` 处理早期设计遗留的同义词（`init_hp` → `final_max_hp`），保证向后兼容
+
+**后续计划**
+1. 实现 `src/pve/map_generator/` 地图生成器（Phase 3）：采用预设地块库拼接策略，避免原子随机游走的死锁风险
+2. 实现 PVE API 端点（`src/api/pve_api.py`）：提供进入/退出/移动/结算等 REST 接口
+3. 补充集成测试：验证从”进入地图”到”收益入库”的完整流程
+
+---
+
 ## 2026-03-08 母舰、PVE 与库存系统：核心玩法闭环
 
 > **项目快照**：代码文件 60 个（8970 行）| 设计文档 12 个（4653 行）
@@ -9,10 +62,10 @@
 ### 逻辑变化与核心思路
 
 1. **母舰系统完整实现（Doc 11）**
-   - **逻辑变化**：新增 `src/pve/services.py` 实现母舰集成服务层，定义 `MothershipConfig` 和 `RegionConfig` 数据模型。母舰作为玩家的"移动基地"，提供货舱容量（`cargo_capacity`）、区域准入（`region_level`）和商店刷新上限（`shop_ilvl_limit`）三大核心能力。
-   - **设计思路**：母舰系统采用**能力提供者模式**（Provider Pattern）——`IMothershipProvider` 接口定义 `get_max_capacity()` 抽象方法，`DatabaseMothershipProvider` 从数据库和静态配置中查询玩家拥有的母舰，返回其中 `cargo_capacity` 的最大值。这种设计允许在母舰系统未完成时使用 `MockMothershipProvider` 进行测试，实现了"延迟依赖"的架构原则。
-   - **区域准入逻辑**：`validate_region_entry()` 方法判断母舰是否具备进入指定区域的能力（`mothership.region_level >= region.min_region_level`）。这为未来的"区域探索限制"和"内容解锁节奏"预留了接口。
-   - **PVE 锁定机制**：`is_pve_session_active()` 方法检查玩家是否处于活跃的 PVE 探索节点中，按 Doc 11 设定，处于活跃状态则阻断购舰与切换舰队，防止"战斗中作弊"。
+   - **逻辑变化**：新增 `src/pve/services.py` 实现母舰集成服务层，定义 `MothershipConfig` 和 `RegionConfig` 数据模型。母舰作为玩家的”移动基地”，提供货舱容量（`cargo_capacity`）、区域准入（`region_level`）和商店刷新上限（`shop_ilvl_limit`）三大核心能力。
+   - **设计思路**：母舰系统采用**能力提供者模式**（Provider Pattern）——`IMothershipProvider` 接口定义 `get_max_capacity()` 抽象方法，`DatabaseMothershipProvider` 从数据库和静态配置中查询玩家拥有的母舰，返回其中 `cargo_capacity` 的最大值。这种设计允许在母舰系统未完成时使用 `MockMothershipProvider` 进行测试，实现了”延迟依赖”的架构原则。
+   - **区域准入逻辑**：`validate_region_entry()` 方法判断母舰是否具备进入指定区域的能力（`mothership.region_level >= region.min_region_level`）。这为未来的”区域探索限制”和”内容解锁节奏”预留了接口。
+   - **PVE 锁定机制**：`is_pve_session_active()` 方法检查玩家是否处于活跃的 PVE 探索节点中，按 Doc 11 设定，处于活跃状态则阻断购舰与切换舰队，防止”战斗中作弊”。
 
 2. **PVE 系统设计文档（Doc 10）**
    - **逻辑变化**：新增 `docs/10.pve_system.md`（691 行），定义了 PVE 探索系统的完整设计。
@@ -26,12 +79,12 @@
    - **逻辑变化**：新增 `src/user/inventory.py` 实现背包服务层，`src/api/inventory_api.py` 实现 REST API 端点。数据库新增 `UserEquipment` 和 `UserItem` 两张表，分别存储不可堆叠装备（每件 1 格）和可堆叠材料（每类 1 格）。
    - **设计思路**：采用**分类堆叠规则**（Category-based Stacking）——装备独立存储（因为具有独立的随机词条和强化等级），材料按 `item_id` 唯一约束合并数量。容量计算逻辑：`占用格子 = 离舱装备数 + 材料种类数`。
    - **超载处理流程**：`finalize_overload()` 端点实现三步验证——（1）显式验证丢弃列表的合法性（数量匹配、权属校验）（2）执行物理删除（3）尝试添加新资产，若依然溢出则报错拦截。这防止了客户端作弊直接跳过清理流程。
-   - **容量管控**：`can_add()` 方法在添加资产前预计算所需格子数（`calculate_required_slots()`），若超过剩余空间则返回 `AddResult.OVERFLOW`。这种"预检查"机制避免了"部分添加后失败"的数据一致性问题。
+   - **容量管控**：`can_add()` 方法在添加资产前预计算所需格子数（`calculate_required_slots()`），若超过剩余空间则返回 `AddResult.OVERFLOW`。这种”预检查”机制避免了”部分添加后失败”的数据一致性问题。
 
 4. **数据库模型扩展**
    - **逻辑变化**：`src/database/models.py` 新增 `UserMothership`、`UserEquipment`、`UserItem`、`UserPilot`、`UserSquad` 五张表，实现玩家资产的完整持久化。
-   - **设计思路**：采用**混合关系型架构**（Hybrid Relational Architecture）——核心资产（机体、装备、材料）使用独立表存储，支持复杂的查询和索引；游戏快照（战斗状态、编队配置）使用 JSON 字段存储，保持灵活性。例如 `UserEquipment.random_stats` 存储 `{"attack": 15, "crit_rate": 5}`，具体数值由运行时配置+公式还原。
-   - **级联删除与关系映射**：使用 `ForeignKey("users.id", ondelete="CASCADE")` 确保用户删除时所有关联资产自动清理，避免孤儿数据。`relationship()` 配置 `lazy="selectin"` 预加载关联数据，避免 N+1 查询问题。
+   - **设计思路**：采用**混合关系型架构**（Hybrid Relational Architecture）——核心资产（机体、装备、材料）使用独立表存储，支持复杂的查询和索引；游戏快照（战斗状态、编队配置）使用 JSON 字段存储，保持灵活性。例如 `UserEquipment.random_stats` 存储 `{“attack”: 15, “crit_rate”: 5}`，具体数值由运行时配置+公式还原。
+   - **级联删除与关系映射**：使用 `ForeignKey(“users.id”, ondelete=”CASCADE”)` 确保用户删除时所有关联资产自动清理，避免孤儿数据。`relationship()` 配置 `lazy=”selectin”` 预加载关联数据，避免 N+1 查询问题。
 
 5. **API 层扩展与用户系统集成**
    - **逻辑变化**：`src/api/user_api.py` 新增 `/api/mothership` 路由组，实现母舰购买、列表查询、当前出战切换等端点。`src/api/inventory_api.py` 新增 `/api/inventory` 路由组，实现状态查询、物品列表、超载处理等端点。
@@ -39,14 +92,18 @@
 
 6. **Google Style 文档规范补充**
    - **逻辑变化**：根据技术审计报告，为 `inventory.py`、`inventory_api.py`、`models.py` 中的所有类和方法补充了完整的 Google Style 文档字符串。包含模块级业务背景说明、类 Attributes 列表、方法 Args/Returns/Raises 说明、使用示例等。
-   - **设计思路**：文档是代码的"第二接口"，特别是库存系统这种涉及复杂业务规则（容量计算、堆叠规则、超载处理）的模块，清晰的文档能大幅降低维护成本。例如 `get_occupancy()` 方法的文档明确说明了"已装备装备不计入容量"这一关键规则。
+   - **设计思路**：文档是代码的”第二接口”，特别是库存系统这种涉及复杂业务规则（容量计算、堆叠规则、超载处理）的模块，清晰的文档能大幅降低维护成本。例如 `get_occupancy()` 方法的文档明确说明了”已装备装备不计入容量”这一关键规则。
 
 7. **类型检查修复**
    - **逻辑变化**：修复 `src/pve/services.py` 缺少 `AsyncSession` 导入、`src/user/service.py` 类型注解 `any` → `Any` 的类型错误。
    - **设计思路**：保持类型系统的完整性是大型 Python 项目的基础，pyright 的严格检查能提前发现大量潜在 bug（如方法拼写错误、参数类型不匹配）。所有新增代码必须通过 pyright 检查才能提交。
 
+8. **双重工厂架构债务定点清除（消除 13 元组与硬编码）**
+   - **逻辑变化**：重构 `src/factory.py` 的 `_apply_equipment_modifiers` 方法，移除了长达 13 个返回值的元组定义与成百行的 `if-elif` 硬编码链。采用字典累加容器（`stats_dict`）和内部别名路由表（`ALIAS_MAP`）统一处理基础数值修正与随机词条计算，返回值简化为 `(Dict, List[WeaponSnapshot])`。
+   - **设计思路**：坚决贯彻”最小有效改动（微创手术）原则”。保留了对外界系统的完美兼容无感适配能力，不干扰业务层的逻辑边界划分，却一举消除了最深层次属性增订的连环改动负担。经过 479 个测试用例的绝对覆盖验证，该核心算子的解耦实现了彻底的未来可拓展性。
+
 **技术要点**
-- **唯一约束与堆叠**：`UserItem` 表的 `UniqueConstraint("user_id", "item_id")` 确保同类材料自动合并，应用层只需 `quantity += new_quantity`
+- **唯一约束与堆叠**：`UserItem` 表的 `UniqueConstraint(“user_id”, “item_id”)` 确保同类材料自动合并，应用层只需 `quantity += new_quantity`
 - **容量预计算**：`calculate_required_slots()` 方法通过 `new_item_ids - existing_item_ids` 差集运算，高效统计新增材料种类数
 - **安全验证三步法**：超载处理端点先验证丢弃列表数量（`existing_count != len(unique_discard_ids)` 报错），再执行删除，最后添加新资产，确保原子性
 - **Google Style 文档结构**：模块文档（业务背景）→ 类文档（用途说明）→ 方法文档（Args/Returns/Raises/Example），层次清晰

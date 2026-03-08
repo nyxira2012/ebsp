@@ -245,7 +245,7 @@ async def debug_generate_item(
         enhancement_level=0,
         random_stats=random_stats
     )
-    result = await service.add_assets(current_user.id, add_equipments=[equip_data], add_items=[])
+    result = await service.add_assets(current_user.id, equipments=[equip_data], items=[])
     
     if result == AddResult.OVERFLOW:
         raise HTTPException(

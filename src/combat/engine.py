@@ -777,3 +777,34 @@ class BattleSimulator:
         # 注意：当前 EventManager 设计没有历史事件存储
         # 这里返回空列表，实际使用时可能需要扩展 EventManager
         return []
+
+    def get_result(self) -> dict:
+        """返回战后结构化结果（供 PVE 等外部系统使用）"""
+        if not self.mecha_a.is_alive():
+            outcome = "b_wins"
+        elif not self.mecha_b.is_alive():
+            outcome = "a_wins"
+        else:
+            hp_a = self.mecha_a.get_hp_percentage()
+            hp_b = self.mecha_b.get_hp_percentage()
+            if hp_a > hp_b:
+                outcome = "a_wins"
+            elif hp_b > hp_a:
+                outcome = "b_wins"
+            else:
+                outcome = "draw"
+        
+        return {
+            "outcome": outcome,
+            "rounds": self.round_number,
+            "mecha_a": {
+                "hp": self.mecha_a.current_hp,
+                "en": self.mecha_a.current_en,
+                "alive": self.mecha_a.is_alive()
+            },
+            "mecha_b": {
+                "hp": self.mecha_b.current_hp,
+                "en": self.mecha_b.current_en,
+                "alive": self.mecha_b.is_alive()
+            }
+        }

@@ -89,7 +89,7 @@ class SnapshotFactory:
         user_equips = await self.user_repo.get_equipments_by_mecha(session, user_mecha_id)
         # 过滤掉为 None 的情况，防止边界异常导致未装配完整的装备混入，并按装配槽位排序
         user_equips = [eq for eq in user_equips if eq.equipped_slot_idx is not None]
-        user_equips.sort(key=lambda x: x.equipped_slot_idx)
+        user_equips.sort(key=lambda x: x.equipped_slot_idx or 0)
         
         equipments_configs = []
         equipments_random_stats = []

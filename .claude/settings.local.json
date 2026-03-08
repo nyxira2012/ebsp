@@ -21,7 +21,8 @@
       "Bash(.venv/bin/pyright:*)",
       "Bash(.venv/bin/pytest:*)",
       "Bash(.venv/bin/python:*)",
-      "Bash(exec wc:*)"
+      "Bash(exec wc:*)",
+      "Bash(wc:*)"
     ]
   }
 }

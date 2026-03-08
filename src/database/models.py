@@ -263,15 +263,32 @@ class PveSession(Base, TimestampMixin):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    status: Mapped[str] = mapped_column(String(20), default="active") # active, overloaded, settled, failed
+    status: Mapped[str] = mapped_column(String(20), default="active") # active, paused, completed, failed, extracted
     
     region_id: Mapped[str] = mapped_column(String(50))
+    current_layer: Mapped[int] = mapped_column(Integer, default=1)
     current_node: Mapped[int] = mapped_column(Integer, default=0)
     
-    # 待领取的临时战利品 JSON (含装备和堆叠物品)
-    pending_loot: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    # 完整会话状态 JSON Blob（MapGraph + 双方 EntityState + pending_rewards）
+    session_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    
+    # 幂等性约束：防止重复领取
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
+    
+    # TTL 管控：断线保护超时时间
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="pve_sessions")
+
+class PveRewardLedger(Base, TimestampMixin):
+    """PVE 收益发放流水表 — 幂等性硬防线"""
+    __tablename__ = "pve_reward_ledger"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)  # 唯一约束
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    rewards_summary: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
 
 # ==============================================================================
 # 复合索引 (可选优化)

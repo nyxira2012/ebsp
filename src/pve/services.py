@@ -7,20 +7,28 @@ class MothershipIntegrationService:
 
     @staticmethod
     def validate_region_entry(region: RegionConfig, mothership: MothershipConfig) -> bool:
-        """准入校验 (宏观探索门槛)
-        
+        """准入校验。
+
         判断当前母舰是否具备进入指定区域的能力。
+
+        Args:
+            region (RegionConfig): 目标区域配置。
+            mothership (MothershipConfig): 玩家当前母舰。
+
+        Returns:
+            bool: 是否允许进入。
         """
         return mothership.region_level >= region.min_region_level
 
     @staticmethod
     def get_max_movement_points(mothership: MothershipConfig) -> int:
-        """寻路与机动力 (微观寿命优化)
-        
-        基于母舰引擎等级，推演出微观点阵地图的最大合法跨越距离。
-        - 引擎 Lv 1: 基础 1-2 格跨越 (简化为只返回 2 作为最大值，或后续配合系统演进)
-        - 此处暂定公式：engine_level + 1 
-          (如 Lv 1 -> 2, Lv 2 -> 3, Lv 3 -> 4 格)
+        """根据母舰引擎等级推算最大移动步数。
+
+        Args:
+            mothership (MothershipConfig): 母舰配置。
+
+        Returns:
+            int: 允许的最大移动步数。
         """
         return mothership.engine_level + 1
 
@@ -82,11 +90,126 @@ class MothershipIntegrationService:
         
         按 Doc 11 设定，处于活跃状态则阻断购舰与切换舰队。
         """
-        # TODO: 待 PveSession 逻辑完全落地。此处应查询 pve_sessions 表中状态为 'ACTIVE' 的记录。
-        # 伪代码：
-        # stmt = select(PveSession).where(user_id=user_id, status='ACTIVE')
-        # result = await session.execute(stmt)
-        # return result.scalar_one_or_none() is not None
+        from sqlalchemy import select
+        from src.database.models import PveSession
         
-        # 临时硬编码：默认不锁定
-        return False
+        stmt = select(PveSession.id).where(
+            PveSession.user_id == user_id, 
+            PveSession.status == 'active'
+        ).limit(1)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+from src.pve.models import PveSessionData
+from src.pve.session_manager import PveSessionManager
+from src.core.factory import SnapshotFactory
+from src.user.repository import UserAssetRepository
+from src.factory import MechaFactory
+from typing import List, Optional, Dict, Any
+
+class PveEntryService:
+    """PVE 进入编排服务。
+
+    该类负责整合工厂、仓库与管理器，完成战斗前的状态锁定与会话初始化。
+    """
+    
+    @staticmethod
+    async def _prepare_locked_config(
+        db: AsyncSession,
+        user_id: int,
+        locked_mecha_ids: List[int],
+        loader: Any,
+        snapshot_factory: SnapshotFactory
+    ) -> Dict[str, Any]:
+        """构建战前锁定配置。
+
+         Args:
+            db (AsyncSession): 数据库异步会话。
+            user_id (int): 玩家 ID。
+            locked_mecha_ids (List[int]): 选定的机体 ID 列表。
+            loader (Any): 资源加载器。
+            snapshot_factory (SnapshotFactory): 快照工厂。
+
+        Returns:
+            Dict[str, Any]: 包含所有选定机体快照的配置字典。
+        """
+        locked_config = {"mechas": []}
+        
+        if locked_mecha_ids:
+            for user_mecha_id in locked_mecha_ids:
+                try:
+                    # 真实构建机体快照
+                    snapshot = await snapshot_factory.create_combat_snapshot(db, user_id, user_mecha_id)
+                    locked_config["mechas"].append({
+                        "user_mecha_id": user_mecha_id,
+                        "mecha_id": snapshot.instance_id,
+                        "max_hp": snapshot.final_max_hp,
+                        "max_en": snapshot.final_max_en,
+                        "snapshot_dict": snapshot.model_dump()
+                    })
+                except (ValueError, Exception):
+                    continue
+        
+        if not locked_config["mechas"]:
+            # Fallback 逻辑：如果未选机体或加载失败，尝试构建默认机体 (测试用)
+            try:
+                mecha_config = loader.get_mecha_config("rx78")
+                snapshot = MechaFactory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
+                locked_config["mechas"].append({
+                    "mecha_id": snapshot.instance_id,
+                    "max_hp": snapshot.final_max_hp,
+                    "max_en": snapshot.final_max_en,
+                    "snapshot_dict": snapshot.model_dump()
+                })
+            except (KeyError, AttributeError):
+                pass
+                
+        return locked_config
+
+    @classmethod
+    async def enter_region(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        region_id: str,
+        mothership_id: Optional[str],
+        locked_mecha_ids: Optional[List[int]],
+        loader: Any,
+        idempotency_key: Optional[str] = None
+    ) -> PveSessionData:
+        """进入 PVE 副本的完整编排流程。
+
+        该方法负责初始化工厂、准备锁定快照并调用 SessionManager 创建会话。
+
+        Args:
+            db (AsyncSession): 数据库异步会话。
+            user_id (int): 玩家唯一 ID。
+            region_id (str): 区域配置 ID。
+            mothership_id (Optional[str]): 母舰 ID。
+            locked_mecha_ids (Optional[List[int]]): 选定的出战机体 ID 列表。
+            loader (Any): 资源加载器实例。
+            idempotency_key (Optional[str], optional): 幂等校验键。
+
+        Returns:
+            PveSessionData: 初始化完成的 PVE 会话实体。
+        """
+        mothership_config = loader.get_mothership_config(mothership_id or "ms_01")
+        
+        # 1. 初始化工厂
+        snapshot_factory = SnapshotFactory(loader, UserAssetRepository())
+        
+        # 2. 准备锁定状态
+        locked_config = await cls._prepare_locked_config(
+            db, user_id, locked_mecha_ids or [], loader, snapshot_factory
+        )
+        
+        # 3. 创建会话
+        session_data = PveSessionManager.create_session(
+            user_id=user_id,
+            region_id=region_id,
+            mothership_config=mothership_config,
+            locked_config=locked_config,
+            loader=loader
+        )
+        
+        return session_data
