@@ -244,6 +244,19 @@ class UserMothershipData(BaseModel):
     switch_count_today: int = 0  # 今日切换次数
     last_switch_date: Optional[str] = None # 最近一次切换日期 (YYYY-MM-DD)
 
+class ZoneConfig(BaseModel):
+    """L2 子区域静态配置"""
+    zone_id: str
+    name: str
+    unlock_requires: Optional[str] = None  # 前置 zone_id，null 为首发
+    event_count_range: tuple[int, int] = (8, 12)
+    event_weights: Dict[str, int] = {}
+    normal_pool: List[str] = []
+    elite_pool: List[str] = []
+    boss_template: Optional[str] = None
+    is_hidden: bool = False
+    spawn_chance: Optional[float] = None  # 仅隐藏节点
+
 class RegionConfig(BaseModel):
     """PVE 大区域静态配置 (Macro-Region Selection)"""
     id: str
@@ -251,6 +264,7 @@ class RegionConfig(BaseModel):
     min_region_level: int    # 需要的母舰核心等级下限
     base_ilvl: int           # 该区域基础掉落装等
     description: str = ""
+    zones: List[ZoneConfig] = []       # 子区域列表
 
 class AffixConfig(BaseModel):
     """装备/武器随机词条配置 (data/affixes.json)

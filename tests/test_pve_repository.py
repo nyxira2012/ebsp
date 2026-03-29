@@ -46,7 +46,7 @@ async def sample_session_data():
         session_id=1,
         user_id=1,
         region_id="test_region",
-        current_layer=1,
+        zone_id="test_zone",
         status=SessionStatus.ACTIVE,
         event_sequence=event_sequence,
         squad_state=squad_state,
@@ -69,7 +69,7 @@ async def test_get_by_user_with_active_session(db_session: AsyncSession, sample_
         user_id=1,
         status="active",
         region_id="test_region",
-        current_layer=1,
+        zone_id="test_zone",
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_1"
     )
@@ -93,7 +93,7 @@ async def test_get_by_user_with_paused_session(db_session: AsyncSession, sample_
         user_id=1,
         status="paused",
         region_id="test_region",
-        current_layer=1,
+        zone_id="test_zone",
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_2"
     )
@@ -125,7 +125,7 @@ async def test_get_by_user_ignores_completed_status(db_session: AsyncSession, sa
         user_id=1,
         status="completed",  # 不在 active/paused 中
         region_id="test_region",
-        current_layer=1,
+        zone_id="test_zone",
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_3"
     )
@@ -149,7 +149,7 @@ async def test_get_by_user_multiple_sessions(db_session: AsyncSession, sample_se
             user_id=1,
             status="active" if i < 2 else "paused",
             region_id=f"region_{i}",
-            current_layer=1,
+            zone_id="test_zone",
             session_data=sample_session_data.model_dump(),
             idempotency_key=f"pve_1_{i+10}"
         )
@@ -221,7 +221,7 @@ async def test_save_or_update_with_different_status(db_session: AsyncSession):
             session_id=100 + idx,  # 不同的 session_id
             user_id=2,
             region_id="test",
-            current_layer=1,
+            zone_id=f"test_zone_{idx}",
             status=status,
             event_sequence=event_sequence,
             squad_state=squad,
@@ -274,7 +274,7 @@ async def test_save_or_update_multiple_users(db_session: AsyncSession):
             session_id=user_id * 100,
             user_id=user_id,
             region_id=f"region_{user_id}",
-            current_layer=1,
+            zone_id=f"zone_{user_id}",
             status=SessionStatus.ACTIVE,
             event_sequence=event_sequence,
             squad_state=squad,

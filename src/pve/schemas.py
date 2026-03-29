@@ -17,13 +17,13 @@ class PveEventSequenceResponse(BaseModel):
     """事件序列概要（前端用于渲染进度条和当前事件）"""
     total_events: int
     current_index: int
-    events: List[EventInfo]  # 全量事件列表（event_id 脱敏，不暴露词条详情）
+    visible_events: List[EventInfo]  # 仅包含 index <= current_index 的事件
 
 class PveSessionResponse(BaseModel):
     session_id: int
     user_id: int
     region_id: str
-    current_layer: int
+    zone_id: str
     current_event_index: int
     status: str
     sequence: PveEventSequenceResponse
@@ -36,13 +36,14 @@ class PveSessionResponse(BaseModel):
 # -----------------
 class EnterRegionRequest(BaseModel):
     region_id: str
+    zone_id: str
     mothership_id: Optional[str] = None
     locked_mechas: List[int] = []       # 用户选择要带进副本的 user_mechas.id 列表
     idempotency_key: Optional[str] = None  # 用于防止重复请求创建多个会话
 
 class AdvanceRequest(BaseModel):
-    """推进到下一事件的请求（无需额外参数，服务端按序列推进）"""
-    pass
+    """推进到下一事件的请求"""
+    expected_index: int  # 客户端认为的当前索引，必须与服务端一致
 
 class EngageRequest(BaseModel):
     event_index: int  # 触发战斗的事件索引，必须与 current_index 一致
@@ -61,6 +62,7 @@ class AdvanceResponse(BaseModel):
     new_event_index: int
     current_event: Optional[EventInfo]   # 如果序列完成则为 None
     sequence_complete: bool
+    sync_correction: bool = False  # 告知前端发生了同步修正
 
 class BattleResultResponse(BaseModel):
     outcome: str

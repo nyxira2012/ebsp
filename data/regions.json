@@ -4,20 +4,82 @@
         "name": "废弃空间站",
         "min_region_level": 1,
         "base_ilvl": 10,
-        "description": "初期探索区域：地球低轨道的一个死寂设施"
+        "description": "初期探索区域：地球低轨道的一个死寂设施",
+        "zones": [
+            {
+                "zone_id": "dock",
+                "name": "空间站码头",
+                "unlock_requires": null,
+                "event_count_range": [8, 10],
+                "event_weights": { "COMBAT": 45, "ELITE_COMBAT": 10, "LOOT": 25, "EVENT": 20 },
+                "normal_pool": ["mech_zaku", "mech_rx78"],
+                "elite_pool": ["mech_zaku", "mech_rx78"],
+                "boss_template": "mech_rx78",
+                "is_hidden": false
+            },
+            {
+                "zone_id": "command_post",
+                "name": "空间站指挥所",
+                "unlock_requires": "dock",
+                "event_count_range": [9, 12],
+                "event_weights": { "COMBAT": 40, "ELITE_COMBAT": 20, "LOOT": 20, "EVENT": 20 },
+                "normal_pool": ["mech_zaku", "mech_rx78"],
+                "elite_pool": ["mech_rx78"],
+                "boss_template": "mech_sazabi",
+                "is_hidden": false
+            },
+            {
+                "zone_id": "warehouse",
+                "name": "空间站仓库",
+                "unlock_requires": "dock",
+                "spawn_chance": 0.15,
+                "event_count_range": [5, 7],
+                "event_weights": { "COMBAT": 15, "LOOT": 60, "EVENT": 25 },
+                "normal_pool": ["mech_zaku"],
+                "elite_pool": [],
+                "boss_template": null,
+                "is_hidden": true
+            }
+        ]
     },
     {
         "id": "orbital_elevator",
         "name": "轨道电梯",
         "min_region_level": 2,
         "base_ilvl": 20,
-        "description": "中期核心要塞：连接宇宙与地球的咽喉"
+        "description": "中期核心要塞：连接宇宙与地球的咽喉",
+        "zones": [
+            {
+                "zone_id": "base",
+                "name": "电梯基座",
+                "unlock_requires": null,
+                "event_count_range": [10, 12],
+                "event_weights": { "COMBAT": 45, "ELITE_COMBAT": 15, "LOOT": 25, "EVENT": 15 },
+                "normal_pool": ["mech_zaku", "mech_rx78"],
+                "elite_pool": ["mech_zaku", "mech_rx78"],
+                "boss_template": "mech_nu",
+                "is_hidden": false
+            }
+        ]
     },
     {
         "id": "orbital_graveyard",
         "name": "宇宙墓场",
         "min_region_level": 3,
         "base_ilvl": 30,
-        "description": "暗礁宙域：埋葬了无数战舰残骸的危险地带"
+        "description": "暗礁宙域：埋葬了无数战舰残骸的危险地带",
+        "zones": [
+            {
+                "zone_id": "debris",
+                "name": "残骸区",
+                "unlock_requires": null,
+                "event_count_range": [10, 15],
+                "event_weights": { "COMBAT": 50, "ELITE_COMBAT": 20, "LOOT": 20, "EVENT": 10 },
+                "normal_pool": ["mech_zaku", "mech_rx78"],
+                "elite_pool": ["mech_nu", "mech_sazabi"],
+                "boss_template": "mech_sazabi",
+                "is_hidden": false
+            }
+        ]
     }
 ]

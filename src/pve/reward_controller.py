@@ -8,6 +8,8 @@ from src.database.models import PveRewardLedger, PveSession, User
 from src.pve.models import PveSessionData
 from src.pve.enums import ExitMethod
 from src.pve.services import MothershipIntegrationService
+from src.pve.progress_service import PveProgressService
+from src.models import MothershipConfig
 
 class RewardController:
     """PVE 收益控制器。
@@ -31,8 +33,16 @@ class RewardController:
             else:
                 session_data.pending_rewards.items.append(item)
                 
-    @staticmethod
-    async def finalize(db: AsyncSession, session_data: PveSessionData,  exit_method: ExitMethod, inventory_service: InventoryService, mothership_config: Any) -> Dict[str, Any]:
+    @classmethod
+    async def finalize(
+        cls, 
+        db: AsyncSession, 
+        session_data: PveSessionData, 
+        exit_method: ExitMethod,
+        inventory_service: "InventoryService",
+        mothership_config: "MothershipConfig",
+        loader: Any
+    ) -> Dict[str, Any]:
         """执行会话结算并将战利品正式入库。
 
         该流程包含幂等校验、战利品折损计算、以及与库存系统的交互。
@@ -130,6 +140,17 @@ class RewardController:
         # 5. 删除由于断线保护持有的 PveSession 表记 (如果不是纯内存测试阶段)
         stmt_del = delete(PveSession).where(PveSession.id == session_id)
         await db.execute(stmt_del)
+
+        # 6. 如果是通关退出，标记进度
+        if exit_method == ExitMethod.BOSS_CLEAR:
+            new_zones = await PveProgressService.mark_zone_cleared(
+                db=db,
+                user_id=user_id,
+                region_id=session_data.region_id,
+                zone_id=session_data.zone_id,
+                loader=loader
+            )
+            summary["new_unlocked_zones"] = new_zones
         
         # 不要主动 commit，将事务提交权交给上层 API 的 Session 依赖注入
         

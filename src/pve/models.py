@@ -22,6 +22,20 @@ class PveEvent(BaseModel):
     cleared: bool = False
     rewards: List[Dict[str, Any]] = Field(default_factory=list)
 
+    def to_event_info(self) -> "EventInfo":
+        """转换为 API 响应格式。
+
+        Returns:
+            EventInfo: 用于 API 响应的事件信息对象。
+        """
+        from src.pve.schemas import EventInfo
+        return EventInfo(
+            index=self.index,
+            event_type=self.event_type.value,
+            event_id=self.event_id,
+            cleared=self.cleared
+        )
+
 class EventSequence(BaseModel):
     """事件序列。
 
@@ -119,7 +133,7 @@ class PveSessionData(BaseModel):
     session_id: int                   # 会话唯一 ID
     user_id: int                      # 所属玩家 ID
     region_id: str                    # 副本区域唯一 ID
-    current_layer: int = 1            # 当前所在的层级 (多层副本扩展用)
+    zone_id: str                      # 当前子区域节点
     status: SessionStatus = SessionStatus.ACTIVE
     
     event_sequence: EventSequence     # 事件序列 (替代原小地图)

@@ -139,6 +139,7 @@ class TestPveEntryService:
 
         # Mock 区域配置
         region_config = Mock()
+        region_config.min_region_level = 3
         region_config.event_count_range = [5, 8]
         region_config.boss_template = "boss_1"
         region_config.elite_pool = ["elite_1", "elite_2"]
@@ -149,7 +150,22 @@ class TestPveEntryService:
             "LOOT": 15,
             "EVENT": 15
         }
+        # Mock zones
+        mock_zone = Mock()
+        mock_zone.zone_id = "test_zone"
+        mock_zone.unlock_requires = None
+        mock_zone.is_hidden = False
+        mock_zone.elite_pool = ["elite_1", "elite_2"]
+        mock_zone.normal_pool = ["mob_1", "mob_2", "mob_3"]
+        region_config.zones = [mock_zone]
         loader.get_region_config.return_value = region_config
+
+        # Mock zone_config
+        zone_config = Mock()
+        zone_config.elite_pool = ["elite_1", "elite_2"]
+        zone_config.normal_pool = ["mob_1", "mob_2", "mob_3"]
+        zone_config.boss_template = "boss_1"
+        loader.get_zone_config.return_value = zone_config
 
         # Mock 机体配置（提供完整的 MechaConfig）
         mecha_config = MechaConfig(
@@ -269,6 +285,14 @@ class TestPveEntryService:
         """测试基本进入区域流程"""
         db = Mock(spec=AsyncSession)
 
+        # Mock 数据库查询结果
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+        db.add = Mock()
+
         # Mock snapshot_factory
         snapshot_factory = Mock()
         snapshot_factory.create_combat_snapshot = AsyncMock(
@@ -284,6 +308,7 @@ class TestPveEntryService:
             db=db,
             user_id=1,
             region_id="test_region",
+            zone_id="test_zone",
             mothership_id="ms_01",
             locked_mecha_ids=[1],
             loader=mock_loader
@@ -298,10 +323,19 @@ class TestPveEntryService:
         """测试不指定机体时进入区域"""
         db = Mock(spec=AsyncSession)
 
+        # Mock 数据库查询结果
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+        db.add = Mock()
+
         session_data = await PveEntryService.enter_region(
             db=db,
             user_id=1,
             region_id="test_region",
+            zone_id="test_zone",
             mothership_id=None,
             locked_mecha_ids=None,
             loader=mock_loader

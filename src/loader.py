@@ -151,6 +151,13 @@ class DataLoader:
             raise KeyError(f"大区域配置不存在: {region_id}")
         return self.regions[region_id]
 
+    def get_zone_config(self, region_id: str, zone_id: str):
+        region = self.get_region_config(region_id)
+        for zone in region.zones:
+            if zone.zone_id == zone_id:
+                return zone
+        raise KeyError(f"子区域配置不存在: {region_id} -> {zone_id}")
+
     def get_affix_config(self, affix_id: str) -> AffixConfig:
         if affix_id not in self.affixes:
             raise KeyError(f"词条配置不存在: {affix_id}")

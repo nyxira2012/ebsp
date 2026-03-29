@@ -19,7 +19,7 @@ from src.api.context import set_loader, get_loader
 from src.database import init_db, close_db
 from src.database.session import get_async_session
 from src.database.models import User
-from src.api import user_api, inventory_api
+from src.api import user_api, inventory_api, pve_api
 from src.user.repository import UserAssetRepository
 from src.user.dependencies import get_optional_user
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ app = FastAPI(title="EBSP Combat Presentation API")
 # 挂载路由
 app.include_router(user_api.router, prefix="/api")
 app.include_router(inventory_api.router, prefix="/api")
+app.include_router(pve_api.router, prefix="/api")
 
 # 全局状态管理由 src.api.context 负责
 
@@ -62,10 +63,18 @@ async def startup_event():
     loader.load_all()
     set_loader(loader)
     print(f"✅ 数据加载完成: {len(loader.mechas)} 机体, {len(loader.equipments)} 装备")
+    
+    # 3. 启动后台守护任务
+    from src.pve.heartbeat import HeartbeatGuard
+    HeartbeatGuard.start()
+    print("✅ PVE 心跳守护已启动")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """服务关闭时清理资源"""
+    from src.pve.heartbeat import HeartbeatGuard
+    HeartbeatGuard.stop()
+    
     await close_db()
     print("✅ 数据库连接已关闭")
 

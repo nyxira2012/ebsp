@@ -19,6 +19,14 @@ class SessionStatus(str, Enum):
     FAILED = "failed"       # 已失败/阵亡
     EXTRACTED = "extracted" # 已撤离结算
 
+class ZoneStatus(str, Enum):
+    """PVE 区域节点状态"""
+    LOCKED = "locked"       # 已锁定 (未解锁)
+    UNLOCKED = "unlocked"   # 已解锁 (可进入)
+    CLEARED = "cleared"     # 已通关
+    AVAILABLE = "available" # 可见 (隐藏节点刷新后可见)
+    HIDDEN = "hidden"       # 隐藏 (不可见)
+
 class CombatOutcome(str, Enum):
     """战斗结算结果"""
     WIN = "WIN"

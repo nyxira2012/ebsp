@@ -44,14 +44,14 @@ def mock_loader():
     """模拟 DataLoader"""
     loader = Mock()
 
-    # Mock region config — 设置 event_count_range 供 EventSequenceGenerator 使用
-    region_config = Mock()
-    region_config.event_count_range = [3, 5]
-    region_config.boss_template = "test_boss"
-    region_config.elite_pool = ["elite_1"]
-    region_config.normal_pool = ["mob_1"]
-    region_config.event_weights = None  # 使用默认权重
-    loader.get_region_config.return_value = region_config
+    # Mock zone config — 设置 event_count_range 供 EventSequenceGenerator 使用
+    zone_config = Mock()
+    zone_config.event_count_range = [3, 5]
+    zone_config.boss_template = "test_boss"
+    zone_config.elite_pool = ["elite_1"]
+    zone_config.normal_pool = ["mob_1"]
+    zone_config.event_weights = None  # 使用默认权重
+    loader.get_zone_config.return_value = zone_config
 
     return loader
 
@@ -74,6 +74,7 @@ def test_create_session_basic(reset_session_manager, basic_locked_config, mock_l
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -83,8 +84,8 @@ def test_create_session_basic(reset_session_manager, basic_locked_config, mock_l
     assert session.session_id == 1
     assert session.user_id == 1
     assert session.region_id == "test_region"
+    assert session.zone_id == "test_zone"
     assert session.status == SessionStatus.ACTIVE
-    assert session.current_layer == 1
 
     # 验证事件序列已生成
     assert session.event_sequence is not None
@@ -110,6 +111,7 @@ def test_create_session_without_loader(reset_session_manager, basic_locked_confi
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=None
@@ -134,6 +136,7 @@ def test_create_session_multiple_mechas(reset_session_manager, mock_loader, mock
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=multi_mecha_config,
         loader=mock_loader
@@ -150,6 +153,7 @@ def test_create_session_auto_increment_id(reset_session_manager, basic_locked_co
     session1 = PveSessionManager.create_session(
         user_id=1,
         region_id="region1",
+        zone_id="zone1",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -158,6 +162,7 @@ def test_create_session_auto_increment_id(reset_session_manager, basic_locked_co
     session2 = PveSessionManager.create_session(
         user_id=2,
         region_id="region2",
+        zone_id="zone2",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -175,6 +180,7 @@ def test_create_session_empty_mechas(reset_session_manager, mock_loader, mock_mo
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=empty_config,
         loader=mock_loader
@@ -188,10 +194,12 @@ def test_create_session_loader_exception(reset_session_manager, basic_locked_con
     """测试 loader 抛出异常时使用默认配置"""
     bad_loader = Mock()
     bad_loader.get_region_config.side_effect = Exception("Loader error")
+    bad_loader.get_zone_config.side_effect = Exception("Loader error")
 
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=bad_loader
@@ -210,6 +218,7 @@ def test_get_session_existing(reset_session_manager, basic_locked_config, mock_l
     created = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -234,6 +243,7 @@ def test_get_session_updates_heartbeat(reset_session_manager, basic_locked_confi
     created = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -265,6 +275,7 @@ def test_destroy_session_existing(reset_session_manager, basic_locked_config, mo
     created = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -289,6 +300,7 @@ def test_destroy_session_twice(reset_session_manager, basic_locked_config, mock_
     created = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -304,6 +316,7 @@ def test_destroy_one_of_multiple(reset_session_manager, basic_locked_config, moc
     session1 = PveSessionManager.create_session(
         user_id=1,
         region_id="region1",
+        zone_id="zone1",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -312,6 +325,7 @@ def test_destroy_one_of_multiple(reset_session_manager, basic_locked_config, moc
     session2 = PveSessionManager.create_session(
         user_id=2,
         region_id="region2",
+        zone_id="zone2",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader
@@ -336,6 +350,7 @@ def test_full_lifecycle(reset_session_manager, basic_locked_config, mock_loader,
     session = PveSessionManager.create_session(
         user_id=1,
         region_id="test_region",
+        zone_id="test_zone",
         mothership_config=mock_mothership_config,
         locked_config=basic_locked_config,
         loader=mock_loader

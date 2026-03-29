@@ -35,6 +35,7 @@ def _make_basic_session(user_id: int = 1, region_id: str = "test_region") -> "sr
         session_id=999,
         user_id=user_id,
         region_id=region_id,
+        zone_id="test_zone",
         current_layer=1,
         status=SessionStatus.ACTIVE,
         event_sequence=sequence,
@@ -171,7 +172,7 @@ def test_pve_advance_and_engage_schemas():
     from src.pve.enums import EventType
     
     # 模拟构建对象以验证 Pydantic Schema
-    req = AdvanceRequest()
+    req = AdvanceRequest(expected_index=0)
     assert req is not None
     
     resp = AdvanceResponse(

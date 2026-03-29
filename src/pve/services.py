@@ -1,6 +1,7 @@
 from typing import Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models import RegionConfig, MothershipConfig
+from src.pve.enums import ZoneStatus
 
 class MothershipIntegrationService:
     """提供母舰系统与外部环境 (如 PVE, 背包, 商店) 集成的逻辑层/钩子."""
@@ -22,15 +23,18 @@ class MothershipIntegrationService:
 
     @staticmethod
     def get_max_movement_points(mothership: MothershipConfig) -> int:
-        """根据母舰引擎等级推算最大移动步数。
+        """获取最大移动点数。
+
+        基于母舰引擎等级计算每回合可移动的点数。
 
         Args:
-            mothership (MothershipConfig): 母舰配置。
+            mothership (MothershipConfig): 玩家当前母舰。
 
         Returns:
-            int: 允许的最大移动步数。
+            int: 最大移动点数，公式为 engine_level + 1。
         """
         return mothership.engine_level + 1
+
 
     @staticmethod
     def calculate_regeneration(
@@ -172,29 +176,26 @@ class PveEntryService:
         db: AsyncSession,
         user_id: int,
         region_id: str,
+        zone_id: str,
         mothership_id: Optional[str],
         locked_mecha_ids: Optional[List[int]],
         loader: Any,
         idempotency_key: Optional[str] = None
     ) -> PveSessionData:
-        """进入 PVE 副本的完整编排流程。
-
-        该方法负责初始化工厂、准备锁定快照并调用 SessionManager 创建会话。
-
-        Args:
-            db (AsyncSession): 数据库异步会话。
-            user_id (int): 玩家唯一 ID。
-            region_id (str): 区域配置 ID。
-            mothership_id (Optional[str]): 母舰 ID。
-            locked_mecha_ids (Optional[List[int]]): 选定的出战机体 ID 列表。
-            loader (Any): 资源加载器实例。
-            idempotency_key (Optional[str], optional): 幂等校验键。
-
-        Returns:
-            PveSessionData: 初始化完成的 PVE 会话实体。
-        """
+        """进入 PVE 副本的完整编排流程。"""
         mothership_config = loader.get_mothership_config(mothership_id or "ms_01")
+        region_config = loader.get_region_config(region_id)
         
+        # 0. 准入与进度校验
+        if not MothershipIntegrationService.validate_region_entry(region_config, mothership_config):
+            raise ValueError(f"Mothership region_level too low for {region_id}")
+            
+        from src.pve.progress_service import PveProgressService
+        region_status = await PveProgressService.get_region_status(db, user_id, region_id, loader)
+        zone_status = region_status.get(zone_id)
+        if zone_status not in (ZoneStatus.UNLOCKED.value, ZoneStatus.CLEARED.value, ZoneStatus.AVAILABLE.value):
+            raise ValueError(f"Zone {zone_id} is not accessible. Current status: {zone_status}")
+
         # 1. 初始化工厂
         snapshot_factory = SnapshotFactory(loader, UserAssetRepository())
         
@@ -207,6 +208,7 @@ class PveEntryService:
         session_data = PveSessionManager.create_session(
             user_id=user_id,
             region_id=region_id,
+            zone_id=zone_id,
             mothership_config=mothership_config,
             locked_config=locked_config,
             loader=loader

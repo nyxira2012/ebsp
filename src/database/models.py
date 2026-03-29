@@ -79,6 +79,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     pve_sessions: Mapped[list["PveSession"]] = relationship(
         "PveSession", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
+    pve_progress: Mapped[Optional["UserPveProgress"]] = relationship(
+        "UserPveProgress", back_populates="user", cascade="all, delete-orphan", lazy="selectin", uselist=False
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}', status='{self.status}')>"
@@ -251,6 +254,21 @@ class BattleRecord(Base, TimestampMixin):
 # PVE 探索相关 (PVE Exploration)
 # ==============================================================================
 
+class UserPveProgress(Base, TimestampMixin):
+    """用户 PVE 探索进度表"""
+    __tablename__ = "user_pve_progress"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    # 结构: {"abandoned_station": {"dock": "cleared", "command_post": "locked", ...}}
+    progress_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    # 隐藏节点单次探索刷新记录
+    hidden_refresh_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    user: Mapped["User"] = relationship("User", back_populates="pve_progress")
+
 class PveSession(Base, TimestampMixin):
     """PVE 探索会话表
     
@@ -264,9 +282,9 @@ class PveSession(Base, TimestampMixin):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="active") # active, paused, completed, failed, extracted
-    
+
     region_id: Mapped[str] = mapped_column(String(50))
-    current_layer: Mapped[int] = mapped_column(Integer, default=1)
+    zone_id: Mapped[str] = mapped_column(String(50))
     
     # 完整会话状态 JSON Blob（EventSequence + 双方 EntityState + pending_rewards）
     session_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
