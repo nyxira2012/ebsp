@@ -49,16 +49,16 @@ class BattleBridge:
         state.current_en = min(state.max_en, state.current_en + en_regen)
         
     @classmethod
-    def engage(cls, session: PveSessionData, node_id: int, 
+    def engage(cls, session: PveSessionData, event_index: int,
                loader: Any, 
                mothership_config: Any, 
                mecha_factory: MechaFactory,
                player_index: int = 0) -> BattleResult:
-        """执行一场与地图地格敌人的遭遇战。
+        """执行一场与当前事件中敌人的遭遇战。
 
         Args:
             session (PveSessionData): 当前活跃的 PVE 会话实例。
-            node_id (int): 触发战斗的地格 ID。
+            event_index (int): 触发战斗的事件索引（对应 event_sequence.current_index）。
             loader (Any): 静态资源加载器。
             mothership_config (Any): 玩家携带的母舰配置对象。
             mecha_factory (MechaFactory): 用于构建战斗快照的工厂。
@@ -68,7 +68,7 @@ class BattleBridge:
             BattleResult: 包含胜负、损耗及掉落的详细结算结果。
 
         Raises:
-            ValueError: 当指定的 node_id 在地图中不存在时抛出。
+            ValueError: 当指定的 event_index 在序列中不存在时抛出。
         """
         current_time = time.time()
         
@@ -103,12 +103,16 @@ class BattleBridge:
         player_snapshot.final_max_hp = player_state.max_hp
         player_snapshot.final_max_en = player_state.max_en
         
-        # 2. 还原或创建敌方机体
-        node = session.map_graph.get_node(node_id)
-        if not node:
-            raise ValueError(f"Node {node_id} not found in map graph")
+        # 2. 还原或创建敌方机体（从事件序列读取，不再依赖 map_graph）
+        events = session.event_sequence.events
+        if event_index < 0 or event_index >= len(events):
+            raise ValueError(f"Event index {event_index} out of range in event sequence")
+        
+        current_event = events[event_index]
+        enemy_template_id = current_event.event_id or "zaku2"
 
-        enemy_template_id = node.event_id or "zaku2"
+        # node_id 兼容旧 API，以 event_index 为 key 存储 enemy_states
+        node_id = event_index
         try:
             enemy_config = loader.get_mecha_config(enemy_template_id)
         except KeyError:
@@ -165,10 +169,11 @@ class BattleBridge:
         else:
             outcome = CombatOutcome.DRAW
             
-        # 5. 更新地图节点
+        # 5. 更新事件状态
         if outcome == CombatOutcome.WIN:
-            if node:
-                node.cleared = True
+            # 将事件标记为已清除
+            if event_index < len(session.event_sequence.events):
+                session.event_sequence.events[event_index].cleared = True
             if node_id in session.enemy_states:
                 del session.enemy_states[node_id]
                 

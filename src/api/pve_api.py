@@ -4,13 +4,12 @@ from src.database.session import get_async_session
 from src.user.dependencies import get_current_user
 from src.user.schemas import UserResponse
 from src.pve.schemas import (
-    EnterRegionRequest, MoveRequest, EngageRequest,
-    PveSessionResponse, MoveResponse, BattleResultResponse,
-    FinalizeResponse, ExtractRequest
+    EnterRegionRequest, AdvanceRequest, EngageRequest,
+    PveSessionResponse, AdvanceResponse, BattleResultResponse,
+    FinalizeResponse, ExtractRequest, EventInfo
 )
 
 from src.pve.session_manager import PveSessionManager
-from src.pve.exploration import ExplorationController
 from src.pve.battle_bridge import BattleBridge
 from src.pve.reward_controller import RewardController
 from src.pve.services import PveEntryService
@@ -47,39 +46,37 @@ async def enter_region(
     )
     return session_data
 
-@router.post("/sessions/{session_id}/move", response_model=MoveResponse)
-async def move_on_map(
+@router.post("/sessions/{session_id}/advance", response_model=AdvanceResponse)
+async def advance_sequence(
     session_id: int,
-    req: MoveRequest,
+    req: AdvanceRequest,
     user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     """
-    在当前副本地图上寻路移动
+    在当前副本事件序列上推进一格
     """
     session = get_pve_session_or_404(session_id)
-    loader = get_loader()
     
-    # 获取母舰配置里的行动力
-    # 假定此处通过 loader 和某处存储的 user mothership id 获取，临时写死或用 session 传下来的
-    max_movement = 2 
+    if session.event_sequence.is_complete():
+        raise HTTPException(status_code=400, detail="Event sequence already complete")
+        
+    has_more = session.event_sequence.advance()
+    current_event = session.event_sequence.current_event()
     
-    move_result = ExplorationController.move(
-        graph=session.map_graph,
-        current_node_id=session.current_node_id,
-        target_node_id=req.target_node_id,
-        max_movement_points=max_movement
-    )
-    
-    session.current_node_id = move_result.reached_node_id
-    
-    return MoveResponse(
-        reached_node_id=move_result.reached_node_id,
-        path_taken=move_result.path_taken,
-        truncated=move_result.truncated,
-        truncation_reason=move_result.truncation_reason,
-        triggered_event=move_result.triggered_event.name if move_result.triggered_event else None,
-        revealed_nodes=move_result.revealed_nodes
+    event_info = None
+    if current_event:
+        event_info = EventInfo(
+            index=current_event.index,
+            event_type=current_event.event_type.value,
+            event_id=current_event.event_id, # 前端如果需要脱敏该在这里隐掉
+            cleared=current_event.cleared
+        )
+        
+    return AdvanceResponse(
+        new_event_index=session.event_sequence.current_index,
+        current_event=event_info,
+        sequence_complete=not has_more
     )
 
 @router.post("/sessions/{session_id}/engage", response_model=BattleResultResponse)
@@ -101,7 +98,7 @@ async def engage_battle(
     
     result = BattleBridge.engage(
         session=session,
-        node_id=req.node_id,
+        event_index=req.event_index,
         loader=loader,
         mothership_config=mothership_config,
         mecha_factory=mecha_factory,

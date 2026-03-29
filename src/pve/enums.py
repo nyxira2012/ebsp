@@ -1,5 +1,16 @@
 from enum import Enum
 
+class EventType(str, Enum):
+    """PVE 事件序列的事件类型枚举
+    
+    用于 EventSequence 中每个 PveEvent 的类型标识。
+    """
+    COMBAT = "COMBAT"               # 普通战斗 (随机敌人遭遇战)
+    ELITE_COMBAT = "ELITE_COMBAT"   # 精英战斗 (强制遭遇，必须战斗)
+    BOSS_COMBAT = "BOSS_COMBAT"     # Boss 战斗 (序列末尾最终挑战)
+    LOOT = "LOOT"                   # 获取 (无战斗直接获得道具/装备)
+    EVENT = "EVENT"                 # 随机事件 (剧情选项、陷阱、补给等)
+
 class SessionStatus(str, Enum):
     """PVE 会话生命周期状态"""
     ACTIVE = "active"       # 进行中

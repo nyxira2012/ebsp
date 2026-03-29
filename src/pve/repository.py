@@ -26,7 +26,6 @@ class PveRepository:
             status=pve_session_data.status.value,
             region_id=pve_session_data.region_id,
             current_layer=pve_session_data.current_layer,
-            current_node=pve_session_data.current_node_id,
             session_data=dumped, # Pydantic v2 直接扔dict即可, SQLAlchemy 会序列化为 JSON
             idempotency_key=f"pve_{pve_session_data.user_id}_{pve_session_data.session_id}" 
         )

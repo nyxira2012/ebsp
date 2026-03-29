@@ -1,5 +1,10 @@
+# DEPRECATED: 地图移动控制器 (Exploration Controller)
+#
+# 该模块属于点阵地图探索系统，已从 PVE 主流程中移除。
+# 设计文档已迁移至 Doc 13（docs/13.map_system.md）。
+# 代码保留供后续大地图系统独立实装使用，请勿在新业务中引用。
+
 from dataclasses import dataclass
-from typing import List, Optional
 from typing import List, Optional
 from src.pve.models import MapGraph, MapNode
 from src.pve.enums import NodeType

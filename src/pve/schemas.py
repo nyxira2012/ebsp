@@ -1,40 +1,35 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
-from src.pve.enums import SessionStatus, NodeType, CombatOutcome
-from src.pve.models import MapGraph, MapNode, PveSquadState, PveEntityState
+from src.pve.enums import SessionStatus, EventType, CombatOutcome
+from src.pve.models import PveSquadState, PveEntityState, PveEvent, EventSequence
 
 # -----------------
 # 响应部分
 # -----------------
-class NodeInfo(BaseModel):
-    """单独的地块信息(返回给前端的剥离版)"""
-    id: int
-    x: int
-    y: int
-    type: str # string literal
+class EventInfo(BaseModel):
+    """单个事件信息（返回给前端的脱敏视图）"""
+    index: int
+    event_type: str          # EventType 字符串 ("COMBAT", "LOOT" 等)
     event_id: Optional[str] = None
     cleared: bool
-    revealed: bool
-    neighbors: List[int]
 
-class PveMapResponse(BaseModel):
-    width: int
-    height: int
-    nodes: Dict[int, NodeInfo] # 只返回 revealed=True的 或 特定的节点
-    start_node_id: int
-    boss_node_id: int # 如果还没走到boss可能返回-1 (Phase 1 简化先全返回)
+class PveEventSequenceResponse(BaseModel):
+    """事件序列概要（前端用于渲染进度条和当前事件）"""
+    total_events: int
+    current_index: int
+    events: List[EventInfo]  # 全量事件列表（event_id 脱敏，不暴露词条详情）
 
 class PveSessionResponse(BaseModel):
     session_id: int
     user_id: int
     region_id: str
     current_layer: int
-    current_node_id: int
+    current_event_index: int
     status: str
-    map_data: PveMapResponse
-    squad_state: PveSquadState # 己方的残血信息
+    sequence: PveEventSequenceResponse
+    squad_state: PveSquadState          # 己方的残血信息
     credits_earned: int
-    pending_rewards_count: int # 把背包详情脱敏成只告诉玩家"10件"
+    pending_rewards_count: int          # 背包详情脱敏为只告诉玩家数量
 
 # -----------------
 # 请求部分
@@ -42,39 +37,38 @@ class PveSessionResponse(BaseModel):
 class EnterRegionRequest(BaseModel):
     region_id: str
     mothership_id: Optional[str] = None
-    locked_mechas: List[int] = [] # 用户选择要带进副本的 user_mechas.id 列表
-    idempotency_key: Optional[str] = None # 用于防止重复请求创建多个会话
+    locked_mechas: List[int] = []       # 用户选择要带进副本的 user_mechas.id 列表
+    idempotency_key: Optional[str] = None  # 用于防止重复请求创建多个会话
 
-class MoveRequest(BaseModel):
-    target_node_id: int
-    
+class AdvanceRequest(BaseModel):
+    """推进到下一事件的请求（无需额外参数，服务端按序列推进）"""
+    pass
+
 class EngageRequest(BaseModel):
-    node_id: int # 虽然战斗通常在 current_node 触发，显式传递增加校验
+    event_index: int  # 触发战斗的事件索引，必须与 current_index 一致
 
 class InteractRequest(BaseModel):
-    action: str # "open_chest" / "clear_debris" 等
+    action: str  # "open_chest" / "skip_event" 等
 
 class ExtractRequest(BaseModel):
-    exit_method: str # "BOSS_CLEAR" (通关) 或者是 "VOLUNTARY_EXIT" (半途撤离) 或 "EMERGENCY_EXIT"
-    
+    exit_method: str  # "BOSS_CLEAR" / "VOLUNTARY_EXIT" / "EMERGENCY_EXIT"
+
 # -----------------
 # 行为返回部分
 # -----------------
-class MoveResponse(BaseModel):
-    reached_node_id: int
-    path_taken: List[int]
-    truncated: bool
-    truncation_reason: Optional[str]
-    triggered_event: Optional[str] # NodeType.name
-    revealed_nodes: List[int] # 本次揭示了哪些节点的ID，让前端播放云雾散去动画
+class AdvanceResponse(BaseModel):
+    """推进事件后的返回：描述已进入的新事件"""
+    new_event_index: int
+    current_event: Optional[EventInfo]   # 如果序列完成则为 None
+    sequence_complete: bool
 
 class BattleResultResponse(BaseModel):
     outcome: str
     rounds_fought: int
     player_states: List[PveEntityState]
-    enemy_state: Optional[PveEntityState] # DRAW的车轮战残局才会返回
+    enemy_state: Optional[PveEntityState]  # DRAW 的车轮战残局才会返回
     credits_earned: int
-    loot_drops: List[Dict[str, Any]] # 本次战斗刚获得的临时收容掉落
+    loot_drops: List[Dict[str, Any]]       # 本次战斗刚获得的临时收容掉落
 
 class FinalizeResponse(BaseModel):
     exit_method: str
@@ -82,4 +76,4 @@ class FinalizeResponse(BaseModel):
     final_equips: int
     original_items: int
     final_items: int
-    received_items_detail: Optional[Dict[str, Any]] = None # (如果有必要，可以返回带回去的明细)
+    received_items_detail: Optional[Dict[str, Any]] = None

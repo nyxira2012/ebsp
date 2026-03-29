@@ -2,6 +2,10 @@ import pytest
 from src.pve.map_generator import TileMapGenerator, ContentPopulator, PathValidator
 from src.pve.enums import NodeType
 
+# DEPRECATED: 地图生成器测试已随地图系统一同迁移至 Doc 13。
+# 请参阅 docs/13.map_system.md。后续独立实装大地图系统时再行解除跳过。
+pytestmark = pytest.mark.skip(reason="Map generator moved to Doc 13 (docs/13.map_system.md), pending standalone implementation.")
+
 def test_tile_generation_and_population():
     """测试真正的地块拼装和连通性！"""
     
@@ -54,3 +58,35 @@ def test_tile_generation_and_population():
     
     print(f"Gen Success! Tot nodes: {len(populated_graph.nodes)}, Hidden: {len(hiddens)}, shortest_path: {plen}")
     
+
+def test_event_sequence_generator():
+    """测试 EventSequenceGenerator 是否按配置生成正确的事件列表"""
+    from src.pve.event_generator import EventSequenceGenerator
+    from src.pve.enums import EventType
+    from unittest.mock import Mock
+    
+    mock_region = Mock()
+    mock_region.event_count_range = [5, 5]
+    mock_region.boss_template = "boss_x"
+    mock_region.elite_pool = ["elite_a"]
+    mock_region.normal_pool = ["mob_b"]
+    # 强制全部随机出战斗事件
+    mock_region.event_weights = {
+        "COMBAT": 100,
+        "ELITE_COMBAT": 0,
+        "LOOT": 0,
+        "EVENT": 0
+    }
+    
+    seq = EventSequenceGenerator.generate(mock_region)
+    assert seq.total_events == 5
+    assert seq.current_index == 0
+    
+    # 前 4 个应该是 COMBAT
+    for i in range(4):
+        assert seq.events[i].event_type == EventType.COMBAT
+        assert seq.events[i].event_id == "mob_b"
+        
+    # 第 5 个必须是 BOSS
+    assert seq.events[4].event_type == EventType.BOSS_COMBAT
+    assert seq.events[4].event_id == "boss_x"

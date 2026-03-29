@@ -267,9 +267,8 @@ class PveSession(Base, TimestampMixin):
     
     region_id: Mapped[str] = mapped_column(String(50))
     current_layer: Mapped[int] = mapped_column(Integer, default=1)
-    current_node: Mapped[int] = mapped_column(Integer, default=0)
     
-    # 完整会话状态 JSON Blob（MapGraph + 双方 EntityState + pending_rewards）
+    # 完整会话状态 JSON Blob（EventSequence + 双方 EntityState + pending_rewards）
     session_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     
     # 幂等性约束：防止重复领取

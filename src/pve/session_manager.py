@@ -1,9 +1,9 @@
 import time
 from typing import Optional, Dict, Any
 
-from src.pve.models import PveSessionData, PveSquadState, PveEntityState
+from src.pve.models import PveSessionData, PveSquadState, PveEntityState, EventSequence
 from src.pve.enums import SessionStatus
-from src.pve.map_generator.tile_map_generator import TileMapGenerator
+from src.pve.event_generator import EventSequenceGenerator
 from src.factory import MechaFactory
 
 class PveSessionManager:
@@ -20,7 +20,7 @@ class PveSessionManager:
     def create_session(cls, user_id: int, region_id: str, mothership_config: Any, locked_config: dict, loader: Any = None) -> PveSessionData:
         """初始化一个全新的 PVE 核心会话。
 
-        该过程包含地图生成、地格事件散布、以及根据战前锁定配置初始化队伍状态。
+        该过程包含事件序列生成，以及根据战前锁定配置初始化队伍状态。
 
         Args:
             user_id (int): 所属玩家 ID。
@@ -32,35 +32,18 @@ class PveSessionManager:
         Returns:
             PveSessionData: 创建成功的会话实例对象。
         """
-        # 1. 临时准入检查（由上层处理，或在这）
-        
-        # 2. 生成地图 (调用 MapGenerator)
-        mg = TileMapGenerator()
-        
-        # 尝试从 loader 解析 region_id，决定地图大区长宽
-        grid_w, grid_h = 4, 4
+        # 1. 尝试从 loader 获取区域配置，供事件序列生成使用
+        region_config = None
         if loader:
             try:
                 region_config = loader.get_region_config(region_id)
-                r_size = getattr(region_config, 'map_size', [4, 4])
-                grid_w, grid_h = r_size[0], r_size[1]
             except Exception:
                 pass
-                
-        graph = mg.generate(grid_w=grid_w, grid_h=grid_h)
-        
-        from src.pve.map_generator.content_populator import ContentPopulator
-        config = {
-            "boss_template": "boss_default",
-            "elite_pool": ["elite_1", "elite_2"],
-            "normal_pool": ["mob_1", "mob_2"],
-            "hidden_encounter_rate": 0.20,
-            "treasure_count": [1, 3]
-        }
-        graph = ContentPopulator.populate(graph, config)
-        
+
+        # 2. 生成事件序列（替代原地图生成）
+        event_sequence: EventSequence = EventSequenceGenerator.generate(region_config)
+
         # 3. 构造队伍状态
-        # 从 locked_config 与 factory 构造真实战前状态
         members = []
         mechas_config = locked_config.get("mechas", [])
         
@@ -85,9 +68,8 @@ class PveSessionManager:
             user_id=user_id,
             region_id=region_id,
             current_layer=1,
-            current_node_id=graph.start_node_id,
             status=SessionStatus.ACTIVE,
-            map_graph=graph,
+            event_sequence=event_sequence,
             squad_state=squad_state,
             created_at=time.time(),
             last_heartbeat=time.time()

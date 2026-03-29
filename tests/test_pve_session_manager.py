@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.pve.session_manager import PveSessionManager
-from src.pve.models import PveSessionData, PveSquadState, MapGraph
+from src.pve.models import PveSessionData, PveSquadState, EventSequence
 from src.pve.enums import SessionStatus
 
 
@@ -44,9 +44,13 @@ def mock_loader():
     """模拟 DataLoader"""
     loader = Mock()
 
-    # Mock region config
+    # Mock region config — 设置 event_count_range 供 EventSequenceGenerator 使用
     region_config = Mock()
-    region_config.map_size = [3, 3]
+    region_config.event_count_range = [3, 5]
+    region_config.boss_template = "test_boss"
+    region_config.elite_pool = ["elite_1"]
+    region_config.normal_pool = ["mob_1"]
+    region_config.event_weights = None  # 使用默认权重
     loader.get_region_config.return_value = region_config
 
     return loader
@@ -81,11 +85,16 @@ def test_create_session_basic(reset_session_manager, basic_locked_config, mock_l
     assert session.region_id == "test_region"
     assert session.status == SessionStatus.ACTIVE
     assert session.current_layer == 1
-    assert session.current_node_id == 0  # start_node_id
 
-    # 验证地图已生成
-    assert session.map_graph is not None
-    assert len(session.map_graph.nodes) > 0
+    # 验证事件序列已生成
+    assert session.event_sequence is not None
+    assert isinstance(session.event_sequence, EventSequence)
+    assert session.event_sequence.total_events > 0
+    # 序列加个 Boss，总事件 >= 2
+    assert session.event_sequence.total_events >= 2
+    # 尾部事件必须是 Boss
+    from src.pve.enums import EventType
+    assert session.event_sequence.events[-1].event_type == EventType.BOSS_COMBAT
 
     # 验证队伍状态
     assert len(session.squad_state.members) == 1
@@ -107,9 +116,9 @@ def test_create_session_without_loader(reset_session_manager, basic_locked_confi
     )
 
     assert session is not None
-    # 应使用默认配置生成地图（具体节点数取决于生成器实现）
-    assert len(session.map_graph.nodes) > 0
-    assert session.map_graph.start_node_id is not None
+    # 应使用默认配置生成事件序列
+    assert session.event_sequence is not None
+    assert session.event_sequence.total_events > 0
 
 
 def test_create_session_multiple_mechas(reset_session_manager, mock_loader, mock_mothership_config):
