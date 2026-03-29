@@ -220,7 +220,7 @@ class MothershipConfig(BaseModel):
     tier: str                  # 稀有度/档次
 
     # 核心属性：会话寿命与探索表现 (PVE Session Lifespan Hooks)
-    engine_level: int          # 航行引擎等级 (决定微观地图单步跨越格数)
+    engine_level: int          # 航行引擎等级 (决定每次探索的事件跨越数或推进效率)
     hp_regen_per_min: int      # HP 恢复速率 (数值/分钟)
     en_regen_per_min: int      # EN 恢复速率 (数值/分钟)
     region_level: int          # 可进入区域等级 1-6

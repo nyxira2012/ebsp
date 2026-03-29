@@ -1,111 +1,6 @@
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, ConfigDict, Field
-from .enums import SessionStatus, NodeType, EventType
-
-# -----------------
-# 微观地图 (Map)
-# -----------------
-class MapNode(BaseModel):
-    """地图上的单个节点。
-
-    Attributes:
-        id (int): 节点全局唯一 ID。
-        x (int): 节点逻辑 X 坐标。
-        y (int): 节点逻辑 Y 坐标。
-        node_type (NodeType): 节点类型 (如 START, BOSS, ENEMY_VISIBLE)。
-        event_id (Optional[str]): 关联的事件或配置 ID (如敌人模板 ID)。
-        revealed (bool): 该地块是否已对玩家揭示（战争迷雾）。
-        cleared (bool): 该地块的事件是否已被处理完毕。
-        neighbors (List[int]): 相邻节点的 ID 列表。
-    """
-    id: int
-    x: int
-    y: int
-    node_type: NodeType = NodeType.EMPTY
-    event_id: Optional[str] = None
-    revealed: bool = False
-    cleared: bool = False
-    neighbors: List[int] = Field(default_factory=list)
-
-class MapGraph(BaseModel):
-    """点阵地图的核心图数据结构。
-
-    使用邻接表存储拓扑关系，支持非规则网格。
-
-    Attributes:
-        width (int): 网格参考宽度。
-        height (int): 网格参考高度。
-        nodes (Dict[int, MapNode]): 节点 ID 到节点对象的映射字典。
-        start_node_id (int): 玩家初始传送点的节点 ID。
-        boss_node_id (int): 最终关底目标点的节点 ID。
-    """
-    width: int
-    height: int
-    nodes: Dict[int, MapNode] = Field(default_factory=dict)
-    start_node_id: int = 0
-    boss_node_id: int = 0
-
-    def get_node(self, node_id: int) -> Optional[MapNode]:
-        """获取指定 ID 的节点。
-
-        Args:
-            node_id (int): 目标节点 ID。
-
-        Returns:
-            Optional[MapNode]: 节点实例，若不存在则返回 None。
-        """
-        return self.nodes.get(node_id)
-
-    def get_neighbors(self, node_id: int) -> List[MapNode]:
-        """获取指定节点的所有相邻节点对象。
-
-        Args:
-            node_id (int): 核心节点 ID。
-
-        Returns:
-            List[MapNode]: 相邻节点的实例列表。
-        """
-        node = self.get_node(node_id)
-        if not node:
-            return []
-        return [self.nodes[n_id] for n_id in node.neighbors if n_id in self.nodes]
-
-    def find_path(self, start_id: int, end_id: int) -> Optional[List[int]]:
-        """计算两个节点之间的最短路径。
-
-        使用 BFS 算法实现。
-
-        Args:
-            start_id (int): 起始节点 ID。
-            end_id (int): 终点节点 ID。
-
-        Returns:
-            Optional[List[int]]: 包含路径上所有节点 ID 的列表（含起终点）。
-                如果路径不连通，则返回 None。
-        """
-        from collections import deque
-        if start_id == end_id:
-            return [start_id]
-            
-        queue = deque([[start_id]])
-        visited = {start_id}
-        
-        while queue:
-            path = queue.popleft()
-            curr = path[-1]
-            if curr == end_id:
-                return path
-                
-            node = self.get_node(curr)
-            if not node:
-                continue
-                
-            for neighbor_id in node.neighbors:
-                if neighbor_id not in visited:
-                    visited.add(neighbor_id)
-                    queue.append(path + [neighbor_id])
-                    
-        return None
+from .enums import SessionStatus, EventType
 
 # -----------------
 # 事件序列 (Event Sequence)
@@ -142,7 +37,7 @@ class EventSequence(BaseModel):
 
     @property
     def total_events(self) -> int:
-        """TODO 列表长度。"""
+        """事件序列的总事件数。"""
         return len(self.events)
 
     def current_event(self) -> Optional["PveEvent"]:
@@ -198,8 +93,8 @@ class PveSquadState(BaseModel):
     locked_config: Dict[str, Any] = Field(default_factory=dict)
 
 class PveEnemyState(BaseModel):
-    """特定格子敌方NPC残血/特殊状态"""
-    node_id: int
+    """特定事件中敌方NPC的残血/特殊状态"""
+    event_index: int
     entity_state: PveEntityState
     enemy_template_id: str
 

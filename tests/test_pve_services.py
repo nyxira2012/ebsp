@@ -137,6 +137,20 @@ class TestPveEntryService:
         mothership_config.region_level = 5
         loader.get_mothership_config.return_value = mothership_config
 
+        # Mock 区域配置
+        region_config = Mock()
+        region_config.event_count_range = [5, 8]
+        region_config.boss_template = "boss_1"
+        region_config.elite_pool = ["elite_1", "elite_2"]
+        region_config.normal_pool = ["mob_1", "mob_2", "mob_3"]
+        region_config.event_weights = {
+            "COMBAT": 50,
+            "ELITE_COMBAT": 20,
+            "LOOT": 15,
+            "EVENT": 15
+        }
+        loader.get_region_config.return_value = region_config
+
         # Mock 机体配置（提供完整的 MechaConfig）
         mecha_config = MechaConfig(
             id="rx78",

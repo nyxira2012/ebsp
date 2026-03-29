@@ -103,7 +103,7 @@ class BattleBridge:
         player_snapshot.final_max_hp = player_state.max_hp
         player_snapshot.final_max_en = player_state.max_en
         
-        # 2. 还原或创建敌方机体（从事件序列读取，不再依赖 map_graph）
+        # 2. 还原或创建敌方机体
         events = session.event_sequence.events
         if event_index < 0 or event_index >= len(events):
             raise ValueError(f"Event index {event_index} out of range in event sequence")
@@ -111,8 +111,7 @@ class BattleBridge:
         current_event = events[event_index]
         enemy_template_id = current_event.event_id or "zaku2"
 
-        # node_id 兼容旧 API，以 event_index 为 key 存储 enemy_states
-        node_id = event_index
+        # event_index 作为 key 存储 enemy_states
         try:
             enemy_config = loader.get_mecha_config(enemy_template_id)
         except KeyError:
@@ -120,8 +119,8 @@ class BattleBridge:
             
         enemy_snapshot = mecha_factory.create_mecha_snapshot(enemy_config, weapon_configs=loader.equipments)
         
-        if node_id in session.enemy_states:
-            enemy_pve_state = session.enemy_states[node_id].entity_state
+        if event_index in session.enemy_states:
+            enemy_pve_state = session.enemy_states[event_index].entity_state
             # 回血 (通常敌方不回血或取决于设计，目前设定敌方不获取母舰回血)
             enemy_snapshot.current_hp = enemy_pve_state.current_hp
             enemy_snapshot.current_en = enemy_pve_state.current_en
@@ -129,15 +128,15 @@ class BattleBridge:
             enemy_snapshot.final_max_en = enemy_pve_state.max_en
         else:
             enemy_pve_state = PveEntityState(
-                entity_id=f"enemy_{node_id}",
+                entity_id=f"enemy_{event_index}",
                 current_hp=enemy_snapshot.max_hp,
                 current_en=enemy_snapshot.max_en,
                 max_hp=enemy_snapshot.max_hp,
                 max_en=enemy_snapshot.max_en,
                 last_combat_time=current_time
             )
-            session.enemy_states[node_id] = PveEnemyState(
-                node_id=node_id,
+            session.enemy_states[event_index] = PveEnemyState(
+                event_index=event_index,
                 entity_state=enemy_pve_state,
                 enemy_template_id=enemy_template_id
             )
@@ -174,8 +173,8 @@ class BattleBridge:
             # 将事件标记为已清除
             if event_index < len(session.event_sequence.events):
                 session.event_sequence.events[event_index].cleared = True
-            if node_id in session.enemy_states:
-                del session.enemy_states[node_id]
+            if event_index in session.enemy_states:
+                del session.enemy_states[event_index]
                 
         # 6. 生成奖励 Loot
         loot_drops = []

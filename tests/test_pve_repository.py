@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from src.pve.repository import PveRepository
-from src.pve.models import PveSessionData, PveSquadState, MapGraph, PveEntityState, PvePendingRewards
-from src.pve.enums import SessionStatus
+from src.pve.models import PveSessionData, PveSquadState, PveEntityState, PvePendingRewards, EventSequence, PveEvent
+from src.pve.enums import SessionStatus, EventType
 from src.database.models import PveSession
 import time
 
@@ -19,9 +19,15 @@ import time
 @pytest.fixture
 async def sample_session_data():
     """创建示例会话数据"""
-    from src.pve.map_generator.simple_generator import SimpleMapGenerator
-
-    graph = SimpleMapGenerator.generate("test_region", layer=1)
+    # 使用事件序列替代地图
+    event_sequence = EventSequence(
+        events=[
+            PveEvent(index=0, event_type=EventType.COMBAT, cleared=True),
+            PveEvent(index=1, event_type=EventType.LOOT, cleared=True),
+            PveEvent(index=2, event_type=EventType.BOSS_COMBAT, event_id="boss_1")
+        ],
+        current_index=2
+    )
 
     members = [
         PveEntityState(
@@ -41,9 +47,8 @@ async def sample_session_data():
         user_id=1,
         region_id="test_region",
         current_layer=1,
-        current_node_id=0,
         status=SessionStatus.ACTIVE,
-        map_graph=graph,
+        event_sequence=event_sequence,
         squad_state=squad_state,
         pending_rewards=PvePendingRewards(equipments=[], items=[]),
         credits_earned=0,
@@ -65,7 +70,6 @@ async def test_get_by_user_with_active_session(db_session: AsyncSession, sample_
         status="active",
         region_id="test_region",
         current_layer=1,
-        current_node=0,
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_1"
     )
@@ -90,7 +94,6 @@ async def test_get_by_user_with_paused_session(db_session: AsyncSession, sample_
         status="paused",
         region_id="test_region",
         current_layer=1,
-        current_node=5,
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_2"
     )
@@ -123,7 +126,6 @@ async def test_get_by_user_ignores_completed_status(db_session: AsyncSession, sa
         status="completed",  # 不在 active/paused 中
         region_id="test_region",
         current_layer=1,
-        current_node=0,
         session_data=sample_session_data.model_dump(),
         idempotency_key="pve_1_3"
     )
@@ -148,7 +150,6 @@ async def test_get_by_user_multiple_sessions(db_session: AsyncSession, sample_se
             status="active" if i < 2 else "paused",
             region_id=f"region_{i}",
             current_layer=1,
-            current_node=i,
             session_data=sample_session_data.model_dump(),
             idempotency_key=f"pve_1_{i+10}"
         )
@@ -206,9 +207,8 @@ async def test_save_or_update_serializes_data(db_session: AsyncSession, sample_s
 @pytest.mark.asyncio
 async def test_save_or_update_with_different_status(db_session: AsyncSession):
     """测试保存不同状态的会话"""
-    from src.pve.map_generator.simple_generator import SimpleMapGenerator
+    event_sequence = EventSequence(events=[])
 
-    graph = SimpleMapGenerator.generate("test", layer=1)
     members = [PveEntityState(
         entity_id="test", current_hp=100, current_en=50,
         max_hp=100, max_en=50, last_combat_time=time.time(), is_alive=True
@@ -222,9 +222,8 @@ async def test_save_or_update_with_different_status(db_session: AsyncSession):
             user_id=2,
             region_id="test",
             current_layer=1,
-            current_node_id=0,
             status=status,
-            map_graph=graph,
+            event_sequence=event_sequence,
             squad_state=squad,
             pending_rewards=PvePendingRewards(equipments=[], items=[]),
             credits_earned=0,
@@ -262,10 +261,9 @@ async def test_save_or_update_generates_idempotency_key(db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_save_or_update_multiple_users(db_session: AsyncSession):
     """测试保存多个用户的会话"""
-    from src.pve.map_generator.simple_generator import SimpleMapGenerator
-
     for user_id in [1, 2, 3]:
-        graph = SimpleMapGenerator.generate(f"region_{user_id}", layer=1)
+        event_sequence = EventSequence(events=[])
+
         members = [PveEntityState(
             entity_id=f"mecha_{user_id}", current_hp=100, current_en=50,
             max_hp=100, max_en=50, last_combat_time=time.time(), is_alive=True
@@ -277,9 +275,8 @@ async def test_save_or_update_multiple_users(db_session: AsyncSession):
             user_id=user_id,
             region_id=f"region_{user_id}",
             current_layer=1,
-            current_node_id=0,
             status=SessionStatus.ACTIVE,
-            map_graph=graph,
+            event_sequence=event_sequence,
             squad_state=squad,
             pending_rewards=PvePendingRewards(equipments=[], items=[]),
             credits_earned=0,
