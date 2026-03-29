@@ -6,7 +6,7 @@
 
 | 层级 | 文档要求 | 现有代码状态 | 差距 |
 |:---|:---|:---|:---|
-| **L1 战略层** (Region) | 大区域准入校验、进度解锁 | `RegionConfig` 模型存在但仅有 3 字段；无 `user_pve_progress` 表 | 🔴 缺 DB 进度表、缺准入拦截 |
+| **L1 战略层** (Region) | 副本准入校验、进度解锁 | `RegionConfig` 模型存在但仅有 3 字段；无 `user_pve_progress` 表 | 🔴 缺 DB 进度表、缺准入拦截 |
 | **L2 战术层** (Zone) | 子区域解锁链、隐藏节点概率刷新 | **完全缺失** — 没有 Zone 概念 | 🔴 从零开始 |
 | **L3 执行层** (Sequence) | 事件序列生成与推进 | ✅ 已有基础实现 | 🟡 需补全幂等校验、脱敏逻辑 |
 | 三层快照 | Layer 1/2/3 完整数据流 | ✅ 已有基础实现 | 🟡 恢复计算通路可用，需整理 |
@@ -54,7 +54,7 @@ Phase 5: 基础设施 — 心跳守护 + 清理遗留
 **为什么**：当前 `regions.json` 只有 Region 级别信息（id/name/min_region_level/base_ilvl），没有 Zone（子区域）定义。文档要求每个 Zone 拥有独立的事件权重、怪物池、Boss 模板，且 Zone 之间存在前置解锁链。
 
 **关键设计决策**：
-- Zone 作为 Region 的子文档嵌套，而非独立文件 — 因为 Zone 的怪物池/权重在不同 Region 间大量变化，聚合在一起便于大区域级别管控
+- Zone 作为 Region 的子文档嵌套，而非独立文件 — 因为 Zone 的怪物池/权重在不同 Region 间大量变化，聚合在一起便于副本级别管控
 - `unlock_requires: null` 表示首发节点（无前置），一个 Region 至少一个首发 Zone
 
 **目标数据结构示例**：
@@ -123,7 +123,7 @@ class ZoneConfig(BaseModel):
     spawn_chance: Optional[float] = None  # 仅隐藏节点
 
 class RegionConfig(BaseModel):
-    """L1 大区域配置 — 增加 zones 子项"""
+    """L1 副本配置 — 增加 zones 子项"""
     id: str
     name: str
     min_region_level: int
@@ -136,7 +136,7 @@ class RegionConfig(BaseModel):
 
 **做什么**：在 [src/database/models.py](file:///Users/dupidupi/ebsp/src/database/models.py) 中新增用户 PVE 进度表。
 
-**为什么**：文档要求 `user_pve_progress` 记录每个大区域下各节点的 cleared/locked/hidden_available 状态，并且隐藏节点的刷新结果需持久化防刷。
+**为什么**：文档要求 `user_pve_progress` 记录每个副本下各节点的 cleared/locked/hidden_available 状态，并且隐藏节点的刷新结果需持久化防刷。
 
 **设计决策**：
 - 采用 **JSONB** 存储进度字典（与 Doc 7 混合架构一致）
@@ -167,7 +167,7 @@ class UserPveProgress(Base, TimestampMixin):
 ## 3. Phase 2: L1 战略层 — 区域准入与进度
 
 ### 目标
-实装大区域准入校验和进度记录。
+实装副本准入校验和进度记录。
 
 ### 3.1 PveProgressService（新建）
 
@@ -176,11 +176,11 @@ class UserPveProgress(Base, TimestampMixin):
 **核心方法**：
 | 方法 | 职责 |
 |:---|:---|
-| `get_region_status(user_id, region_id)` | 返回该大区域下所有 Zone 的解锁状态 |
+| `get_region_status(user_id, region_id)` | 返回该副本下所有 Zone 的解锁状态 |
 | `unlock_zone(user_id, region_id, zone_id)` | 将指定 Zone 标记为已解锁 |
 | `mark_zone_cleared(user_id, region_id, zone_id)` | 通关后标记 cleared + 触发后续 Zone 解锁链 |
 | `roll_hidden_zone(user_id, region_id)` | 概率刷新隐藏节点并持久化结果 |
-| `initialize_progress(user_id, region_id)` | 首次进入大区域时初始化进度（开放首发节点） |
+| `initialize_progress(user_id, region_id)` | 首次进入副本时初始化进度（开放首发节点） |
 
 **设计要点**：
 - 解锁链通过配置中的 `unlock_requires` 驱动，`mark_zone_cleared` 完成后自动遍历所有子 Zone，将 `unlock_requires == 当前 zone_id` 的节点标记为 unlocked
@@ -206,7 +206,7 @@ class UserPveProgress(Base, TimestampMixin):
 - 修改 `POST /pve/enter-region` — 请求体新增 `zone_id` 字段，服务端校验该 Zone 已解锁后才生成事件序列
 
 > [!IMPORTANT]
-> 这意味着 `PveSessionData` 需要新增一个 `zone_id` 字段来记录当前进行的子区域节点。
+> 这意味着 `PveSessionData` 需要新增一个 `zone_id` 字段来记录当前进行的子子区域。
 
 ---
 

@@ -82,5 +82,49 @@
         "mecha_proficiency": 1500,
         "innate_skills": ["skill_newtype_sync"],
         "contribution_rate": 0.35
+    },
+    {
+        "id": "pilot_ai_passive",
+        "name": "被动式AI",
+        "portrait_id": "p_ai_passive",
+        "stat_shooting": 50,
+        "stat_melee": 50,
+        "stat_awakening": 50,
+        "stat_defense": 50,
+        "stat_reaction": 50,
+        "innate_skills": []
+    },
+    {
+        "id": "pilot_ai_auto",
+        "name": "自主型AI",
+        "portrait_id": "p_ai_auto",
+        "stat_shooting": 60,
+        "stat_melee": 60,
+        "stat_awakening": 60,
+        "stat_defense": 60,
+        "stat_reaction": 60,
+        "innate_skills": []
+    },
+    {
+        "id": "pilot_ai_sentry",
+        "name": "警戒机",
+        "portrait_id": "p_ai_sentry",
+        "stat_shooting": 70,
+        "stat_melee": 70,
+        "stat_awakening": 70,
+        "stat_defense": 70,
+        "stat_reaction": 70,
+        "innate_skills": []
+    },
+    {
+        "id": "pilot_ai_evolved",
+        "name": "自我强化智能体",
+        "portrait_id": "p_ai_evolved",
+        "stat_shooting": 80,
+        "stat_melee": 80,
+        "stat_awakening": 80,
+        "stat_defense": 80,
+        "stat_reaction": 80,
+        "innate_skills": []
     }
 ]

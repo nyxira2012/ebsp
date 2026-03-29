@@ -118,5 +118,61 @@
             "wpn_funnel_system",
             "wpn_railgun"
         ]
+    },
+    {
+        "id": "mech_grunt",
+        "name": "旧式防卫工兵",
+        "portrait_id": "p_m_grunt",
+        "model_asset": "grunt_bot",
+        "series": "GENERIC",
+        "init_hp": 500,
+        "init_en": 100,
+        "init_armor": 500,
+        "init_mobility": 50,
+        "init_hit": 10.0,
+        "init_precision": 10.0,
+        "init_crit": 5.0,
+        "init_dodge": 5.0,
+        "init_parry": 5.0,
+        "init_block": 10.0,
+        "init_block_red": 50,
+        "init_en_regen_rate": 1.0,
+        "init_en_regen_fixed": 1,
+        "slots": [
+            "WEAPON",
+            "EQUIP"
+        ],
+        "fixed_weapons": [
+            "wpn_machine_gun"
+        ]
+    },
+    {
+        "id": "mech_boss_weak",
+        "name": "失控的镇守原型机",
+        "portrait_id": "p_m_boss_weak",
+        "model_asset": "boss_prototype",
+        "series": "GENERIC",
+        "init_hp": 1000,
+        "init_en": 150,
+        "init_armor": 800,
+        "init_mobility": 60,
+        "init_hit": 15.0,
+        "init_precision": 15.0,
+        "init_crit": 10.0,
+        "init_dodge": 10.0,
+        "init_parry": 10.0,
+        "init_block": 15.0,
+        "init_block_red": 80,
+        "init_en_regen_rate": 1.5,
+        "init_en_regen_fixed": 2,
+        "slots": [
+            "WEAPON",
+            "WEAPON",
+            "EQUIP"
+        ],
+        "fixed_weapons": [
+            "wpn_beam_rifle",
+            "wpn_heat_axe"
+        ]
     }
 ]
