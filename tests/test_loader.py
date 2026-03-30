@@ -223,6 +223,73 @@ def temp_data_dir():
     with open(affixes_file, 'w', encoding='utf-8') as f:
         json.dump(affixes_data, f, ensure_ascii=False, indent=2)
 
+    # 7. instances.json (InstanceConfig)
+    instances_data = [
+        {
+            "instance_id": "test_instance",
+            "name": "测试副本",
+            "base_ilvl": 10,
+            "description": "用于测试的副本",
+            "zones": {
+                "test_zone": {
+                    "zone_id": "test_zone",
+                    "name": "测试区域",
+                    "type": "NORMAL",
+                    "ilvl_bonus": 0,
+                    "drop_rate_mult": 1.0,
+                    "sequence": {
+                        "length": 5,
+                        "fixed_encounters": {
+                            "5": {
+                                "index": 5,
+                                "type": "BOSS_COMBAT",
+                                "template_id": "test_boss"
+                            }
+                        },
+                        "random_encounter_chance": 0.4,
+                        "total_random_encounters": None,
+                        "event_chance": 0.2
+                    }
+                }
+            },
+            "enemy_templates": {
+                "test_boss": {
+                    "template_id": "test_boss",
+                    "name": "测试Boss",
+                    "mecha_id": "m_rx78",
+                    "pilot_id": "p_amuro",
+                    "scaling": {
+                        "hp_mult": 1.0,
+                        "damage_mult": 1.0,
+                        "armor_mult": 1.0,
+                        "mobility_mult": 1.0
+                    }
+                },
+                "mob_1": {
+                    "template_id": "mob_1",
+                    "name": "杂兵1",
+                    "mecha_id": "m_rx78",
+                    "pilot_id": "p_char",
+                    "scaling": {
+                        "hp_mult": 0.5,
+                        "damage_mult": 0.5,
+                        "armor_mult": 0.5,
+                        "mobility_mult": 0.5
+                    }
+                }
+            },
+            "loot_tables": {
+                "global": {
+                    "common_drops": [],
+                    "boss_drops": []
+                }
+            }
+        }
+    ]
+    instances_file = temp_path / "instances.json"
+    with open(instances_file, 'w', encoding='utf-8') as f:
+        json.dump(instances_data, f, ensure_ascii=False, indent=2)
+
     yield temp_path
 
     # 清理临时目录

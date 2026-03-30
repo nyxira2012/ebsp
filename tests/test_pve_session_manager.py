@@ -51,7 +51,22 @@ def mock_loader():
     zone_config.elite_pool = ["elite_1"]
     zone_config.normal_pool = ["mob_1"]
     zone_config.event_weights = None  # 使用默认权重
+
+    # Mock sequence 配置（供 instance_zone_config 使用）
+    zone_config.sequence = Mock()
+    zone_config.sequence.length = 3
+    zone_config.sequence.fixed_encounters = {}
+    zone_config.sequence.random_encounter_chance = 0.4
+    zone_config.sequence.total_random_encounters = None
+    zone_config.sequence.event_chance = 0.2
+
     loader.get_zone_config.return_value = zone_config
+
+    # Mock instance_zone_config（会优先使用）
+    instance_zone_config = Mock()
+    instance_zone_config.zone_id = "test_zone"
+    instance_zone_config.sequence = zone_config.sequence
+    loader.get_instance_zone_config.return_value = instance_zone_config
 
     return loader
 
@@ -195,6 +210,7 @@ def test_create_session_loader_exception(reset_session_manager, basic_locked_con
     bad_loader = Mock()
     bad_loader.get_region_config.side_effect = Exception("Loader error")
     bad_loader.get_zone_config.side_effect = Exception("Loader error")
+    bad_loader.get_instance_zone_config.side_effect = Exception("Loader error")
 
     session = PveSessionManager.create_session(
         user_id=1,

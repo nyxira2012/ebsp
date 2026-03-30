@@ -275,14 +275,125 @@ class AffixConfig(BaseModel):
     min_ilvl: int = 1          # 获取门槛 ilvl
     weight: int = 1000         # 抽取权重
     slot_tags: List[str] = []      # 可用槽位标识，如 ["WEAPON", "EQUIP"]
-    
+
     # === type="stat" 时特有字段 ===
     target: Optional[str] = None   # 加成目标属性名，如 "final_hit", "final_crit", "init_hp"
     base_value: float = 0.0        # 基础数值
     ilvl_scale: float = 0.0        # 每装等加成系数
-    
+
     # === type="skill" 时特有字段 ===
     skill_id: Optional[str] = None # 绑定的被动技能 ID
+
+
+# ============================================================================
+# 副本配置模型 (Instance Configuration - Doc 13)
+# ============================================================================
+
+class ScalingConfig(BaseModel):
+    """敌方属性缩放系数配置"""
+    hp_mult: float = 1.0       # HP 倍率
+    damage_mult: float = 1.0   # 伤害倍率
+    armor_mult: float = 1.0    # 装甲倍率
+    mobility_mult: float = 1.0 # 机动倍率
+
+
+class EnemyTemplateConfig(BaseModel):
+    """敌方模板配置 (data/instances.json)
+
+    根据 Doc 13：通过组件拼装 + 动态缩放生成敌人。
+    敌方使用机体自带的 fixed_weapons，无需单独配置武器。
+    """
+    template_id: str
+    name: str
+    mecha_id: str              # 装配机体（从 mechas.json 选择）
+    pilot_id: str              # 驾驶员（从 pilots.json 选择）
+    scaling: ScalingConfig = Field(default_factory=ScalingConfig)  # 难度缩放系数
+
+
+class LootEntryConfig(BaseModel):
+    """单个掉落条目配置"""
+    type: str = "equipment"            # "equipment" 或 "item"
+    equipment_id: Optional[str] = None # 装备 ID（如果是 equipment）
+    item_id: Optional[str] = None      # 道具 ID（如果是 item）
+    chance: float              # 掉落概率 (0.0 ~ 1.0)
+    quantity: int = 1          # 数量
+
+
+class LootTableConfig(BaseModel):
+    """掉落表配置"""
+    # 区域通用掉落池（装备列表，每个有独立掉率）
+    common_drops: List[LootEntryConfig] = Field(default_factory=list)
+
+    # Boss 专有掉落（极低概率的稀有物品）
+    boss_drops: List[LootEntryConfig] = Field(default_factory=list)
+
+
+class FixedEncounterConfig(BaseModel):
+    """固定遭遇配置（序列中特定位置的固定事件）"""
+    index: int                 # 在序列中的位置（1-based，如第5步）
+    type: str                  # 事件类型：COMBAT, ELITE_COMBAT, BOSS_COMBAT, LOOT, EVENT
+    template_id: Optional[str] = None  # 敌方模板 ID（仅 COMBAT 类需要）
+
+
+class ZoneSequenceConfig(BaseModel):
+    """子区域事件序列配置（Doc 13 序列配置规范）"""
+    length: int = 10                    # 序列总长度（步数）
+    fixed_encounters: Dict[str, FixedEncounterConfig] = Field(default_factory=dict)  # 固定位置 {str(index): config}
+    random_encounter_chance: float = 0.4  # 暗雷触发概率
+    total_random_encounters: Optional[int] = None  # 暗雷总次数上限（None 表示不限制）
+    event_chance: float = 0.2          # 补给事件触发概率
+
+
+class InstanceZoneConfig(BaseModel):
+    """副本子区域配置 (data/instances.json)
+
+    Doc 13 区分常规子区域和隐藏子区域。
+    """
+    zone_id: str
+    name: str
+    type: str = "NORMAL"       # NORMAL 或 HIDDEN
+    ilvl_bonus: int = 0        # 掉落装等加成（隐藏区域 +5）
+    drop_rate_mult: float = 1.0  # 掉落率倍率
+
+    # 解锁条件
+    unlock_requires: Optional[str] = None  # 前置 zone_id
+
+    # 隐藏区域特有
+    spawn_chance: Optional[float] = None   # 隐藏区域出现概率
+
+    # 序列配置
+    sequence: ZoneSequenceConfig = Field(default_factory=ZoneSequenceConfig)
+
+
+class InstanceConfig(BaseModel):
+    """副本配置 (data/instances.json)
+
+    Doc 13：副本是玩家进行 PVE 探索的顶层容器。
+    决定背景主题、基础难度底线以及掉落产出。
+
+    与 RegionConfig 的关系：
+    - RegionConfig：用于准入验证和进度追踪
+    - InstanceConfig：用于敌方生成和掉落计算
+    """
+    instance_id: str
+    name: str
+    base_ilvl: int             # 基础掉落装等
+    description: str = ""
+
+    # 子区域配置
+    zones: Dict[str, InstanceZoneConfig] = Field(default_factory=dict)
+
+    # 敌方模板池（全副本共享）
+    enemy_templates: Dict[str, EnemyTemplateConfig] = Field(default_factory=dict)
+
+    # 掉落表
+    loot_tables: Dict[str, LootTableConfig] = Field(default_factory=dict)  # key: zone_id 或 "global"
+
+    @property
+    def id(self) -> str:
+        """兼容 DataLoader 的 id 属性"""
+        return self.instance_id
+
 
 # ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic

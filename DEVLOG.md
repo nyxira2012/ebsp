@@ -2,6 +2,52 @@
 
 ---
 
+## 2026-03-30 PVE 系统测试修复与副本配置重构
+
+> **项目快照**：代码文件 64 个（11442 行）| 设计文档 17 个（5571 行）
+
+### 逻辑变化与核心思路
+
+1. **PVE 系统测试修复与性能优化**
+   - **逻辑变化**：修复了 `src/pve/services.py` 中 `PveEntryService` 的类型推断问题，优化了机体快照创建逻辑。将原有的串行 N+1 查询改为并行批量处理（`asyncio.gather`），显著提升了多机体编队的加载性能。
+   - **设计思路**：解决 Pyright 类型检查器对 `asyncio.gather(*tasks, return_exceptions=True)` 返回值的类型推断问题。通过添加显式类型注解 `snapshot: MechaSnapshot = snapshot_or_error  # type: ignore[assignment]` 明确告知类型检查器异常已被过滤。同时，错误处理策略从"单个失败全盘回滚"改为"跳过失败个体"，提升了系统的容错性。
+   - **测试覆盖**：修复了 `tests/test_pve_core.py` 中 Mock 对象的可迭代性问题，为 `mock_loader` 添加了必要的字典属性（`mechas`、`enemy_templates`），确保测试环境完整模拟生产数据结构。
+
+2. **副本配置系统重构（Doc 13 架构落地）**
+   - **逻辑变化**：实现了基于 `InstanceConfig` 的新副本配置体系，替代原有的单一 `RegionConfig` 模式。新增 `src/models.py` 下的副本配置模型族——`InstanceConfig`、`InstanceZoneConfig`、`EnemyTemplateConfig`、`LootTableConfig`、`ScalingConfig` 等，支持更精细化的内容设计。
+   - **设计思路**：采用**组件化配置架构**（Component-Based Configuration）。副本（Instance）→ 子区域（Zone）→ 事件序列（Sequence）形成三级嵌套结构，设计师可以独立调整每个子区域的序列长度、固定遭遇位置、掉落倍率等参数，无需触及全局配置。
+   - **敌方模板系统**：引入 `EnemyTemplateConfig`，通过"机体 + 驾驶员 + 缩放系数"的拼装模式生成敌人，替代原有硬编码的属性配置。设计师可以复用已有的机体配置，仅调整 `ScalingConfig`（HP/伤害/装甲/机动倍率）快速生成不同难度的敌方单位。
+
+3. **事件生成器增强（支持固定遭遇与暗雷限制）**
+   - **逻辑变化**：重构 `src/pve/event_generator.py` 的 `EventSequenceGenerator`，支持 Doc 13 定义的新配置格式。新增 `fixed_encounters`（固定遭遇位置）和 `total_random_encounters`（暗雷总数限制）参数，改变了原有纯随机生成的序列模式。
+   - **设计思路**：采用**模板填充算法**（Template Filling Algorithm）。首先根据 `fixed_encounters` 配置在序列指定位置（如第 5 步固定 Boss）放置预设事件，剩余槽位再按权重随机填充。这种设计确保了关键剧情节点的固定性，同时保持了探索过程的重玩价值。
+   - **向后兼容**：保留了对旧 `RegionConfig` 格式的支持，通过回退机制（`instance_zone_config or zone_config`）确保现有副本配置无需迁移即可运行。
+
+4. **资源加载器扩展（副本配置热加载）**
+   - **逻辑变化**：`src/loader.py` 新增 `get_instance_config()` 和 `get_instance_zone_config()` 方法，支持从 `data/instances.json` 加载副本配置。扩展现有的 `_load_from_json()` 通用加载方法，统一管理所有静态资源（装备、机体、驾驶员、副本等）。
+   - **设计思路**：保持**单一数据源原则**（Single Source of Truth）。所有副本配置集中存储在 `instances.json`，加载时通过 Pydantic 进行类型校验，避免配置错误导致的运行时异常。设计师修改 JSON 后重启服务即可生效，无需代码变更。
+
+5. **会话管理器优化（支持多配置格式）**
+   - **逻辑变化**：`src/pve/session_manager.py` 的 `create_session()` 方法调整，优先尝试加载 `InstanceZoneConfig`，失败后回退到旧 `RegionConfig`。将配置解析逻辑从"单一来源"改为"优先级回退链"，提升了系统的兼容性。
+   - **设计思路**：采用**优雅降级策略**（Graceful Degradation）。新副本使用 Doc 13 格式，旧副本继续使用 `RegionConfig`，两者共存于同一代码库中。这种设计允许设计师逐步迁移现有副本，避免大规模重构带来的风险。
+
+6. **PVE 内容设计调优**
+   - **逻辑变化**：`docs/13.pve_content_design.md` 调整了"废弃空间站"副本的参数。将常规区域 `dock` 的序列长度从 10 步缩短至 5 步，固定 Boss 位置从第 10 步提前至第 5 步。隐藏区域 `warehouse` 的掉落倍率从 2.5x 下调至 1.5x。
+   - **设计思路**：基于**玩家体验优化**（Player Experience Optimization）。过长的序列容易导致疲劳感，缩短序列并提前 Boss 战可以提升节奏紧凑感。降低隐藏区域的掉落倍率是为了避免"高风险低回报"的负面体验，平衡探索收益与风险的曲线。
+
+7. **静态数据文件补充**
+   - **逻辑变化**：新增 `data/instances.json` 和 `data/items.json` 两个静态配置文件。`instances.json` 定义了"废弃空间站"副本的完整配置（区域信息、事件序列、敌方模板、掉落表）。`items.json` 定义了游戏内的道具物品（如"废料碎片"、"静默加密芯片"）。
+   - **设计思路**：遵循**配置与代码分离**（Configuration-Code Separation）。将内容设计数据与游戏逻辑代码解耦，设计师可以直接编辑 JSON 文件调整副本参数，无需开发介入。同时，通过 Git 版本管理配置变更，保留完整的历史记录与回滚能力。
+
+**技术要点**
+- **并行查询优化**：使用 `asyncio.gather(*tasks, return_exceptions=True)` 批量加载机体快照，将 N 次串行数据库查询优化为 1 次并行批量查询，大幅降低网络延迟叠加
+- **类型安全容错**：通过 `# type: ignore[assignment]` 标记告知类型检查器已显式处理异常分支，避免误报
+- **配置兼容性回退**：`instance_zone_config or zone_config` 表达式实现新格式优先、旧格式兜底的双模式支持
+- **模板填充算法**：固定位置先占位 + 随机槽位后填充的两阶段序列生成，确保关键事件位置可控
+- **组件拼装生成敌人**：`mecha_id + pilot_id + scaling` 的三元组替代硬编码属性，提升配置复用率
+
+---
+
 ## 2026-03-08 PVE 核心系统实现与测试覆盖扩展
 
 > **项目快照**：代码文件 67 个（11034 行）| 设计文档 14 个（4709 行）

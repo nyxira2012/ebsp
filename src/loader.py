@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
-    WeaponType, MothershipConfig, RegionConfig, AffixConfig # 导入用于校验或转换
+    WeaponType, MothershipConfig, RegionConfig, AffixConfig, InstanceConfig
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -36,6 +36,7 @@ class DataLoader:
         self.motherships: Dict[str, MothershipConfig] = {}
         self.regions: Dict[str, RegionConfig] = {}
         self.affixes: Dict[str, AffixConfig] = {}
+        self.instances: Dict[str, InstanceConfig] = {}
 
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
@@ -65,6 +66,9 @@ class DataLoader:
         
         # 6. 加载词条属性配置 (Doc 8)
         self._load_from_json("affixes.json", AffixConfig, self.affixes)
+
+        # 7. 加载副本配置 (Doc 13)
+        self._load_from_json("instances.json", InstanceConfig, self.instances)
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
         """通用的 JSON 加载方法"""
@@ -162,6 +166,19 @@ class DataLoader:
         if affix_id not in self.affixes:
             raise KeyError(f"词条配置不存在: {affix_id}")
         return self.affixes[affix_id]
+
+    def get_instance_config(self, instance_id: str) -> InstanceConfig:
+        """获取副本配置 (Doc 13)"""
+        if instance_id not in self.instances:
+            raise KeyError(f"副本配置不存在: {instance_id}")
+        return self.instances[instance_id]
+
+    def get_instance_zone_config(self, instance_id: str, zone_id: str):
+        """获取副本子区域配置"""
+        instance = self.get_instance_config(instance_id)
+        if zone_id not in instance.zones:
+            raise KeyError(f"副本子区域配置不存在: {instance_id} -> {zone_id}")
+        return instance.zones[zone_id]
 
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""

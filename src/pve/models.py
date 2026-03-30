@@ -1,6 +1,9 @@
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field
 from .enums import SessionStatus, EventType
+
+if TYPE_CHECKING:
+    from src.pve.schemas import EventInfo
 
 # -----------------
 # 事件序列 (Event Sequence)

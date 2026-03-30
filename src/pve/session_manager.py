@@ -26,14 +26,23 @@ class PveSessionManager:
 
         # 1. 获取区域与子区域配置
         zone_config = None
+        instance_zone_config = None
         if loader:
             try:
-                zone_config = loader.get_zone_config(region_id, zone_id)
+                # 优先尝试获取 InstanceZoneConfig（Doc 13）
+                instance_zone_config = loader.get_instance_zone_config(region_id, zone_id)
             except Exception:
-                pass
+                # 回退到旧的 RegionConfig
+                try:
+                    zone_config = loader.get_zone_config(region_id, zone_id)
+                except Exception:
+                    pass
 
-        # 2. 生成事件序列
-        event_sequence: EventSequence = EventSequenceGenerator.generate(zone_config)
+        # 2. 生成事件序列（使用 instance_zone_config 或 zone_config）
+        event_sequence: EventSequence = EventSequenceGenerator.generate(
+            region_config=zone_config,
+            zone_config=instance_zone_config or zone_config
+        )
 
         # 3. 构造队伍状态
         members = []

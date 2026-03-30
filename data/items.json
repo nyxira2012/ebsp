@@ -1,0 +1,20 @@
+[
+  {
+    "id": "mat_silent_crypto_chip",
+    "name": "静音加密芯片",
+    "description": "极高价值的加密组件，隐藏着未知的底层协议。",
+    "type": "material"
+  },
+  {
+    "id": "mat_armor_plate",
+    "name": "装甲复合板",
+    "description": "通用机甲防御建材，广泛用于基础维护。",
+    "type": "material"
+  },
+  {
+    "id": "mat_scrap",
+    "name": "废料碎片",
+    "description": "回收的金属垃圾，价值低廉。",
+    "type": "material"
+  }
+]
