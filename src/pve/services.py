@@ -1,7 +1,19 @@
-from typing import Tuple
+from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.models import RegionConfig, MothershipConfig
-from src.pve.enums import ZoneStatus
+from src.models import RegionConfig, MothershipConfig, InstanceConfig
+from src.pve.enums import ZoneStatus, CombatOutcome, ExitMethod
+from src.pve.models import PveSessionData
+from src.pve.session_manager import PveSessionManager
+from src.factory import MechaFactory
+from src.user.inventory import InventoryService
+from src.core.factory import SnapshotFactory
+from src.user.repository import UserAssetRepository
+
+# 使用 TYPE_CHECKING 避免运行时循环导入
+if TYPE_CHECKING:
+    from src.pve.battle_bridge import BattleBridge
+    from src.pve.reward_controller import RewardController
 
 class MothershipIntegrationService:
     """提供母舰系统与外部环境 (如 PVE, 背包, 商店) 集成的逻辑层/钩子."""
@@ -104,13 +116,6 @@ class MothershipIntegrationService:
         result = await session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
-from src.pve.models import PveSessionData
-from src.pve.session_manager import PveSessionManager
-from src.core.factory import SnapshotFactory
-from src.user.repository import UserAssetRepository
-from src.factory import MechaFactory
-from typing import List, Optional, Dict, Any
-
 class PveEntryService:
     """PVE 进入编排服务。
 
@@ -138,22 +143,29 @@ class PveEntryService:
             Dict[str, Any]: 包含所有选定机体快照的配置字典。
         """
         locked_config = {"mechas": []}
-        
+
         if locked_mecha_ids:
-            for user_mecha_id in locked_mecha_ids:
-                try:
-                    # 真实构建机体快照
-                    snapshot = await snapshot_factory.create_combat_snapshot(db, user_id, user_mecha_id)
-                    locked_config["mechas"].append({
-                        "user_mecha_id": user_mecha_id,
-                        "mecha_id": snapshot.instance_id,
-                        "max_hp": snapshot.final_max_hp,
-                        "max_en": snapshot.final_max_en,
-                        "snapshot_dict": snapshot.model_dump()
-                    })
-                except (ValueError, Exception):
+            # 并行创建所有机体快照，避免 N+1 查询问题
+            tasks = [
+                snapshot_factory.create_combat_snapshot(db, user_id, user_mecha_id)
+                for user_mecha_id in locked_mecha_ids
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for user_mecha_id, snapshot_or_error in zip(locked_mecha_ids, results):
+                # 跳过失败的结果
+                if isinstance(snapshot_or_error, Exception):
                     continue
-        
+
+                snapshot: MechaSnapshot = snapshot_or_error  # type: ignore[assignment]
+                locked_config["mechas"].append({
+                    "user_mecha_id": user_mecha_id,
+                    "mecha_id": snapshot.instance_id,
+                    "max_hp": snapshot.final_max_hp,
+                    "max_en": snapshot.final_max_en,
+                    "snapshot_dict": snapshot.model_dump()
+                })
+
         if not locked_config["mechas"]:
             # Fallback 逻辑：如果未选机体或加载失败，尝试构建默认机体 (测试用)
             try:
@@ -213,5 +225,123 @@ class PveEntryService:
             locked_config=locked_config,
             loader=loader
         )
-        
+
         return session_data
+
+    @classmethod
+    def get_session(cls, session_id: int) -> Optional[PveSessionData]:
+        """获取 PVE 会话（公开方法）"""
+        return PveSessionManager.get_session(session_id)
+
+    @classmethod
+    def get_session_by_user(cls, user_id: int) -> Optional[PveSessionData]:
+        """根据用户 ID 获取 PVE 会话（公开方法）"""
+        return PveSessionManager.get_session_by_user(user_id)
+
+    @classmethod
+    def advance_event(cls, session: PveSessionData) -> bool:
+        """推进事件序列（公开方法）
+
+        Returns:
+            bool: 如果序列未完成返回 True，已完成返回 False
+        """
+        return session.event_sequence.advance()
+
+    @classmethod
+    def get_current_event(cls, session: PveSessionData):
+        """获取当前事件（公开方法）"""
+        return session.event_sequence.current_event()
+
+    @classmethod
+    def is_sequence_complete(cls, session: PveSessionData) -> bool:
+        """检查事件序列是否完成（公开方法）"""
+        return session.event_sequence.is_complete()
+
+    @classmethod
+    def engage_battle(
+        cls,
+        session: PveSessionData,
+        event_index: int,
+        loader: Any,
+        mothership_config: MothershipConfig,
+        mecha_factory: MechaFactory,
+        player_index: int = 0,
+        verbose: bool = False
+    ):
+        """触发战斗（公开方法）
+
+        Args:
+            session: PVE 会话
+            event_index: 事件索引
+            loader: 资源加载器
+            mothership_config: 母舰配置
+            mecha_factory: 机体工厂
+            player_index: 玩家索引
+            verbose: 是否显示详细战斗过程
+
+        Returns:
+            BattleResult: 战斗结果
+        """
+        # 延迟导入避免循环依赖
+        from src.pve.battle_bridge import BattleBridge
+        return BattleBridge.engage(
+            session=session,
+            event_index=event_index,
+            loader=loader,
+            mothership_config=mothership_config,
+            mecha_factory=mecha_factory,
+            player_index=player_index,
+            verbose=verbose
+        )
+
+    @classmethod
+    def add_loot_rewards(cls, session: PveSessionData, loot_drops: List[Dict[str, Any]], credits: int = 0):
+        """添加掉落到临时背包（公开方法）"""
+        # 延迟导入避免循环依赖
+        from src.pve.reward_controller import RewardController
+        RewardController.add_pending_loot(session, loot_drops)
+        session.credits_earned += credits
+
+    @classmethod
+    async def extract_rewards(
+        cls,
+        db: AsyncSession,
+        session: PveSessionData,
+        exit_method: ExitMethod,
+        loader: Any,
+        mothership_config: MothershipConfig
+    ) -> Dict[str, Any]:
+        """结算并提取战利品（公开方法）
+
+        Args:
+            db: 数据库会话
+            session: PVE 会话
+            exit_method: 退出方式（BOSS_CLEAR/DEFEATED/EXTRACT）
+            loader: 资源加载器
+            mothership_config: 母舰配置
+
+        Returns:
+            Dict: 结算摘要
+        """
+        # 延迟导入避免循环依赖
+        from src.pve.reward_controller import RewardController
+        inv_service = InventoryService(session=db, loader=loader)
+        summary = await RewardController.finalize(
+            db=db,
+            session_data=session,
+            exit_method=exit_method,
+            inventory_service=inv_service,
+            mothership_config=mothership_config,
+            loader=loader
+        )
+        return summary
+
+    @classmethod
+    def destroy_session(cls, session_id: int):
+        """销毁 PVE 会话（公开方法）"""
+        PveSessionManager.destroy_session(session_id)
+
+    @classmethod
+    def send_heartbeat(cls, session_id: int) -> Optional[PveSessionData]:
+        """发送心跳保持会话存活（公开方法）"""
+        return PveSessionManager.get_session(session_id)

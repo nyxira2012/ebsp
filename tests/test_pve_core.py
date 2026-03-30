@@ -106,6 +106,13 @@ def test_pve_battle_bridge_engage():
 
     mock_loader = Mock()
     mock_loader.equipments = {}
+    mock_loader.mechas = {}
+
+    # Mock instance_config 以避免 "argument of type 'Mock' is not iterable"
+    mock_instance_config = Mock()
+    mock_instance_config.loot_tables = {}  # 空字典可迭代
+    mock_instance_config.enemy_templates = {}  # 空字典可迭代
+    mock_loader.get_instance_config.return_value = mock_instance_config
 
     mock_factory = Mock()
 
