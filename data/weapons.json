@@ -3,11 +3,13 @@
         "id": "wpn_beam_rifle",
         "name": "光束步枪",
         "type": "WEAPON",
-        "weapon_type": "RIFLE",
+        "weapon_type": "SHOOTING",
         "weapon_tags": [
             "beam",
             "long_range"
         ],
+        "motion_style": "SHOOT_INSTANT",
+        "damage_material": "ENERGY",
         "power": 2000,
         "en_cost": 5,
         "range": {
@@ -25,6 +27,8 @@
             "beam",
             "slash_light"
         ],
+        "motion_style": "SLASH_LIGHT",
+        "damage_material": "ENERGY",
         "power": 1500,
         "en_cost": 4,
         "range": {
@@ -37,11 +41,13 @@
         "id": "wpn_machine_gun",
         "name": "120mm机炮",
         "type": "WEAPON",
-        "weapon_type": "RIFLE",
+        "weapon_type": "SHOOTING",
         "weapon_tags": [
             "rapid",
             "projectile_single"
         ],
+        "motion_style": "PROJ_SINGLE",
+        "damage_material": "KINETIC",
         "power": 1500,
         "en_cost": 3,
         "range": {
@@ -60,6 +66,8 @@
             "slash_heavy",
             "energy"
         ],
+        "motion_style": "SLASH_HEAVY",
+        "damage_material": "ENERGY",
         "power": 1800,
         "en_cost": 5,
         "range": {
@@ -77,6 +85,8 @@
             "beam",
             "massive"
         ],
+        "motion_style": "SHOOT_MASSIVE",
+        "damage_material": "ENERGY",
         "power": 1750,
         "en_cost": 8,
         "range": {
@@ -95,6 +105,8 @@
             "hammer",
             "heavy"
         ],
+        "motion_style": "STRIKE_BLUNT",
+        "damage_material": "PHYSICAL",
         "power": 1900,
         "en_cost": 15,
         "range": {
@@ -113,6 +125,8 @@
             "funnel",
             "beam"
         ],
+        "motion_style": "PSYCHO_WAVE",
+        "damage_material": "ENERGY",
         "power": 1700,
         "en_cost": 25,
         "range": {
@@ -132,6 +146,8 @@
             "massive",
             "beam"
         ],
+        "motion_style": "AOE_BURST",
+        "damage_material": "ENERGY",
         "power": 1950,
         "en_cost": 100,
         "range": {
@@ -144,11 +160,13 @@
         "id": "wpn_railgun",
         "name": "线性轨道炮",
         "type": "WEAPON",
-        "weapon_type": "RIFLE",
+        "weapon_type": "SHOOTING",
         "weapon_tags": [
             "projectile_single",
             "long_range"
         ],
+        "motion_style": "PROJ_SINGLE",
+        "damage_material": "KINETIC",
         "power": 1850,
         "en_cost": 12,
         "range": {
@@ -163,6 +181,8 @@
         "type": "WEAPON",
         "weapon_type": "FALLBACK",
         "weapon_tags": [],
+        "motion_style": "STRIKE_BLUNT",
+        "damage_material": "GENERIC",
         "power": 1,
         "en_cost": 0,
         "range": {

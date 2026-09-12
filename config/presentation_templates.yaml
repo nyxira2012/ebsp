@@ -42,7 +42,7 @@ action_bones:
     damage_material: "ENERGY"
     text_fragments:
       - "{attacker}的光束军刀在空气中留下一道灼热的轨迹，向敌机斩去！"
-      - "高温光束刃划破空气！{attacker}的{weapon}化作一道白色闪光！"
+      - "高温光束刃划破空气！{attacker}的{weapon}化作高能残像！"
       - "{attacker}手中的{weapon}喷吐出炽热的高温粒子，斩向敌机！"
     anim_id: "anim_slash_fast_energy"
 
@@ -51,7 +51,7 @@ action_bones:
     damage_material: "ENERGY"
     text_fragments:
       - "{attacker}手中的{weapon}喷吐出炽热的高温粒子，将空气都烧得噼啪作响！"
-      - "{attacker}挥舞着燃烧的{weapon}，一道熔金般的烈焰轨迹劈向敌机！"
+      - "{attacker}挥舞着燃烧的{weapon}，一道高热等离子轨迹劈向敌机！"
       - "灼热的气浪扑面而来！{attacker}的{weapon}带着赤红的高温光芒斩下！"
     anim_id: "anim_slash_heavy_energy"
 
@@ -70,7 +70,7 @@ action_bones:
     motion_style: "AOE_BURST"
     damage_material: "ENERGY"
     text_fragments:
-      - "{attacker}启动了禁忌的武器序列，地平线上仿佛升起了第二颗太阳！"
+      - "{attacker}启动超大出力模式，空间因能量密度过高而扭曲！"
       - "{attacker}将所有的能量倾注于这一次全域打击！"
     anim_id: "anim_aoe_burst"
 
@@ -80,7 +80,7 @@ action_bones:
     damage_material: "KINETIC"
     text_fragments:
       - "{attacker}的{weapon}瞄准系统锁定目标，枪口喷出火舌！"
-      - "{attacker}扣下扳机，{weapon}发出有节奏的咆哮，弹壳飞舞！"
+      - "{attacker}扣下扳机，{weapon}发出有节奏的轰鸣，弹壳飞舞！"
       - "{attacker}稳稳地端起{weapon}，精确点射，弹头呼啸而出！"
     anim_id: "anim_rifle_fullauto"
 
@@ -98,7 +98,7 @@ action_bones:
     cooldown: 3
     weight: 0.3
     text_fragments:
-      - "{attacker}的{weapon}发出雷鸣般的咆哮，巨大的后坐力让机体猛然后坐！"
+      - "{attacker}的{weapon}发出轰鸣，机体因后坐力向后滑移！"
       - "炮口制退器喷出炽热的火焰，{attacker}的{weapon}将毁灭性的弹丸投向目标！"
     anim_id: "anim_heavy_cannon"
 
@@ -108,7 +108,7 @@ action_bones:
     text_fragments:
       - "「覆盖前方区域！」{attacker}的{weapon}向前方喷吐出密集的火蛇！"
       - "{attacker}试图用压倒性的钢铁暴雨封锁目标的所有活动空间！"
-      - "{attacker}的{weapon}喷吐出无休止的弹幕，将战场化作地狱！"
+      - "{attacker}的{weapon}持续发射，导弹群覆盖目标区域！"
     anim_id: "anim_missile_rain"
 
   # --- 物理近战类 (PHYSICAL) ---
@@ -116,8 +116,8 @@ action_bones:
     motion_style: "SLASH_LIGHT"
     damage_material: "PHYSICAL"
     text_fragments:
-      - "{attacker}身形一闪，{weapon}划出一道致命的弧线，斩向敌机！"
-      - "{attacker}从腰间拔出{weapon}，机体已化作白色闪光，瞬间划破空气！"
+      - "{attacker}姿态制御喷嘴爆发，{weapon}以高速机动斩向敌机！"
+      - "{attacker}拔出{weapon}，推进器喷射留下高热残像，瞬间切入敌机死角！"
       - "{attacker}以迅雷不及掩耳之势挥动{weapon}，向敌人发起致命斩击！"
     anim_id: "anim_slash_fast"
 
@@ -126,8 +126,8 @@ action_bones:
     damage_material: "PHYSICAL"
     text_fragments:
       - "{attacker}将推进器出力推至极限，{weapon}划出一道足以撕裂大气层的弧光，劈向敌机！"
-      - "{attacker}抡起沉重的{weapon}，以泰山压顶之势猛然砸下！"
-      - "{attacker}的{weapon}在空中留下一道完美的、象征终焉的轨迹，狠狠斩下！"
+      - "{attacker}将推进器出力推至极限，{weapon}带着巨大动能劈下！"
+      - "{attacker}的{weapon}划出致命的斩击轨迹，向敌机狠狠劈下！"
     anim_id: "anim_slash_heavy"
 
   - bone_id: "act_strike_blunt"
@@ -136,7 +136,7 @@ action_bones:
     text_fragments:
       - "{attacker}加速重拳挥出，空气在高速移动的拳头前部形成了肉眼可见的激波！"
       - "{attacker}踏步出击，试图以雷霆万钧的重击击碎对方的防御！"
-      - "{attacker}的重击精准击中了机体结构的结合点，造成剧烈震荡！"
+      - "{attacker}的重击瞄准机体结构的结合点，带着巨大的震荡力挥出！"
     anim_id: "anim_strike"
 
   # --- 通用撞击类 (GENERIC) ---
@@ -224,7 +224,7 @@ reaction_bones:
     text_fragments:
       - "{defender}的I-Field在全方位轰击下过载，{hit_part}承受了全部能量，装甲熔融，机体濒临机能停止！"
       - "立体光束网精准锁定{defender}的{hit_part}，高能粒子在装甲上烧出无数孔洞，机体冒着浓烟急速后退！"
-      - "浮游炮的集束打击命中{defender}的{hit_part}，能量传导引发核心系统受损，机体发出绝望的红色警报！"
+      - "浮游炮的集束打击命中{defender}的{hit_part}，能量传导引发核心系统受损，机体发出刺耳的红色警报！"
     vfx_ids: ["vfx_crit_impact", "vfx_beam_pierce", "vfx_core_meltdown"]
     sfx_ids: ["sfx_crit_energy", "sfx_alarm"]
 
@@ -291,7 +291,7 @@ reaction_bones:
     damage_material: "KINETIC"
     attack_result: "PARRY"
     text_fragments:
-      - "{defender}的近防火神炮疯狂咆哮，在火箭弹逼近的瞬间将其凌空打爆！"
+      - "{defender}的近防火神炮全速射击，在火箭弹逼近的瞬间将其凌空打爆！"
       - "火箭弹被{defender}以精妙的装甲倾角弹开，在大气中划出一道偏转的轨迹！"
       - "{defender}的 ECM 系统发出强力干扰，火箭弹的制导失灵，擦着机体飞向虚空！"
     vfx_ids: ["vfx_ricochet", "vfx_flak_burst", "vfx_ecm_wave"]
@@ -333,7 +333,7 @@ reaction_bones:
     damage_material: "KINETIC"
     attack_result: "PARRY"
     text_fragments:
-      - "{defender}的近防火神炮疯狂咆哮，在空中构筑出一道密集的拦截网，导弹群在引爆中化作无害的烟花！"
+      - "{defender}的近防火神炮全速射击，在空中构筑出一道密集的拦截网，导弹群在引爆中化作无害的烟花！"
       - "反导弹系统在千钧一发之际启动，{defender}用精确的点射在导弹群中撕开了一条生路！"
       - "{defender}的ECM系统发出强力干扰波，导弹群的制导全部失灵，在空中漫无目的地乱飞后坠毁！"
     vfx_ids: ["vfx_missile_intercept", "vfx_explosion_chain"]
@@ -372,7 +372,7 @@ reaction_bones:
     damage_material: "ENERGY"
     attack_result: "CRIT"
     text_fragments:
-      - "光束军刀斩入{defender}的{hit_part}，高能粒子在装甲内部引发连锁熔毁，机体爆出绝望的红光！"
+      - "光束军刀斩入{defender}的{hit_part}，高能粒子在装甲内部引发连锁熔毁，驾驶舱内红色警告灯大作！"
       - "{defender}的{hit_part}被光束刃精准贯穿，装甲被能量撕裂成两半的伤口，机体冒着火花勉强维持运作！"
       - "斩击的能量余波贯穿{defender}的{hit_part}，装甲在熔融的同时内部核心系统遭受重创，机体濒临机能停止！"
     vfx_ids: ["vfx_crit_impact", "vfx_beam_slice", "vfx_core_meltdown"]
@@ -399,9 +399,9 @@ reaction_bones:
     damage_material: "PHYSICAL"
     attack_result: "CRIT"
     text_fragments:
-      - "实体剑刃带着恐怖的动能斩向{defender}的{hit_part}，装甲被撕裂成碎片，机体在剧痛中失衡！"
+      - "实体剑刃带着巨大的动能斩向{defender}的{hit_part}，装甲被撕裂成碎片，机体在剧烈震颤中失衡！"
       - "{defender}的{hit_part}被重剑精准斩中，液压管爆裂，失去平衡的机体在地面拖出深深的伤痕！"
-      - "斩击的恐怖扭矩让{defender}的{hit_part}彻底变形，机体骨架在冲击下发出令人牙酸的扭曲声，濒临机能停止！"
+      - "斩击的巨大扭矩让{defender}的{hit_part}彻底变形，机体骨架在冲击下发出令人牙酸的扭曲声，濒临机能停止！"
     vfx_ids: ["vfx_crit_impact", "vfx_structure_twist", "vfx_hydraulic_leak"]
     sfx_ids: ["sfx_crit_impact", "sfx_structure_groan"]
 
@@ -600,7 +600,7 @@ reaction_bones:
     macro_motion: "MELEE_CLASH"
     attack_result: "CRIT"
     text_fragments:
-      - "这无可匹敌的近身一击直接撕裂了{defender}的机体外甲，内部核心系统瞬间爆出绝望的红光！"
+      - "这无可匹敌的近身一击直接撕裂了{defender}的{hit_part}，驾驶舱内红色警告灯大作！"
       - "{defender}的{hit_part}遭受毁灭性打击，装甲区完全损毁！"
       - "致命的近身重击命中{defender}的{hit_part}，系统瞬间离线！"
     vfx_ids: ["vfx_crit_impact", "vfx_armor_shatter"]

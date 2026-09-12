@@ -1,0 +1,301 @@
+# =============================================================================
+# 战斗演出系统模板配置 (CPS v5.1)
+# =============================================================================
+# 本文件定义 ActionBone（攻击方动作骨架）和 ReactionBone（防御方反应骨架）
+# 供 L2 DualBidder 竞标使用
+#
+# 模板格式说明：
+# - bone_id: 唯一标识符
+# - motion_style: 动作风格（SLASH_LIGHT, SHOOT_INSTANT, PROJ_RAIN 等）
+# - damage_material: 物理材质（ENERGY, KINETIC, PHYSICAL, GENERIC）
+# - text_fragments: 多个完整句子（随机选一个），支持变量替换
+#   变量：{attacker}, {defender}, {weapon}, {hit_part}, {skill_name}
+# - macro_motion: 宏观动作分类（仅 Reaction 使用，用于 T2.5_Decay 降级）
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ActionBone: 攻击方动作骨架
+# -----------------------------------------------------------------------------
+# 规则：主要由 motion_style 驱动，damage_material 作为可选约束
+# -----------------------------------------------------------------------------
+
+action_bones:
+  # --- 斩击类 (SLASH_LIGHT) ---
+
+  - bone_id: "action_slash_light_beam"
+    motion_style: "SLASH_LIGHT"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}手中的{weapon}在空中划出一道耀眼的轨迹，直取{defender}！"
+      - "随着{attacker}的机动动作，{weapon}化作致命的光弧斩向{defender}！"
+      - "{attacker}踏前一步，{weapon}以迅雷不及掩耳之势刺向{defender}！"
+    anim_id: "anim_slash_beam_fast"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+    cooldown: 0
+
+  - bone_id: "action_slash_light_physical"
+    motion_style: "SLASH_LIGHT"
+    damage_material: "PHYSICAL"
+    text_fragments:
+      - "{attacker}挥舞{weapon}斩向{defender}，动作行云流水！"
+      - "{attacker}的{weapon}划破空气，精准地切向{defender}！"
+    anim_id: "anim_slash_physical_fast"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 重型斩击 (SLASH_HEAVY) ---
+
+  - bone_id: "action_slash_heavy_beam"
+    motion_style: "SLASH_HEAVY"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}高高举起{weapon}，积蓄的能量化作恐怖的重量！"
+      - "{attacker}以全身之力挥下{weapon}，{weapon}裹挟着光焰当头劈下！"
+      - "{attacker}启动推进器，{weapon}带着推进器的动能狠狠斩向{defender}！"
+    anim_id: "anim_slash_beam_heavy"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 瞬间射击 (SHOOT_INSTANT) ---
+
+  - bone_id: "action_shoot_instant_beam"
+    motion_style: "SHOOT_INSTANT"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}举起{weapon}，连续扣动扳机！"
+      - "{attacker}锁定目标后，{weapon}倾泻出密集的光束！"
+      - "{attacker}的{weapon}喷吐着致命的光流，直取{defender}！"
+    anim_id: "anim_rifle_beam_shoot"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  - bone_id: "action_shoot_instant_kinetic"
+    motion_style: "SHOOT_INSTANT"
+    damage_material: "KINETIC"
+    text_fragments:
+      - "{attacker}架起{weapon}，实弹从枪膛呼啸而出！"
+      - "{attacker}的{weapon}吐出火舌，弹壳如雨点般洒落！"
+    anim_id: "anim_rifle_kinetic_shoot"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 弹幕覆盖 (PROJ_RAIN) ---
+
+  - bone_id: "action_proj_rain_missile"
+    motion_style: "PROJ_RAIN"
+    damage_material: "KINETIC"
+    text_fragments:
+      - "{attacker}发射的导弹群拖着尾焰覆盖了{defender}所在区域！"
+      - "{attacker}肩部的发射器全部打开，导弹如暴雨般倾泻而下！"
+    anim_id: "anim_missile_rain"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 巨炮轰击 (SHOOT_MASSIVE) ---
+
+  - bone_id: "action_shoot_massive_beam"
+    motion_style: "SHOOT_MASSIVE"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}架起{weapon}，巨大的能量汇聚在炮口！"
+      - "{attacker}启动了{weapon}的最大出力，空气都因高热而扭曲！"
+      - "{attacker}的{weapon}蓄力完毕，一道毁灭性的粗大光柱喷涌而出！"
+    anim_id: "anim_mega_beam_charge"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 钝器打击 (STRIKE_BLUNT) ---
+
+  - bone_id: "action_strike_blunt_physical"
+    motion_style: "STRIKE_BLUNT"
+    damage_material: "PHYSICAL"
+    text_fragments:
+      - "{attacker}挥舞{weapon}，以泰山压顶之势砸向{defender}！"
+      - "{attacker}借助推进器的推力，用{weapon}狠狠撞击{defender}！"
+    anim_id: "anim_strike_blunt"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+
+  # --- 精神波动 (PSYCHO_WAVE) ---
+
+  - bone_id: "action_psycho_wave_funnel"
+    motion_style: "PSYCHO_WAVE"
+    damage_material: "ENERGY"
+    text_fragments:
+      - "{attacker}的{weapon}散布开来，从四面八方发起攻击！"
+      - "{attacker}的精神感应波化作实体，{weapon}自动追踪并打击{defender}！"
+      - "{attacker}闭上双眼，{weapon}在精神力的操控下发起全方位攻击！"
+    anim_id: "anim_funnel_attack"
+    tier: "T1_HIGHLIGHT"
+    weight: 1.0
+    cooldown: 3  # 高光模板需要冷却
+
+# -----------------------------------------------------------------------------
+# ReactionBone: 防御方反应骨架
+# -----------------------------------------------------------------------------
+# 规则：
+# - channel: 演出频道（FATAL/EVADE/IMPACT/SPECIAL）
+# - damage_material: 物理材质（ENERGY/KINETIC/PHYSICAL/GENERIC）
+# - macro_motion: 宏观动作分类（用于 T2.5_Decay 降级）
+#   GENERIC + macro_motion=MELEE_CLASH → 近战通用模板
+#   GENERIC + macro_motion=RANGED_DIRECT → 远程通用模板
+#   GENERIC + macro_motion=ANY → 完全通用模板
+# - attack_result: 攻击结果（HIT/CRIT/BLOCK/PARRY/DODGE/MISS），None 表示通用
+# -----------------------------------------------------------------------------
+
+reaction_bones:
+  # --- IMPACT 频道：命中类反应 ---
+
+  # 精确匹配：能量武器命中（ENERGY + 具体动作风格）
+  - bone_id: "react_impact_energy_melee"
+    channel: "IMPACT"
+    damage_material: "ENERGY"
+    motion_style: "SLASH_LIGHT"
+    text_fragments:
+      - "{defender}的{hit_part}被光束灼烧，装甲发出悲鸣！"
+      - "高热光束切开{defender}的装甲，熔融的金属滴落！"
+    macro_motion: "MELEE_CLASH"
+    tier: "T2_TACTICAL"
+    weight: 1.0
+    attack_result: "HIT"
+
+  # T2.5_Decay 降级：近战通用模板（GENERIC + macro_motion）
+  # 注意：通用模板严禁出现材质词（光束、实弹、金属刃等）
+  - bone_id: "react_impact_melee_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "两股庞大的力量在交错瞬间碰撞，迸发出刺耳的撞击声！"
+      - "{defender}的{hit_part}遭受直接打击，机体剧烈震颤！"
+      - "恐怖的冲击力让{defender}的{hit_part}装甲严重变形！"
+    macro_motion: "MELEE_CLASH"
+    tier: "T2_5_DECAY"
+    weight: 0.8
+    attack_result: "HIT"
+
+  # T2.5_Decay 降级：远程通用模板
+  - bone_id: "react_impact_ranged_direct_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "攻击精准命中{defender}的{hit_part}，机体震颤不已！"
+      - "{defender}的{hit_part}被直射火力命中，留下明显痕迹！"
+      - "密集的打击覆盖了{defender}的{hit_part}，警报声大作！"
+    macro_motion: "RANGED_DIRECT"
+    tier: "T2_5_DECAY"
+    weight: 0.8
+    attack_result: "HIT"
+
+  # T3_Fallback：完全通用模板（macro_motion=ANY）
+  - bone_id: "react_impact_any_fallback"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}受到了攻击的影响。"
+    macro_motion: "ANY"
+    tier: "T3_FALLBACK"
+    weight: 0.5
+    attack_result: "HIT"
+
+  # --- 暴击反应 ---
+
+  - bone_id: "react_crit_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "致命一击命中{defender}的{hit_part}，系统濒临崩溃！"
+      - "{defender}的{hit_part}遭受毁灭性打击，机体失控！"
+      - "{defender}的{hit_part}被精准贯穿，引发严重损毁！"
+    macro_motion: "ANY"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "CRIT"
+
+  # --- 格挡反应 ---
+
+  - bone_id: "react_block_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}举起盾牌，挡住了正面袭来的攻击！"
+      - "{defender}以装甲硬接了攻击，火花四溅！"
+      - "迎面而来的攻击被{defender}强行格挡，装甲冒出黑烟！"
+    macro_motion: "ANY"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "BLOCK"
+
+  # --- 招架反应 ---
+
+  - bone_id: "react_parry_melee_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}以精妙的角度偏转了袭来的攻击！"
+      - "两股力量在空中碰撞，{defender}成功卸掉了大部分冲击！"
+      - "{defender}看准时机，用武器架住了攻击！"
+    macro_motion: "MELEE_CLASH"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "PARRY"
+
+  - bone_id: "react_parry_ranged_generic"
+    channel: "IMPACT"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}以超凡感知预判了攻击轨迹，强行在火力网中撕开生路！"
+      - "{defender}顶着狂风暴雨般的攻势，强行偏转了直射火力！"
+    macro_motion: "RANGED_DIRECT"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "PARRY"
+
+  # --- EVADE 频道：闪避/未命中反应 ---
+
+  - bone_id: "react_evade_dodge_generic"
+    channel: "EVADE"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}在千钧一发之际完成了闪避机动！"
+      - "{defender}以惊人的反应速度躲开了攻击！"
+      - "{defender}一个侧滑，攻击从身旁擦过！"
+    macro_motion: "ANY"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "DODGE"
+
+  - bone_id: "react_evade_miss_generic"
+    channel: "EVADE"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "攻击擦着{defender}的装甲划过，只留下一道浅痕！"
+      - "{defender}预判了攻击轨迹，提前避开了火力！"
+      - "{defender}一个不规则的机动动作，让攻击全部落空！"
+    macro_motion: "ANY"
+    tier: "T2_5_DECAY"
+    weight: 1.0
+    attack_result: "MISS"
+
+  # --- FATAL 频道：致命伤害反应 ---
+
+  - bone_id: "react_fatal_generic"
+    channel: "FATAL"
+    damage_material: "GENERIC"
+    motion_style: "ANY"
+    text_fragments:
+      - "{defender}的驾驶舱被精准贯穿，机体化作一团火球！"
+      - "{defender}的核心反应堆发生爆炸，机体四分五裂！"
+      - "{defender}的动力炉被击穿，恐怖的爆炸吞噬了整台机体！"
+    macro_motion: "ANY"
+    tier: "T0_LETHAL"
+    weight: 1.0

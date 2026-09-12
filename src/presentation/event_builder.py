@@ -9,6 +9,10 @@
   这样做的好处：
   - 引擎和表现层之间的耦合大幅降低，为将来调整任意一侧提供空间。
   - RawAttackEvent 的构造逻辑集中在一处，消除了 engine.py 中的代码重复。
+
+MDDC v5.1 数据驱动 (Doc 6)：
+  - motion_style 和 damage_material 直接从武器配置读取
+  - 消除关键词猜测逻辑，定义权收归数据配置侧
 """
 
 from __future__ import annotations
@@ -35,71 +39,12 @@ class AttackEventBuilder:
             result=result,
             damage=damage,
             triggered_skill_ids=triggered_skill_ids,
+            spirit_commands=spirit_commands,
             is_first=is_first,
             round_number=self.round_number,
             en_cost=int(weapon_cost),
         )
     """
-
-    @staticmethod
-    def _extract_motion_style(weapon_type: str, weapon_tags: List[str], weapon_name: str = "") -> MotionStyle:
-        """从武器数据中提取动作风格 (Action Style)"""
-        tags = [t.lower() for t in weapon_tags]
-        name = weapon_name.lower()
-
-        # 辅助函数：检查标签是否包含任意关键词
-        def has_keyword(keywords):
-            return any(any(kw in tag for tag in tags) for kw in keywords)
-
-        # 1. 精神/浮游类（优先检查，因为标签可能包含 beam）
-        if has_keyword(["psycho", "精神", "funnel", "浮游"]):
-            return MotionStyle.PSYCHO_WAVE
-
-        # 2. 斩击类
-        if has_keyword(["slash", "blade", "saber", "sword", "axe", "knife", "军刀", "斩", "剑", "斧"]):
-            if has_keyword(["heavy", "giant", "重"]):
-                return MotionStyle.SLASH_HEAVY
-            return MotionStyle.SLASH_LIGHT
-
-        # 3. 射击类
-        if has_keyword(["missile", "projectile", "rocket", "导弹", "火箭"]):
-            return MotionStyle.PROJ_RAIN
-        if has_keyword(["bazooka", "cannon", "炮"]):
-            return MotionStyle.PROJ_SINGLE
-        if has_keyword(["beam", "rifle", "laser", "步枪", "射击"]):
-            if has_keyword(["massive", "mega", "map", "巨"]):
-                return MotionStyle.SHOOT_MASSIVE
-            return MotionStyle.SHOOT_INSTANT
-
-        # 4. 撞击类
-        if has_keyword(["ram", "tackle", "撞"]):
-            return MotionStyle.IMPACT_RAM
-
-        return MotionStyle.STRIKE_BLUNT
-
-    @staticmethod
-    def _extract_damage_material(weapon_tags: List[str], weapon_name: str = "") -> DamageMaterial:
-        """从武器数据中提取物理材质 (Damage Material)"""
-        tags = [t.lower() for t in weapon_tags]
-        name = weapon_name.lower()
-
-        # 辅助函数：检查标签是否包含任意关键词
-        def has_keyword(keywords):
-            return any(any(kw in tag for tag in tags) for kw in keywords)
-
-        # 1. 能量类
-        if has_keyword(["beam", "energy", "particle", "laser", "光束", "高能"]):
-            return DamageMaterial.ENERGY
-
-        # 2. 实弹类
-        if has_keyword(["missile", "projectile", "shell", "bullet", "rocket", "导弹", "实弹", "物理弹"]):
-            return DamageMaterial.KINETIC
-
-        # 3. 物理/金属类
-        if has_keyword(["slash", "blade", "saber", "physical", "冲击", "撞"]):
-            return DamageMaterial.PHYSICAL
-
-        return DamageMaterial.GENERIC
 
     @staticmethod
     def build(
@@ -134,6 +79,23 @@ class AttackEventBuilder:
         Returns:
             RawAttackEvent: 可供 EventMapper 直接消费的原始攻击事件
         """
+        # MDDC 数据驱动：从武器快照直接读取枚举值
+        # 注意：工厂方法 (factory.py) 已完成字符串到枚举的转换
+        # 兼容性处理：如果是字符串则转换为枚举，如果是枚举则直接使用
+        motion_style_val = getattr(weapon, 'motion_style', None)
+        damage_material_val = getattr(weapon, 'damage_material', None)
+
+        # 转换为枚举（支持字符串和枚举输入）
+        if isinstance(motion_style_val, str):
+            motion_style = MotionStyle[motion_style_val] if motion_style_val in MotionStyle.__members__ else MotionStyle.STRIKE_BLUNT
+        else:
+            motion_style = motion_style_val or MotionStyle.STRIKE_BLUNT
+
+        if isinstance(damage_material_val, str):
+            damage_material = DamageMaterial[damage_material_val] if damage_material_val in DamageMaterial.__members__ else DamageMaterial.GENERIC
+        else:
+            damage_material = damage_material_val or DamageMaterial.GENERIC
+
         return RawAttackEvent(
             # ── 基本信息 ──────────────────────────────────────────────
             round_number=round_number,
@@ -178,12 +140,9 @@ class AttackEventBuilder:
             defender_max_hp=defender.final_max_hp,
 
             # ── 演出系统数据契约 (MDDC v5.1) ─────────────────────────
+            # 直接从武器配置读取，消除关键词猜测
             is_lethal=(defender.current_hp <= 0),
-            motion_style=AttackEventBuilder._extract_motion_style(
-                weapon.type.value, getattr(weapon, 'tags', []), weapon.name
-            ),
-            damage_material=AttackEventBuilder._extract_damage_material(
-                getattr(weapon, 'tags', []), weapon.name
-            ),
+            motion_style=motion_style,
+            damage_material=damage_material,
             spirit_commands=spirit_commands,
         )

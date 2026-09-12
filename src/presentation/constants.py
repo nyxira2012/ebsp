@@ -105,3 +105,9 @@ T3_FALLBACK_TEXTS: dict[str, list[str]] = {
 }
 
 T3_FALLBACK_FATAL = "{defender} 被彻底摧毁了。"
+
+
+# ============ 默认值常量 ============
+# 集中管理 MDDC 数据契约的默认值，避免魔法字符串散布各处
+DEFAULT_MOTION_STYLE = MotionStyle.STRIKE_BLUNT
+DEFAULT_DAMAGE_MATERIAL = DamageMaterial.GENERIC

@@ -22,7 +22,11 @@
       "Bash(.venv/bin/pytest:*)",
       "Bash(.venv/bin/python:*)",
       "Bash(exec wc:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(PYTHONPATH=/Users/dupidupi/ebsp .venv/bin/python scripts/sim/simulate_pve.py)",
+      "Bash(PYTHONPATH=/Users/dupidupi/ebsp .venv/bin/python scripts/sim/sim_attack_table.py)",
+      "Bash(PYTHONPATH=/Users/dupidupi/ebsp .venv/bin/python scripts/sim/sim_challenge_boss.py)",
+      "Bash(PYTHONPATH=/Users/dupidupi/ebsp .venv/bin/python scripts/sim/sim_combat.py)"
     ]
   }
 }

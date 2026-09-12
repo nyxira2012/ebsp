@@ -120,6 +120,12 @@ class EquipmentConfig(BaseModel):
     weapon_tags: List[str] = Field(default=[], alias="tags")
     weapon_anim_id: str = "default_anim"
 
+    # MDDC 多维数据契约 (Doc 6) - 演出系统核心数据
+    # 维度 A：动作风格 - 描述"驾驶员如何操作武器"
+    motion_style: str = "STRIKE_BLUNT"
+    # 维度 B：物理材质 - 描述"交互的物理本质"
+    damage_material: str = "GENERIC"
+
     # 用于接收嵌套的 range 对象 (from weapons.json)
     range: Optional[Dict[str, int]] = None
 
@@ -405,19 +411,25 @@ class WeaponSnapshot(BaseModel):
     definition_id: str          # 原始配置ID
     name: str
     type: WeaponType
-    
+
     final_power: int            # 加成后的实战威力
     range_min: int
     range_max: int
     en_cost: int                # 统一使用 EN 消耗
     will_req: int               # 气力需求
     anim_id: str                # 战斗动画 ID
-    
+
     # 额外补正 (通常来自武器自身特性)
     hit_mod: float = 0.0
     crit_mod: float = 0.0
-    
+
     tags: List[str] = []
+
+    # MDDC 多维数据契约 (Doc 6) - 演出系统核心数据（枚举类型）
+    # 维度 A：动作风格 - 描述"驾驶员如何操作武器"
+    motion_style: str = "STRIKE_BLUNT"  # 在工厂中转换为 MotionStyle 枚举
+    # 维度 B：物理材质 - 描述"交互的物理本质"
+    damage_material: str = "GENERIC"    # 在工厂中转换为 DamageMaterial 枚举
 
     def can_use_at_distance(self, distance: int) -> bool:
         return self.range_min <= distance <= self.range_max

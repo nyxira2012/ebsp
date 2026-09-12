@@ -13,7 +13,7 @@ from src.factory import MechaFactory
 from src.combat.engine import BattleSimulator
 from src.presentation.renderer import JSONRenderer
 from src import DataLoader
-from src.api.context import set_loader, get_loader
+from src.api.context import set_loader, get_loader, initialize_presentation_registry
 
 # 数据库与用户系统
 from src.database import init_db, close_db
@@ -63,8 +63,18 @@ async def startup_event():
     loader.load_all()
     set_loader(loader)
     print(f"✅ 数据加载完成: {len(loader.mechas)} 机体, {len(loader.equipments)} 装备")
-    
-    # 3. 启动后台守护任务
+
+    # 3. 加载演出模板 (CPS v5.1)
+    # 使用异常处理代替 os.path.exists() 避免 TOCTOU 反模式
+    from src.api.context import initialize_presentation_registry
+    import os
+    template_path = os.path.join("data", "presentation", "templates.yaml")
+    try:
+        initialize_presentation_registry(template_path)
+    except FileNotFoundError:
+        print(f"⚠️  演出模板文件不存在: {template_path}，将使用 T3 兜底文本")
+
+    # 4. 启动后台守护任务
     from src.pve.heartbeat import HeartbeatGuard
     HeartbeatGuard.start()
     print("✅ PVE 心跳守护已启动")
