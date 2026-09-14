@@ -1,5 +1,35 @@
 # Development Log (DEVLOG.md)
 
+## 2026-09-14 美术处理工具链收敛重构 (artgen 收拢为双核心脚本)
+
+> **项目快照**：美术脚本架构收敛 | 移除散落 JSON/处理脚本 | 形成生图与二次处理双核心
+
+### 逻辑变化与核心思路
+
+1. **ComfyUI 模板内嵌化**
+   - **逻辑变化**：将原外部工作流描述文件 `landing_t2i.api.json` 作为常量 `DEFAULT_WORKFLOW_TEMPLATE` 完整合入 `scripts/artgen/generate_asset.py`，并移除外部 JSON 文件。
+   - **设计思路**：消除生图脚本执行时的外部路径依赖，实现生图脚本的单文件完全自包含（Self-contained），同时保留 `--template` 参数以兼容自定义外部工作流覆盖。
+
+2. **图像二次处理三合一 (`process_asset.py`)**
+   - **逻辑变化**：将原有的 `remove_bg.py`（背景透明抠除）、`optimize_asset.py`（调色板量化与WebP深度重编码）和 `preview_bg.py`（UI 遮挡质检标注）三份脚本合并为统一的 `scripts/artgen/process_asset.py`，并删除旧的三份脚本。
+   - **设计思路**：统一管理所有本地 CPU 图像二次处理算法，支持一键流水线模式（`--pipeline`：抠图+量化压缩一气呵成），同时支持单功能独立调用（`--remove-bg`、`--optimize`、`--preview`）。
+   - **管线调度解耦**：`generate_asset.py` 内部后处理逻辑统一对接 `process_asset` 模块，管线职责清晰分为「AI 远程生图调度」与「本地图像算法二次处理」两层。
+
+---
+
+## 2026-09-13 前端仓库独立化 (ebs-duo) 与原型图完整迁移
+
+> **项目快照**：前后端仓库解耦 | 前端独立工程: https://github.com/nyxira2012/ebs-duo
+
+### 架构演进与核心思路
+
+1. **前后端架构彻底解耦 (Multi-repo 治理)**
+   - **逻辑变化**：将原存在于 `ebsp/prototype/` 的全屏 2D 动漫赛璐璐风机甲界面、交互逻辑、Mock 数据层、ComfyUI 素材生成管线产物及视觉规范（`ART_SPEC.md`）整体迁移至独立前端工程 `ebs-duo`（`git@github.com:nyxira2012/ebs-duo.git`）。`ebsp` 内清理未追踪的临时原型目录。
+   - **设计思路**：`ebsp` 聚焦于 Python 高性能战斗模拟引擎、圆桌判定、装备/机体数据配置及核心 API 契约；`ebs-duo` 成为专属前端宿主仓库，两端独立发布与演进，避免单仓静态大文件污染与协同冲突。
+
+2. **美术生成工具流适配跨工程输出**
+   - **逻辑变化**：更新 `scripts/artgen/generate_asset.py`，检测到同级 `../ebs-duo/assets/` 时自动将 AI 赛璐璐机体与副官立绘生成至前端工程目录，保留后端 Python 美术管线工具链的连续性。
+
 ---
 
 ## 2026-03-30 PVE 系统测试修复与副本配置重构
