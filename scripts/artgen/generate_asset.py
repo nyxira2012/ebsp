@@ -248,6 +248,7 @@ PRESETS: dict[str, dict[str, Any]] = {
         "has_transparency": True,
         "optimize_colors": 128,
         "optimize_quality": 80,
+        "optimize_max_side": 720,  # 默认缩放导出 480x720（生图维持 720x1080 保证 AI 五官精度，导出等比缩小 55% 像素冗余）
         "style": (
             "2d日式动漫，1990年代复古动画角色赛璐璐原画，纯正手绘赛璐璐质感，"
             "清晰黑色描边，2阶阶梯硬阴影，色彩纯净清爽"
@@ -463,13 +464,15 @@ def postprocess_and_save(
     preset: dict[str, Any] | None = None,
     skip_postprocess: bool = False,
     generate_preview: bool = False,
+    max_side: int | None = None,
 ) -> list[Path]:
-    """处理产物并在本地落盘。若命中预设则自动执行抠图/优化。"""
+    """处理产物并在本地落盘。若命中预设则自动执行抠图/优化/缩放。"""
     from PIL import Image
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.open(BytesIO(raw_bytes))
     saved_files: list[Path] = []
+    actual_max_side = max_side if max_side is not None else (preset.get("optimize_max_side") if preset else None)
 
     if preset and not skip_postprocess:
         import process_asset
@@ -494,29 +497,38 @@ def postprocess_and_save(
             except Exception as e:
                 print(f"[警告] 遮挡预览跳过: {e}", file=sys.stderr)
 
-        # 3. 自动调色板压缩优化
+        # 3. 自动调色板压缩优化与等比缩放
         try:
             scheme, payload = process_asset.optimize_image_bytes(
                 image,
                 colors=preset.get("optimize_colors"),
                 quality=preset.get("optimize_quality", 80),
-                max_side=preset.get("optimize_max_side"),
+                max_side=actual_max_side,
             )
             output_path.write_bytes(payload)
             saved_files.append(output_path)
-            print(f"[{preset['title']}] 调色板优化完成 ({scheme}): {len(raw_bytes)/1024:.0f}KB -> {len(payload)/1024:.0f}KB")
+            out_img = Image.open(BytesIO(payload))
+            dim_str = f"{out_img.width}x{out_img.height}"
+            print(f"[{preset['title']}] 调色板优化与缩放完成 ({scheme}, {dim_str}): {len(raw_bytes)/1024:.0f}KB -> {len(payload)/1024:.0f}KB")
             return saved_files
         except Exception as e:
             print(f"[警告] 调色板优化跳过，直接保存: {e}", file=sys.stderr)
 
-    # 普通保存流程
+    # 普通保存流程（若有指定缩放，执行等比缩小）
+    if actual_max_side is not None and max(image.size) > actual_max_side:
+        scale = actual_max_side / max(image.size)
+        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+
     suffix = output_path.suffix.lower()
     if suffix == ".webp":
         image.save(output_path, "WEBP", quality=80)
     elif suffix in (".jpg", ".jpeg"):
         image.convert("RGB").save(output_path, "JPEG", quality=92)
     else:
-        output_path.write_bytes(raw_bytes)
+        if actual_max_side is not None:
+            image.save(output_path)
+        else:
+            output_path.write_bytes(raw_bytes)
     saved_files.append(output_path)
     return saved_files
 
@@ -534,6 +546,7 @@ def generate(
     skip_postprocess: bool = False,
     generate_preview: bool = False,
     template_path: Path | None = None,
+    export_max_side: int | None = None,
 ) -> list[Path]:
     """核心生图 API。"""
     actual_seed = seed if seed is not None else random.randint(0, 2**48)
@@ -593,6 +606,7 @@ def generate(
         preset=preset,
         skip_postprocess=skip_postprocess,
         generate_preview=generate_preview,
+        max_side=export_max_side,
     )
 
 
@@ -603,7 +617,7 @@ def generate(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """命令行参数解析。"""
     parser = argparse.ArgumentParser(
-        description="E.B.S.P 美术素材生成工具（支持槽位预设与自动后处理）",
+        description="E.B.S.P 美术素材生成工具（支持槽位预设、自动后处理与导出缩放）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("prompt", nargs="?", default="", help="提示词（选用预设时为纯业务内容词）")
@@ -613,6 +627,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None, help="随机种子，缺省时随机")
     parser.add_argument("--width", type=int, default=None, help="画布宽（缺省从预设读取或 800）")
     parser.add_argument("--height", type=int, default=None, help="画布高（缺省从预设读取或 1200）")
+    parser.add_argument("--export-max-side", "--max-side", type=int, default=None, dest="export_max_side", help="导出缩放：最长边像素上限（等比缩小），adjutant 预设默认 720 即 480x720 导出")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="单次生成超时（秒）")
     parser.add_argument("--background", choices=sorted(BACKGROUND_PRESETS), default=None, help="覆盖背景色预设")
     parser.add_argument("--dry-run", action="store_true", help="演练模式：仅打印装配后的提示词与规格，不调用服务器")
@@ -634,7 +649,14 @@ def main(argv: list[str] | None = None) -> int:
         for key, p in PRESETS.items():
             trans = " [自动抠图]" if p.get("has_transparency") else ""
             bg_prev = " [遮挡质检]" if p.get("is_background") else ""
-            print(f"• {key:<14} | {p['title']} ({p['width']}x{p['height']}){trans}{bg_prev}")
+            export_side = p.get("optimize_max_side")
+            if export_side and max(p['width'], p['height']) > export_side:
+                scale = export_side / max(p['width'], p['height'])
+                w_out, h_out = round(p['width'] * scale), round(p['height'] * scale)
+                size_str = f"{p['width']}x{p['height']} -> 默认导出 {w_out}x{h_out}"
+            else:
+                size_str = f"{p['width']}x{p['height']}"
+            print(f"• {key:<14} | {p['title']} ({size_str}){trans}{bg_prev}")
             print(f"  说明: {p['description']}")
             print()
         return 0
@@ -650,8 +672,15 @@ def main(argv: list[str] | None = None) -> int:
             pos, neg = assemble_prompt(preset, args.prompt, custom_bg=args.background)
             w = args.width or preset["width"]
             h = args.height or preset["height"]
+            actual_max_side = args.export_max_side or preset.get("optimize_max_side")
+            if actual_max_side and max(w, h) > actual_max_side:
+                scale = actual_max_side / max(w, h)
+                w_out, h_out = round(w * scale), round(h * scale)
+                size_info = f"生图: {w}x{h} -> 默认缩放导出: {w_out}x{h_out}"
+            else:
+                size_info = f"生图/导出: {w}x{h}"
             print("=" * 72)
-            print(f"【DRY-RUN 预设演练】{preset['title']} ({args.preset}) · {w}x{h}")
+            print(f"【DRY-RUN 预设演练】{preset['title']} ({args.preset}) · {size_info}")
             print("-" * 72)
             print(f"【装配后正向 Prompt】:\n  {pos}\n")
             print(f"【装配后负向 Prompt】:\n  {neg}\n")
@@ -682,6 +711,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_postprocess=args.skip_postprocess,
         generate_preview=args.preview,
         template_path=args.template,
+        export_max_side=args.export_max_side,
     )
     for path in saved:
         print(f"产物已落盘：{path}（{path.stat().st_size / 1024:.0f} KB）")
