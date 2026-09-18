@@ -10,8 +10,9 @@
 - 值冻结：EngagementSpec 构造即深拷贝快照，格纳库后续改动不影响已开打的这场仗；
 - 三产物同源：timeline.result 与 report.ruling 为同一对象。
 
-随机流：本模块尚用全局随机（P2 批收编注入）；seed 缺省随机生成、
-仅后端侧记录（不入契约，裁决 #2）。
+随机流（红线 3）：resolve 以 seed_used 建本场随机流并注入引擎与演出，
+替换一切影响战报的全局随机——并发会话互不污染，同委托同种子必得同一
+战报。seed 缺省随机生成、仅后端侧记录（不入契约，裁决 #2）。
 """
 
 import random
@@ -231,8 +232,11 @@ class Engagement:
         if self._report is not None:
             raise RuntimeError("裁定封闭：同一委托已裁定，不可二次 resolve（Doc 15 §3）")
 
-        # 种子缺省随机生成、仅后端侧记录（裁决 #2）；P2 前不注入随机流
+        # 种子缺省随机生成、仅后端侧记录（裁决 #2）——先生成再建流，
+        # 缺省路径同样落在可复现的本场随机流上
         seed_used = self._spec.seed if self._spec.seed is not None else random.randrange(2**32)
+        # 本场随机流（红线 3）：裁判持有，圆桌/技能/演出竞标统一经此取随机
+        rng = random.Random(seed_used)
 
         # 引擎会原地 mutate 快照：再深拷贝一份喂引擎，spec 原值专供 init 块
         sim = BattleSimulator(
@@ -240,6 +244,7 @@ class Engagement:
             self._spec.mecha_b.model_copy(deep=True),
             enable_presentation=True,
             quiet=True,
+            rng=rng,
         )
         sim.run_battle()
 

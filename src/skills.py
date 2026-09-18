@@ -127,7 +127,8 @@ def cb_instinct_dodge(val, ctx, owner):
     import random
 
     if val == AttackResult.HIT:
-        triggered = random.random() < 0.3
+        # 随机流：ctx.rng 为本场注入流，未注入回落模块级 random（Doc 15 红线 3）
+        triggered = (ctx.rng or random).random() < 0.3
         ctx.publish_event(TriggerEvent(
             skill_id="spirit_instinct",
             owner=owner,

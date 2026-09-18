@@ -4,6 +4,9 @@
 固定种子跑一场模拟，战报全量对比 tests/golden/battle_timeline_v1.json——
 契约字段任何漂移（改名/搬家/漏输出）在此报警。
 
+确定性（Doc 15 §4 红线 3，P2 起）：种子经 ``EngagementSpec(seed=...)``
+注入，裁判持有本场随机流，不依赖全局 random 状态。
+
 三处同步规则（Doc 15 §8）：改字段必须先改 Doc 14（契约正册）→
 再改 src/presentation/contracts.py（及 engagement 装配）→ 重录金样张。
 跳步即打回。
@@ -11,17 +14,10 @@
 重录方法（字段变更走完前两步后执行）::
 
     UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_battle_golden.py
-
-确定性窗口期：P2（RNG 注入，B6）落地前，引擎与演出仍消费模块级
-random 流，本测试靠 ``random.seed(20260918)`` 固定全局随机——用毕
-``random.seed()`` 复位，防止固定种子污染同进程内其它测试的随机流。
-P2 切换点：改为 ``EngagementSpec(seed=...)`` 注入确定性并重录基线，
-届时删除本窗口期机制与说明。
 """
 
 import json
 import os
-import random
 from pathlib import Path
 from typing import Any
 
@@ -33,15 +29,14 @@ SIZE_BUDGET_BYTES = 512 * 1024  # Doc 15 §3：单场战报数百 KB 量级
 
 
 def _resolve_seeded(mecha_a, mecha_b):
-    """固定全局随机流后裁定一场，用毕复位（见模块 docstring 窗口期说明）。"""
-    random.seed(GOLDEN_SEED)
-    try:
-        spec = EngagementSpec(
-            mecha_a=mecha_a, mecha_b=mecha_b, context=EngagementContext(source="debug")
-        )
-        return Engagement(spec).resolve()
-    finally:
-        random.seed()
+    """以注入种子裁定一场（裁判持有本场随机流，见模块 docstring）。"""
+    spec = EngagementSpec(
+        mecha_a=mecha_a,
+        mecha_b=mecha_b,
+        context=EngagementContext(source="debug"),
+        seed=GOLDEN_SEED,
+    )
+    return Engagement(spec).resolve()
 
 
 def _first_diff(actual: Any, golden: Any, path: str = "$") -> str:

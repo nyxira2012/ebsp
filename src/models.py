@@ -609,6 +609,10 @@ class BattleContext:
     # 而不是使用全局默认 EventManager。
     event_manager: Optional[Any] = field(default=None, repr=False)
 
+    # 本场随机流（Doc 15 红线 3，由 BattleSimulator 注入）；None 时消费方回落
+    # 模块级 random——回落是调用期属性查找，monkeypatch random.* 对旧调用方仍生效
+    rng: Optional[Any] = field(default=None, repr=False)
+
     def publish_event(self, event: Any) -> None:
         """发布技能触发事件，路由到当前战斗绑定的 EventManager 实例。
 

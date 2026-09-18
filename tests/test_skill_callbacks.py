@@ -144,6 +144,7 @@ class TestCbInstinctDodge:
     def test_instinct_converts_hit_when_triggered(self):
         """触发时将 HIT 转为 DODGE"""
         ctx = MagicMock()
+        ctx.rng = None  # 概率分支经 ctx.rng 取随机：stub 未注入，回落被 patch 的全局 random
 
         with patch('random.random', return_value=0.1):  # < 0.3, 触发
             result = cb_instinct_dodge(AttackResult.HIT, ctx, None)
@@ -152,6 +153,7 @@ class TestCbInstinctDodge:
     def test_instinct_keeps_hit_when_not_triggered(self):
         """未触发时保持 HIT"""
         ctx = MagicMock()
+        ctx.rng = None  # 同上：MagicMock 的自动属性会被误当注入流，显式置 None
 
         with patch('random.random', return_value=0.5):  # > 0.3, 未触发
             result = cb_instinct_dodge(AttackResult.HIT, ctx, None)
@@ -169,6 +171,7 @@ class TestCbInstinctDodge:
     def test_instinct_publishes_event(self):
         """触发时发布事件"""
         ctx = MagicMock()
+        ctx.rng = None  # 同 TestCbInstinctDodge：未注入随机流的 stub
 
         with patch('random.random', return_value=0.1):
             cb_instinct_dodge(AttackResult.HIT, ctx, None)

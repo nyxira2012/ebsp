@@ -18,13 +18,18 @@ from ..presentation.event_builder import AttackEventBuilder
 class InitiativeCalculator:
     """先手判定系统"""
 
-    def __init__(self) -> None:
+    def __init__(self, rng: Optional[random.Random] = None) -> None:
         """初始化先手判定系统。
 
         创建连续先攻计数器,用于强制换手机制。
+
+        Args:
+            rng: 本场随机流（Doc 15 红线 3）；None 时回落模块级 random——
+                属性查找发生在调用期，monkeypatch random.uniform 等仍生效。
         """
         self.consecutive_wins: dict[str, int] = {'A': 0, 'B': 0}
         self.last_winner: str | None = None
+        self._rng: Any = rng if rng is not None else random
 
     def calculate_initiative(
         self,
@@ -67,8 +72,8 @@ class InitiativeCalculator:
             return (mecha_a, mecha_b, InitiativeReason.FORCED_SWITCH)
 
         # 检查技能: 强制先攻 (HOOK_INITIATIVE_CHECK)
-        ctx_a = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_a, mecha_b=None, event_manager=event_manager)
-        ctx_b = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_b, mecha_b=None, event_manager=event_manager)
+        ctx_a = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_a, mecha_b=None, event_manager=event_manager, rng=self._rng)
+        ctx_b = BattleContext(round_number=round_number, distance=0, mecha_a=mecha_b, mecha_b=None, event_manager=event_manager, rng=self._rng)
 
         force_a = SkillRegistry.process_hook("HOOK_INITIATIVE_CHECK", False, ctx_a)
         if force_a:
@@ -122,7 +127,7 @@ class InitiativeCalculator:
         will_bonus: float = mecha.current_will * Config.INITIATIVE_WILL_BONUS
 
         # 随机事件 (小幅度)
-        random_event: float = random.uniform(
+        random_event: float = self._rng.uniform(
             -Config.INITIATIVE_RANDOM_RANGE,
             Config.INITIATIVE_RANDOM_RANGE
         )
@@ -132,7 +137,7 @@ class InitiativeCalculator:
         # HOOK: 先攻得分修正 (HOOK_INITIATIVE_SCORE)
         # 在 Initiative 阶段，创建临时 context 来处理钩子
         # 注意：这里不传递 event_manager，因为这是一个内部辅助方法
-        ctx = BattleContext(round_number=0, distance=0, mecha_a=mecha, mecha_b=None, event_manager=None)
+        ctx = BattleContext(round_number=0, distance=0, mecha_a=mecha, mecha_b=None, event_manager=None, rng=self._rng)
         final_score = SkillRegistry.process_hook("HOOK_INITIATIVE_SCORE", final_score, ctx)
 
         return final_score
@@ -269,7 +274,7 @@ class WeaponSelector:
 class BattleSimulator:
     """战斗模拟器主控"""
 
-    def __init__(self, mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool = True, verbose: bool = True, quiet: bool = False) -> None:
+    def __init__(self, mecha_a: Mecha, mecha_b: Mecha, enable_presentation: bool = True, verbose: bool = True, quiet: bool = False, rng: Optional[random.Random] = None) -> None:
         """初始化战斗模拟器。
 
         Args:
@@ -278,12 +283,16 @@ class BattleSimulator:
             enable_presentation: 是否启用演出系统（默认True）
             verbose: 是否输出详细战斗日志（默认True）
             quiet: 是否完全静默模式（默认False，静默模式下强制 verbose=False）
+            rng: 本场随机流（Doc 15 红线 3）；None 时回落模块级 random——
+                属性查找发生在调用期，monkeypatch random.uniform 等仍生效。
         """
         self.mecha_a: Mecha = mecha_a
         self.mecha_b: Mecha = mecha_b
-        self.initiative_calc: InitiativeCalculator = InitiativeCalculator()
+        self.initiative_calc: InitiativeCalculator = InitiativeCalculator(rng=rng)
         self.round_number: int = 0
         self.battle_log: list[str] = []
+        # 本场随机流：先手波动/距离/圆桌/技能掷点/演出竞标统一经此（裁判注入）
+        self._rng: Any = rng if rng is not None else random
 
         # 状态控制
         self.verbose: bool = verbose if not quiet else False
@@ -304,7 +313,7 @@ class BattleSimulator:
 
         if self.enable_presentation:
             # v5.0: 新架构是唯一路径，不再需要 use_new_pipeline 参数
-            self.mapper = EventMapper()
+            self.mapper = EventMapper(rng=self._rng)
             # Try loading templates from config
             try:
                 import os
@@ -349,7 +358,7 @@ class BattleSimulator:
         # 2. 循环执行回合
         # HOOK: 初始回合上限判定 (HOOK_MAX_ROUNDS)
         max_rounds = SkillRegistry.process_hook("HOOK_MAX_ROUNDS", Config.MAX_ROUNDS,
-                                              BattleContext(round_number=0, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager))
+                                              BattleContext(round_number=0, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager, rng=self._rng))
 
         while True:
             # 状态检查: 是否有人击破
@@ -359,7 +368,7 @@ class BattleSimulator:
             # 回合上限检查
             if self.round_number >= max_rounds:
                 # HOOK: 强制继续战斗判定 (如：死斗/剧情需要)
-                ctx = BattleContext(round_number=self.round_number, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager)
+                ctx = BattleContext(round_number=self.round_number, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager, rng=self._rng)
                 should_maintain = SkillRegistry.process_hook("HOOK_CHECK_MAINTAIN_BATTLE", False, ctx)
                 if not should_maintain:
                     break
@@ -375,7 +384,7 @@ class BattleSimulator:
         # HOOK: 战斗结束 (HOOK_ON_BATTLE_END)
         # 用于清理 BATTLE_BASED 状态 (如 学习电脑层数)
         # 此时 round_number 可能已经达到 MAX，或者有一方死亡
-        final_ctx = BattleContext(round_number=self.round_number, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager)
+        final_ctx = BattleContext(round_number=self.round_number, distance=0, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager, rng=self._rng)
         SkillRegistry.process_hook("HOOK_ON_BATTLE_END", None, final_ctx)
 
         # 战斗结算
@@ -487,7 +496,7 @@ class BattleSimulator:
 
         # HOOK: 回合结束 (HOOK_ON_TURN_END)
         # 用于清理 TURN_BASED 状态，或触发每回合结束的效果 (如 EN回复)
-        ctx = BattleContext(round_number=self.round_number, distance=distance, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager)
+        ctx = BattleContext(round_number=self.round_number, distance=distance, mecha_a=self.mecha_a, mecha_b=self.mecha_b, event_manager=self._event_manager, rng=self._rng)
         SkillRegistry.process_hook("HOOK_ON_TURN_END", None, ctx)
 
         # 7. 效果结算 (Tick)
@@ -566,7 +575,7 @@ class BattleSimulator:
         range_max: int = max(Config.DISTANCE_FINAL_MAX, Config.DISTANCE_INITIAL_MAX - reduction)
 
         # 在范围内随机
-        return random.randint(range_min, range_max)
+        return self._rng.randint(range_min, range_max)
 
     def _execute_attack(
         self,
@@ -613,7 +622,8 @@ class BattleSimulator:
             mecha_a=attacker,
             mecha_b=defender,
             weapon=weapon,
-            event_manager=self._event_manager
+            event_manager=self._event_manager,
+            rng=self._rng
         )
 
         # 3. 计算并消耗 EN

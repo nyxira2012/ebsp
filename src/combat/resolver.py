@@ -195,7 +195,8 @@ class AttackTableResolver:
         assert weapon is not None, "Weapon cannot be None"
 
         # Generate random roll (uniform to avoid 101-integer bias)
-        roll: float = random.uniform(0, 100)
+        # 随机流：ctx.rng 为本场注入流，未注入回落模块级 random（Doc 15 红线 3）
+        roll: float = (ctx.rng or random).uniform(0, 100)
         ctx.roll = roll
 
         # Calculate segment data

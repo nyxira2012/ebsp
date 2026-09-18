@@ -8,7 +8,7 @@ L3 动态丰满层 - 原子化组合 + DHL + SVI
 """
 
 import random
-from typing import List, Optional, Tuple, Dict, TYPE_CHECKING
+from typing import Any, List, Optional, Tuple, Dict, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .models import RawAttackEvent
@@ -40,13 +40,14 @@ class DhlMapper:
     }
 
     @classmethod
-    def get_hit_location(cls, channel: Channel, attack_result: str) -> Optional[str]:
+    def get_hit_location(cls, channel: Channel, attack_result: str, rng: Optional[random.Random] = None) -> Optional[str]:
         """
         根据频道和攻击结果获取受击部位。
 
         Args:
             channel: 演出频道
             attack_result: 攻击结果 (AttackResult 枚举值，继承自 str)
+            rng: 本场随机流（Doc 15 红线 3）；None 回落模块级 random
 
         Returns:
             部位名称，或 None（如果是 EVADE）
@@ -66,7 +67,7 @@ class DhlMapper:
         else:
             pool = cls._LOCATION_MAP["HIT"]
 
-        return random.choice(pool) if pool else None
+        return (rng or random).choice(pool) if pool else None
 
 
 class DamageGrader:
@@ -152,9 +153,10 @@ class SVI:
     def build_variables(
         cls,
         event: RawAttackEvent,
-        hit_part: Optional[str] = None
+        hit_part: Optional[str] = None,
+        rng: Optional[random.Random] = None
     ) -> Dict[str, str]:
-        """构建变量字典用于 str.format()"""
+        """构建变量字典用于 str.format()（rng：本场随机流，None 回落模块级 random）"""
         return {
             "attacker": event.attacker_name,
             "defender": event.defender_name,
@@ -166,7 +168,7 @@ class SVI:
             "hit_part": hit_part or "目标",
             "skill_name": cls._pick_skill_label(event),
             "damage_grade": DamageGrader.get_grade(event.damage, event.defender_max_hp),
-            "status_word": random.choice(DamageGrader.get_hp_status_words(
+            "status_word": (rng or random).choice(DamageGrader.get_hp_status_words(
                 event.defender_hp_after, event.defender_max_hp
             )),
         }
@@ -210,6 +212,14 @@ class TextAssembler:
     react_text  = [受击部位] + [物理反馈] + [状态反馈]
     """
 
+    def __init__(self, rng: Optional[random.Random] = None):
+        """
+        Args:
+            rng: 本场随机流（Doc 15 红线 3）；None 回落模块级 random——调用期
+                属性查找，monkeypatch random.choice 对未注入的旧调用方仍生效。
+        """
+        self._rng: Any = rng if rng is not None else random
+
     def assemble(
         self,
         action_bone: Optional[ActionBone],
@@ -224,10 +234,10 @@ class TextAssembler:
             (action_text, reaction_text, hit_part) 元组
         """
         # 获取受击部位
-        hit_part = DhlMapper.get_hit_location(channel, event.attack_result)
+        hit_part = DhlMapper.get_hit_location(channel, event.attack_result, rng=self._rng)
 
         # 构建变量字典
-        variables = SVI.build_variables(event, hit_part)
+        variables = SVI.build_variables(event, hit_part, rng=self._rng)
 
         # 组装 Action 文本
         action_text = self._assemble_action(action_bone, event, variables)
@@ -245,7 +255,7 @@ class TextAssembler:
     ) -> str:
         """组装攻击方文本"""
         if bone and bone.text_fragments:
-            text = random.choice(bone.text_fragments)
+            text = self._rng.choice(bone.text_fragments)
         else:
             # 默认兜底
             text = "{attacker}使用{weapon}展开了攻击！"
@@ -275,7 +285,7 @@ class TextAssembler:
         """
         # 断言 Bidder 已提供有效骨架
         assert bone and bone.text_fragments, "Bidder should always provide a valid bone with text_fragments"
-        base_text = random.choice(bone.text_fragments)
+        base_text = self._rng.choice(bone.text_fragments)
 
         # 变量注入
         try:

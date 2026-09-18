@@ -10,7 +10,8 @@ Event Mapper - 演出系统核心编排器 (CPS v5.0)
 入口：map_attack() - 将 RawAttackEvent 转换为 PresentationAttackEvent 序列
 """
 
-from typing import List, Optional, TYPE_CHECKING
+import random
+from typing import Any, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .registry import TemplateRegistry
@@ -39,12 +40,14 @@ class EventMapper:
     这是 v5.0 四层架构的唯一入口，所有旧路径逻辑已被移除。
     """
 
-    def __init__(self, registry: Optional['TemplateRegistry'] = None):
+    def __init__(self, registry: Optional['TemplateRegistry'] = None, rng: Optional[random.Random] = None):
         """
         初始化 EventMapper。
 
         Args:
             registry: 模板注册表，如果为 None 则创建默认实例
+            rng: 本场随机流（Doc 15 红线 3），注入竞标与拼装层；None 回落
+                模块级 random——调用期属性查找，monkeypatch 对旧调用方仍生效
         """
         if registry is None:
             from .registry import TemplateRegistry
@@ -52,11 +55,13 @@ class EventMapper:
         else:
             self.registry = registry
 
+        self._rng: Any = rng if rng is not None else random
+
         self.scripted_manager = ScriptedPresentationManager()
 
         # L2-L4 组件
         self._bidder: Optional[DualBidder] = None
-        self._assembler = TextAssembler()
+        self._assembler = TextAssembler(rng=self._rng)
         self._av_dispatcher = AVDispatcher()
 
         # 初始化竞标器
@@ -70,7 +75,7 @@ class EventMapper:
 
             # 只有在有数据时才初始化 bidder
             if action_bones or reaction_bones:
-                self._bidder = DualBidder(action_bones, reaction_bones)
+                self._bidder = DualBidder(action_bones, reaction_bones, rng=self._rng)
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.info(f"[EventMapper] DualBidder 初始化完成："

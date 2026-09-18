@@ -106,8 +106,8 @@ class EffectProcessor:
                 if effect.duration == 0 or effect.charges == 0:
                     continue
 
-                # 概率判定
-                if effect.trigger_chance < 1.0 and random.random() >= effect.trigger_chance:
+                # 概率判定（随机流：ctx 注入优先，未注入回落模块级 random——Doc 15 红线 3）
+                if effect.trigger_chance < 1.0 and (context.rng or random).random() >= effect.trigger_chance:
                     context.publish_event(TriggerEvent(
                         skill_id=effect.id,
                         owner=owner,

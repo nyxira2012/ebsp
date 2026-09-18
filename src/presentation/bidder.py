@@ -7,7 +7,7 @@ L2 剧本解构层 - 动反双轨独立竞标 (Dual-Track Bidding)
 
 import random
 import logging
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from .models import RawAttackEvent
@@ -39,9 +39,12 @@ class DualBidder:
     两次竞标完全独立，互不影响。
     """
 
-    def __init__(self, action_bones: List[ActionBone], reaction_bones: List[ReactionBone]):
+    def __init__(self, action_bones: List[ActionBone], reaction_bones: List[ReactionBone], rng: Optional[random.Random] = None):
         self.action_bones = action_bones
         self.reaction_bones = reaction_bones
+        # 本场随机流（Doc 15 红线 3）；None 回落模块级 random——调用期属性查找，
+        # monkeypatch random.choices 对未注入的旧调用方仍生效
+        self._rng: Any = rng if rng is not None else random
         # 冷却跟踪：bone_id -> 剩余冷却回合
         self._cooldowns: dict[str, int] = {}
 
@@ -85,7 +88,7 @@ class DualBidder:
 
         if candidates:
             weights = [getattr(bone, 'weight', 1.0) for bone in candidates]
-            return random.choices(candidates, weights=weights, k=1)[0]
+            return self._rng.choices(candidates, weights=weights, k=1)[0]
 
         # 2. T2 降级：动作风格 + GENERIC 材质
         candidates = [
@@ -97,7 +100,7 @@ class DualBidder:
 
         if candidates:
             weights = [getattr(bone, 'weight', 1.0) for bone in candidates]
-            return random.choices(candidates, weights=weights, k=1)[0]
+            return self._rng.choices(candidates, weights=weights, k=1)[0]
 
         # 3. T3 硬编码兜底：无匹配模板时的最终 fallback
         return ActionBone(
@@ -187,7 +190,7 @@ class DualBidder:
 
             weights.append(score)
 
-        return random.choices(candidates, weights=weights, k=1)[0]
+        return self._rng.choices(candidates, weights=weights, k=1)[0]
 
     def tick_cooldowns(self):
         """每回合调用，递减所有冷却计数"""

@@ -7,7 +7,8 @@ CONTEXT 与 SUMMARY 事件）、裁定推导（ko/decision/draw）、
 meta/init/result 结构对齐 Doc 14、战报体积预算。
 
 确定性策略（结构断言不依赖具体随机结果）：
-- ko 场景拦截 random.uniform 把圆桌掷点恒压到 HIT 段；
+- ko 场景拦截 random.Random.uniform（类级——裁判持有本场随机流，模块级
+  patch 够不到注入流）把圆桌掷点恒压到 HIT 段；
 - decision/draw 场景用超高装甲靶船（任何判定下伤害恒 0），终局与掷点无关；
 - 推导函数的分支覆盖直接构造快照终态单测 _derive_ruling。
 """
@@ -213,7 +214,8 @@ class TestRulingDerivation:
 
     def test_ko_battle(self, gundam_rx78, zaku_ii, monkeypatch):
         # 圆桌掷点恒压到最高段 → 每次攻击必命中，残血 1 的扎古必被击破
-        monkeypatch.setattr(random, "uniform", lambda low, high: 99.9)
+        # （类级 patch：连裁判注入的本场随机流一并压住，模块级 patch 够不到它）
+        monkeypatch.setattr(random.Random, "uniform", lambda self, low, high: 99.9)
         zaku_ii.current_hp = 1
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.ruling.finish == "ko"
@@ -229,7 +231,7 @@ class TestRulingDerivation:
 
     def test_ko_battle_b_side_lethal(self, gundam_rx78, zaku_ii, monkeypatch):
         """b 攻致死的镜像面：锁定 b 出招时攻/防属性到 a/b 键的映射。"""
-        monkeypatch.setattr(random, "uniform", lambda low, high: 99.9)
+        monkeypatch.setattr(random.Random, "uniform", lambda self, low, high: 99.9)
         gundam_rx78.current_hp = 1
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.ruling.finish == "ko"
@@ -390,7 +392,7 @@ class TestRoundFieldsAndBroadcastEvents:
 
     def test_ko_battle_summary_events(self, gundam_rx78, zaku_ii, monkeypatch):
         """击破局：击破播报与终局宣告同在最后一回合 summary_events，先破后宣告。"""
-        monkeypatch.setattr(random, "uniform", lambda low, high: 99.9)
+        monkeypatch.setattr(random.Random, "uniform", lambda self, low, high: 99.9)
         zaku_ii.current_hp = 1
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.ruling.finish == "ko"
