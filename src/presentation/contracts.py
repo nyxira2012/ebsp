@@ -4,8 +4,11 @@
 对外契约的唯一实现点：前端消费的时间轴 JSON 只经由本模块的
 ``TimelineDocument`` 装配（装配逻辑在 ``src/combat/engagement.py``），
 结构上不可能漏字段（架构红线 1：战报格式唯一拼装点）。
+现状：simulate 已切换为 response_model=TimelineDocument，
+API 响应链路上无第二拼装点；PVE 接敌随 B5 并入。
 
-同步规则（三处同步，Doc 15 §8）：改字段必须先改 Doc 14 → 再改本模块 → 重录金样张。
+同步规则（三处同步，Doc 15 §8）：改字段必须先改 Doc 14 → 再改本模块 → 重录金样张
+（tests/test_battle_golden.py，重录方法见其 docstring）。
 """
 
 from typing import List, Literal, Optional

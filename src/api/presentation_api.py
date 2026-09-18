@@ -10,8 +10,8 @@ from typing import Optional
 
 from src.models import Mecha, PilotConfig, MechaConfig, Weapon, WeaponType
 from src.factory import MechaFactory
-from src.combat.engine import BattleSimulator
-from src.presentation.renderer import JSONRenderer
+from src.combat.engagement import Engagement, EngagementContext, EngagementSpec
+from src.presentation.contracts import TimelineDocument
 from src import DataLoader
 from src.api.context import set_loader, get_loader, initialize_presentation_registry
 
@@ -102,7 +102,7 @@ async def shutdown_event():
 def health():
     return {"status": "ok"}
 
-@app.post("/battle/simulate")
+@app.post("/battle/simulate", response_model=TimelineDocument)
 async def simulate_battle(
     req: BattleRequest,
     current_user: Optional[User] = Depends(get_optional_user),
@@ -159,14 +159,17 @@ async def simulate_battle(
                     # 养成数据无效，忽略并使用默认配置
                     print(f"⚠️ 玩家出战数据无效，使用默认配置: {e}")
 
-        # 执行战斗模拟
-        sim = BattleSimulator(mecha_a, mecha_b, enable_presentation=True)
-        sim.run_battle()
+        # 执行裁定：快照交裁判，拿完整战报（Doc 15 §5 simulate 行；
+        # 契约即响应模型，序列化漏字段在结构上不可能——红线 1）
+        report = Engagement(
+            EngagementSpec(
+                mecha_a=mecha_a,
+                mecha_b=mecha_b,
+                context=EngagementContext(source="debug"),
+            )
+        ).resolve()
 
-        timeline = sim.presentation_timeline
-        json_data = JSONRenderer.render_timeline(timeline)
-
-        return json_data
+        return report.timeline
 
     except HTTPException:
         raise

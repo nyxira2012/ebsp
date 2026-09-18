@@ -3,7 +3,6 @@
 
 职责：
 - TextRenderer: 生成人类可读的终端文本（带颜色）
-- JSONRenderer: 生成前端可用的 JSON 数据
 
 在演出系统架构中的位置：
 这是 L4 AV Dispatcher 的下游，负责最终输出格式的转换。
@@ -14,10 +13,12 @@
 - REACTION (蓝色): 防御方反应
 - T1 (洋红): 高亮/特殊事件
 - DAMAGE (红色): 伤害数值
+
+历史注记：曾有 JSONRenderer 负责前端 JSON 输出，simulate 切换到
+TimelineDocument 契约（Doc 15 红线 1：契约唯一拼装点）后零消费方，已删除。
 """
 
-from typing import List, Optional
-import json
+from typing import List
 from .models import PresentationAttackEvent, PresentationRoundEvent, TemplateTier
 
 
@@ -110,100 +111,3 @@ class TextRenderer:
                 output.append(f"{summary.text}")
 
         return "\n".join(output)
-
-
-class JSONRenderer:
-    """
-    JSON 渲染器 - 将演出事件渲染为前端可用的 JSON 格式。
-
-    用于前后端分离架构中，将演出数据序列化为前端可解析的格式。
-    支持完整的战斗时间线导出。
-    """
-
-    @staticmethod
-    def render_attack(events: List[PresentationAttackEvent]) -> str:
-        """将单次攻击事件序列渲染为 JSON 字符串。
-
-        Args:
-            events: 演出事件列表
-
-        Returns:
-            JSON 格式的字符串，包含事件类型、文本、动画ID、特效、音效等信息
-        """
-        data = []
-        for e in events:
-            data.append({
-                "type": e.event_type,
-                "text": e.text,
-                "anim_id": e.anim_id,
-                "vfx": e.vfx_ids,
-                "sfx": e.sfx_ids,
-                "damage": e.damage_display,
-                "tier": e.tier.value
-            })
-        return json.dumps(data, indent=2, ensure_ascii=False)
-
-    @staticmethod
-    def render_timeline(timeline: List[PresentationRoundEvent]) -> dict:
-        """将完整战斗时间线渲染为可 JSON 序列化的字典。
-
-        Args:
-            timeline: 回合事件列表，代表整场战斗的演出序列
-
-        Returns:
-            包含完整战斗数据的可序列化字典，结构如下：
-            {
-                "rounds": [
-                    {
-                        "round_number": int,
-                        "context_events": [...],
-                        "attack_sequences": [...],
-                        "summary_events": [...]
-                    }
-                ]
-            }
-        """
-        rounds = []
-        for round_event in timeline:
-            round_data = {
-                "round_number": round_event.round_number,
-                "context_events": [
-                    {
-                        "type": e.event_type,
-                        "text": e.text,
-                        "anim_id": e.anim_id,
-                        "vfx": e.vfx_ids,
-                        "sfx": e.sfx_ids,
-                        "tier": e.tier.value
-                    } for e in round_event.context_events
-                ],
-                "attack_sequences": [
-                    {
-                        "attacker_id": seq.attacker_id,
-                        "defender_id": seq.defender_id,
-                        "events": [
-                            {
-                                "type": e.event_type,
-                                "text": e.text,
-                                "anim_id": e.anim_id,
-                                "vfx": e.vfx_ids,
-                                "sfx": e.sfx_ids,
-                                "damage": e.damage_display,
-                                "tier": e.tier.value
-                            } for e in seq.events
-                        ]
-                    } for seq in round_event.attack_sequences
-                ],
-                "summary_events": [
-                    {
-                        "type": e.event_type,
-                        "text": e.text,
-                        "anim_id": e.anim_id,
-                        "vfx": e.vfx_ids,
-                        "sfx": e.sfx_ids,
-                        "tier": e.tier.value
-                    } for e in round_event.summary_events
-                ]
-            }
-            rounds.append(round_data)
-        return {"rounds": rounds}

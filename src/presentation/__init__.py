@@ -17,7 +17,7 @@ from .template import (
 )
 from .registry import TemplateRegistry
 from .mapper import EventMapper
-from .renderer import TextRenderer, JSONRenderer
+from .renderer import TextRenderer
 
 # v5.0 四层架构组件
 from .router import OutcomeRouter
@@ -35,6 +35,6 @@ __all__ = [
     "ActionBone", "ReactionBone",
     "PresentationTemplate", "TemplateConditions", "TemplateContent", "TemplateVisuals",
     # 核心组件
-    "EventMapper", "TemplateRegistry", "TextRenderer", "JSONRenderer",
+    "EventMapper", "TemplateRegistry", "TextRenderer",
     "OutcomeRouter", "DualBidder", "TextAssembler", "AVDispatcher",
 ]

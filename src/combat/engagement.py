@@ -122,27 +122,22 @@ def _build_event(event: PresentationAttackEvent, attacker_side: Optional[str]) -
     }
     if raw is not None and attacker_side is not None:
         defender_side = "b" if attacker_side == "a" else "a"
-        # 攻/防属性按序列侧位映射到 a/b 键（Doc 14 §6.2/§6.3 的方位口径）
-        if attacker_side == "a":
-            will_delta = WillDelta(a=raw.attacker_will_delta, b=raw.defender_will_delta)
-            state_after = StateAfter(
-                a=CombatantState(
-                    hp=raw.attacker_hp_after, en=raw.attacker_en_after, will=raw.attacker_will_after
-                ),
-                b=CombatantState(
-                    hp=raw.defender_hp_after, en=raw.defender_en_after, will=raw.defender_will_after
-                ),
-            )
-        else:
-            will_delta = WillDelta(a=raw.defender_will_delta, b=raw.attacker_will_delta)
-            state_after = StateAfter(
-                a=CombatantState(
-                    hp=raw.defender_hp_after, en=raw.defender_en_after, will=raw.defender_will_after
-                ),
-                b=CombatantState(
-                    hp=raw.attacker_hp_after, en=raw.attacker_en_after, will=raw.attacker_will_after
-                ),
-            )
+        # 攻/防状态与气力增量先按角色组一次，再按出招方位落 a/b 键
+        # （Doc 14 §6.2/§6.3 的方位口径；攻防两分支同构，避免镜像重复装配）
+        states = {
+            attacker_side: CombatantState(
+                hp=raw.attacker_hp_after, en=raw.attacker_en_after, will=raw.attacker_will_after
+            ),
+            defender_side: CombatantState(
+                hp=raw.defender_hp_after, en=raw.defender_en_after, will=raw.defender_will_after
+            ),
+        }
+        deltas = {
+            attacker_side: raw.attacker_will_delta,
+            defender_side: raw.defender_will_delta,
+        }
+        will_delta = WillDelta(a=deltas["a"], b=deltas["b"])
+        state_after = StateAfter(a=states["a"], b=states["b"])
         fields.update(
             attack_result=raw.attack_result.value,
             attacker=attacker_side,
@@ -168,6 +163,10 @@ def _derive_ruling(a: MechaSnapshot, b: MechaSnapshot, rounds_fought: int) -> Re
     一方死一方活 → ko + 活方；双活比 HP 百分比，高者 → decision；
     相等 → draw（winner 为 None）。不用引擎 get_result() 的口径——
     a_wins/b_wins 无法区分击破与判定。
+
+    双死边界：双方同时不存活按 draw 处理（双活等百分比分支的自然延伸）；
+    当前引擎每回合攻击即时结算，不存在同一结算点双死，此分支不可达——
+    留声明防未来引入同回合双伤机制时静默误判。
     """
     a_alive = a.is_alive()
     b_alive = b.is_alive()

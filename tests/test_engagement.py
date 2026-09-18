@@ -225,6 +225,21 @@ class TestRulingDerivation:
             defender_state = getattr(event.state_after, event.defender)
             assert defender_state.hp == 0
 
+    def test_ko_battle_b_side_lethal(self, gundam_rx78, zaku_ii, monkeypatch):
+        """b 攻致死的镜像面：锁定 b 出招时攻/防属性到 a/b 键的映射。"""
+        monkeypatch.setattr(random, "uniform", lambda low, high: 99.9)
+        gundam_rx78.current_hp = 1
+        report = _resolve(gundam_rx78, zaku_ii)
+        assert report.ruling.finish == "ko"
+        assert report.ruling.winner == "b"
+        assert report.final_states["a"]["alive"] is False
+        assert report.final_states["b"]["alive"] is True
+        lethal = [event for event in _all_attack_events(report) if event.is_lethal]
+        assert lethal
+        for event in lethal:
+            assert event.defender == "a"
+            assert event.state_after.a.hp == 0
+
     def test_decision_and_draw_battles(self):
         # 超高装甲 → 伤害恒 0 → 打满回合上限进入判定
         stronger = _fortress("f_a", "FortressA", max_hp=1000, current_hp=1000)

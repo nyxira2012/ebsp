@@ -1,0 +1,353 @@
+{
+  "meta": {
+    "contract_version": "1.0",
+    "cps_version": "5.1",
+    "route": "debug"
+  },
+  "init": {
+    "a": {
+      "mecha_id": "m_rx78",
+      "name": "RX-78高达",
+      "portrait": "m_gundam",
+      "hp": 5500,
+      "max_hp": 5500,
+      "en": 120,
+      "max_en": 120,
+      "will": 100,
+      "will_min": 50,
+      "will_max": 150,
+      "pilot": {
+        "name": null,
+        "portrait": null
+      }
+    },
+    "b": {
+      "mecha_id": "m_zaku",
+      "name": "扎古II",
+      "portrait": "m_zaku",
+      "hp": 4500,
+      "max_hp": 4500,
+      "en": 100,
+      "max_en": 100,
+      "will": 100,
+      "will_min": 50,
+      "will_max": 150,
+      "pilot": {
+        "name": null,
+        "portrait": null
+      }
+    }
+  },
+  "rounds": [
+    {
+      "round_number": 1,
+      "distance": 0,
+      "first": null,
+      "first_reason": null,
+      "context_events": [],
+      "attack_sequences": [
+        {
+          "attacker_id": "m_rx78",
+          "defender_id": "m_zaku",
+          "is_first_attack": true,
+          "events": [
+            {
+              "type": "ACTION",
+              "text": "RX-78高达 使用撞击展开了攻击！",
+              "timestamp": 0.0,
+              "tier": "T3_FALLBACK",
+              "anim_id": "anim_generic_attack",
+              "camera": "cam_long_shot",
+              "vfx": [
+                "vfx_impact_shock",
+                "vfx_armor_impact"
+              ],
+              "sfx": [
+                "sfx_collision_heavy"
+              ],
+              "attack_result": "HIT",
+              "attacker": "a",
+              "defender": "b",
+              "weapon_name": "撞击",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "body",
+              "damage": 480,
+              "en_cost": 0,
+              "will_delta": {
+                "a": 2,
+                "b": 1
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 120,
+                  "will": 104
+                },
+                "b": {
+                  "hp": 4020,
+                  "en": 100,
+                  "will": 102
+                }
+              },
+              "is_lethal": false,
+              "triggered_skills": [],
+              "spirit_commands": []
+            },
+            {
+              "type": "REACTION",
+              "text": "近身攻击突破了防御，扎古II的肩部遭受严重损伤（命中！-480，中伤）",
+              "timestamp": 1.5,
+              "tier": "T2_5_DECAY",
+              "anim_id": "anim_hit_impact",
+              "camera": "cam_long_shot",
+              "vfx": [
+                "vfx_impact_shock",
+                "vfx_armor_impact"
+              ],
+              "sfx": [
+                "sfx_collision_heavy"
+              ],
+              "attack_result": "HIT",
+              "attacker": "a",
+              "defender": "b",
+              "weapon_name": "撞击",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "肩部",
+              "damage": 480,
+              "en_cost": 0,
+              "will_delta": {
+                "a": 2,
+                "b": 1
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 120,
+                  "will": 104
+                },
+                "b": {
+                  "hp": 4020,
+                  "en": 100,
+                  "will": 102
+                }
+              },
+              "is_lethal": false,
+              "triggered_skills": [],
+              "spirit_commands": []
+            }
+          ]
+        },
+        {
+          "attacker_id": "m_zaku",
+          "defender_id": "m_rx78",
+          "is_first_attack": true,
+          "events": [
+            {
+              "type": "ACTION",
+              "text": "扎古II 使用撞击展开了攻击！",
+              "timestamp": 0.0,
+              "tier": "T3_FALLBACK",
+              "anim_id": "anim_generic_attack",
+              "camera": "cam_long_shot",
+              "vfx": [
+                "vfx_dodge_trail"
+              ],
+              "sfx": [
+                "sfx_dodge"
+              ],
+              "attack_result": "MISS",
+              "attacker": "b",
+              "defender": "a",
+              "weapon_name": "撞击",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "body",
+              "damage": 0,
+              "en_cost": 0,
+              "will_delta": {
+                "a": 0,
+                "b": 0
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 120,
+                  "will": 104
+                },
+                "b": {
+                  "hp": 4020,
+                  "en": 100,
+                  "will": 102
+                }
+              },
+              "is_lethal": false,
+              "triggered_skills": [],
+              "spirit_commands": []
+            },
+            {
+              "type": "REACTION",
+              "text": "RX-78高达果断后撤，这狂暴的近身一击彻底落空！（未命中！）",
+              "timestamp": 1.5,
+              "tier": "T2_5_DECAY",
+              "anim_id": "anim_evade",
+              "camera": "cam_long_shot",
+              "vfx": [
+                "vfx_dodge_trail"
+              ],
+              "sfx": [
+                "sfx_dodge"
+              ],
+              "attack_result": "MISS",
+              "attacker": "b",
+              "defender": "a",
+              "weapon_name": "撞击",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "body",
+              "damage": 0,
+              "en_cost": 0,
+              "will_delta": {
+                "a": 0,
+                "b": 0
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 120,
+                  "will": 104
+                },
+                "b": {
+                  "hp": 4020,
+                  "en": 100,
+                  "will": 102
+                }
+              },
+              "is_lethal": false,
+              "triggered_skills": [],
+              "spirit_commands": []
+            }
+          ]
+        }
+      ],
+      "summary_events": []
+    },
+    {
+      "round_number": 2,
+      "distance": 0,
+      "first": null,
+      "first_reason": null,
+      "context_events": [],
+      "attack_sequences": [
+        {
+          "attacker_id": "m_rx78",
+          "defender_id": "m_zaku",
+          "is_first_attack": true,
+          "events": [
+            {
+              "type": "ACTION",
+              "text": "RX-78高达 使用光束步枪展开了攻击！",
+              "timestamp": 0.0,
+              "tier": "T3_FALLBACK",
+              "anim_id": "anim_generic_attack",
+              "camera": "cam_dramatic_zoom",
+              "vfx": [],
+              "sfx": [],
+              "attack_result": "CRIT",
+              "attacker": "a",
+              "defender": "b",
+              "weapon_name": "光束步枪",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "body",
+              "damage": 5034,
+              "en_cost": 12,
+              "will_delta": {
+                "a": 5,
+                "b": 0
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 108,
+                  "will": 115
+                },
+                "b": {
+                  "hp": 0,
+                  "en": 100,
+                  "will": 103
+                }
+              },
+              "is_lethal": true,
+              "triggered_skills": [],
+              "spirit_commands": []
+            },
+            {
+              "type": "REACTION",
+              "text": "扎古II 被彻底摧毁了。（暴击！-5034，濒死 💀）",
+              "timestamp": 2.4,
+              "tier": "T3_FALLBACK",
+              "anim_id": "anim_explosion_fatal",
+              "camera": "cam_dramatic_zoom",
+              "vfx": [],
+              "sfx": [],
+              "attack_result": "CRIT",
+              "attacker": "a",
+              "defender": "b",
+              "weapon_name": "光束步枪",
+              "motion_style": "STRIKE_BLUNT",
+              "damage_material": "GENERIC",
+              "hit_location": "核心反应堆",
+              "damage": 5034,
+              "en_cost": 12,
+              "will_delta": {
+                "a": 5,
+                "b": 0
+              },
+              "state_after": {
+                "a": {
+                  "hp": 5500,
+                  "en": 108,
+                  "will": 115
+                },
+                "b": {
+                  "hp": 0,
+                  "en": 100,
+                  "will": 103
+                }
+              },
+              "is_lethal": true,
+              "triggered_skills": [],
+              "spirit_commands": []
+            }
+          ]
+        }
+      ],
+      "summary_events": []
+    }
+  ],
+  "result": {
+    "finish": "ko",
+    "winner": "a",
+    "rounds_fought": 2,
+    "summary": {
+      "a": {
+        "hp": 5500,
+        "max_hp": 5500,
+        "hp_pct": 100.0,
+        "en": 108,
+        "will": 115,
+        "alive": true
+      },
+      "b": {
+        "hp": 0,
+        "max_hp": 4500,
+        "hp_pct": 0.0,
+        "en": 100,
+        "will": 103,
+        "alive": false
+      }
+    }
+  }
+}
