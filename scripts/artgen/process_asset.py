@@ -118,9 +118,25 @@ def remove_white_background(
     arr = np.asarray(image.convert("RGB")).astype(np.int16)
     if key == "auto":
         key_arr = _sample_border_key(arr)
+    elif key == "magenta":
+        sampled = _sample_border_key(arr)
+        if sampled[0] > 160 and sampled[2] > 120 and sampled[1] < 90:
+            key_arr = sampled
+        else:
+            key_arr = np.array([255, 0, 255])
     else:
         key_arr = np.array(KEY_COLORS.get(key, KEY_COLORS["white"]))
     near_bg = np.abs(arr - key_arr).max(axis=2) < threshold
+    if key == "magenta":
+        # 兼容标准品红及模型输出的偏紫/深洋红/暖洋红（高R、高B、低中G且R/B明显高于G）
+        is_magenta_shade = (
+            (arr[..., 0] > 150)
+            & (arr[..., 2] > 115)
+            & (arr[..., 1] < 115)
+            & (arr[..., 0] - arr[..., 1] > 50)
+            & (arr[..., 2] - arr[..., 1] > 25)
+        )
+        near_bg |= is_magenta_shade
 
     if key == "white":
         labeled, _ = ndimage.label(near_bg)
@@ -135,6 +151,13 @@ def remove_white_background(
     else:
         background = near_bg
 
+    # 清理背景中散落的孤立微小噪点色块（1024画布下主体常在数十万像素，杂质碎片通常小于1500像素）
+    labeled_fg, num_fg = ndimage.label(~background)
+    if num_fg > 1:
+        sizes = ndimage.sum(~background, labeled_fg, range(1, num_fg + 1))
+        small_specks = np.isin(labeled_fg, np.where(sizes < 1500)[0] + 1)
+        background |= small_specks
+
     # 腐蚀 1px 去色键色晕边，再高斯羽化软化轮廓
     alpha = ndimage.binary_erosion(~background, iterations=1)
     alpha = ndimage.gaussian_filter(alpha.astype(np.float32), sigma=0.8)
@@ -142,8 +165,9 @@ def remove_white_background(
 
     rgb = np.asarray(image.convert("RGB")).astype(np.int16)
     if key != "white":
-        # 溢色消除：抑制模型边缘色键 rim light 泛光
-        spill = (rgb[..., 0] > rgb[..., 1] + SPILL_DELTA) & (rgb[..., 2] > rgb[..., 1] + SPILL_DELTA)
+        # 溢色消除：仅在主体边缘羽化过渡带（alpha < 220）抑制色键溢色，严禁污染角色本体粉发与洋红服饰
+        edge_zone = (alpha_u8 > 0) & (alpha_u8 < 220)
+        spill = edge_zone & (rgb[..., 0] > rgb[..., 1] + SPILL_DELTA) & (rgb[..., 2] > rgb[..., 1] + SPILL_DELTA)
         cap = rgb[..., 1] + SPILL_DELTA
         rgb = np.dstack(
             [
