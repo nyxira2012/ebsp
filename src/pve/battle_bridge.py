@@ -20,6 +20,9 @@ class BattleResult:
         rounds_fought (int): 战斗实际进行的回合数。
         credits_earned (int): 本场战斗掉落的信用点金额。
         loot_drops (List[Dict[str, Any]]): 产生的战利品列表（包含装备字典或物品详情）。
+        battle_report (dict): 完整战报时间轴（Doc 14 四块结构的
+            model_dump(mode="json")；Doc 15 §3 三件产物之一，补上烂摊子 2）——
+            engage 裁定成功恒含。
     """
     outcome: CombatOutcome
     player_states: List[PveEntityState]
@@ -27,6 +30,7 @@ class BattleResult:
     rounds_fought: int
     credits_earned: int
     loot_drops: List[Dict[str, Any]]
+    battle_report: dict
 
 class BattleBridge:
     """PVE 与战斗编排层之间的桥接（Doc 15 §5 消费方表）。
@@ -141,6 +145,8 @@ class BattleBridge:
             now=current_time, player_index=player_index,
         )
         report = Engagement(spec).resolve()
+        # dump 一次、响应与暂存共用同一字典（Doc 14 四块结构，Doc 15 §3）
+        battle_report = report.timeline.model_dump(mode="json")
 
         # 3. 裁定成功，一次性写回（Doc 15 §3：残血出自同一次裁定）
         result_player = report.final_states["a"]
@@ -183,11 +189,16 @@ class BattleBridge:
                 assembly.event.event_type.name, instance_config, loader, session.zone_id, base_ilvl
             )
 
+        # 6. 暂存战报（Doc 15 §6）：发生在全部成功路径之后——裁定失败时
+        # 异常早已传播，暂存零写入（失败原子不受影响）
+        session.battle_reports[event_index] = battle_report
+
         return BattleResult(
             outcome=outcome,
             player_states=session.squad_state.members,
             enemy_state=enemy_pve_state if outcome == CombatOutcome.DRAW else None,
             rounds_fought=report.ruling.rounds_fought,
             credits_earned=credits_earned,
-            loot_drops=loot_drops
+            loot_drops=loot_drops,
+            battle_report=battle_report
         )

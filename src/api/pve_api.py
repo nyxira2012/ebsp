@@ -6,7 +6,8 @@ from src.user.schemas import UserResponse
 from src.pve.schemas import (
     EnterRegionRequest, AdvanceRequest, EngageRequest,
     PveSessionResponse, AdvanceResponse, BattleResultResponse,
-    FinalizeResponse, ExtractRequest, EventInfo, PveEventSequenceResponse
+    FinalizeResponse, ExtractRequest, EventInfo, PveEventSequenceResponse,
+    BattleReplayResponse
 )
 
 from src.pve.session_manager import PveSessionManager
@@ -117,6 +118,11 @@ async def advance_sequence(
         raise HTTPException(status_code=400, detail="Event sequence already complete")
         
     has_more = session.event_sequence.advance()
+
+    # 战报暂存至事件点消化完成（Doc 15 §6）：推进到新事件即清理旧事件点暂存
+    for stale_index in [k for k in session.battle_reports if k < session.event_sequence.current_index]:
+        del session.battle_reports[stale_index]
+
     current_event = session.event_sequence.current_event()
     
     event_info = None
@@ -181,8 +187,33 @@ async def engage_battle(
         player_states=result.player_states,
         enemy_state=result.enemy_state,
         credits_earned=result.credits_earned,
-        loot_drops=result.loot_drops
+        loot_drops=result.loot_drops,
+        battle_report=result.battle_report
     )
+
+@router.get("/sessions/{session_id}/battle/{event_index}", response_model=BattleReplayResponse)
+async def replay_battle(
+    session_id: int,
+    event_index: int,
+    user: UserResponse = Depends(get_current_user)
+):
+    """
+    重放已裁定战报（Doc 14 §9.5：PVE 战斗页重入=重放，非新对局）
+
+    暂存不存在（进程重启丢失/已随推进清理/从未接敌）→ 404，
+    前端据此降级为仅展示终局摘要（Doc 15 §6）。
+    """
+    session = get_pve_session_or_404(session_id)
+
+    if session.user_id != user.id:
+        # 他人会话与不存在同口径 404，不泄露他人会话存在性
+        raise HTTPException(status_code=404, detail="PVE Session not found")
+
+    battle_report = session.battle_reports.get(event_index)
+    if battle_report is None:
+        raise HTTPException(status_code=404, detail="No cached battle report for this event")
+
+    return BattleReplayResponse(battle_report=battle_report)
 
 @router.post("/sessions/{session_id}/extract", response_model=FinalizeResponse)
 async def extract_loot(

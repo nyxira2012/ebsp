@@ -411,6 +411,7 @@ def test_engage_failure_atomic():
     assert session.enemy_states == {}                       # 敌方未新建
     assert session.squad_state.members[0] == original_member  # 己方未被回能/写回
     assert session.event_sequence.events[1].cleared is False  # 事件未消耗
+    assert session.battle_reports == {}                     # 战报暂存零写入（P1-b）
 
 
 def test_engage_draw_keeps_enemy_residual_state():

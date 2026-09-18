@@ -146,6 +146,11 @@ class PveSessionData(BaseModel):
     
     pending_rewards: PvePendingRewards = Field(default_factory=PvePendingRewards)
     credits_earned: int = 0
-    
+
+    # 已裁定战报暂存：key=事件索引（Doc 15 §6 内存态，裁决 #3 不落库）。
+    # 暂存至事件点消化完成——advance 推进后旧事件点即清理（pve_api.advance），
+    # 进程重启随会话对象丢失=前端降级仅终局摘要。
+    battle_reports: Dict[int, dict] = Field(default_factory=dict)
+
     created_at: float
     last_heartbeat: float

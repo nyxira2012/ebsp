@@ -19,7 +19,9 @@ class PveRepository:
         from src.database.models import PveSession
         
         # pve_session_data.model_dump() 是 Pydantic 字典
-        dumped = pve_session_data.model_dump()
+        # battle_reports 排除落库：战报是内存态即用即弃（Doc 15 §6 裁决 #3），
+        # 断线续连只需会话状态，不需历史战报
+        dumped = pve_session_data.model_dump(exclude={"battle_reports"})
         
         rec = PveSession(
             user_id=pve_session_data.user_id,
