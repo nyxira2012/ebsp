@@ -1,5 +1,64 @@
 # Development Log (DEVLOG.md)
 
+## 2026-09-18 战斗编排层 (Doc 15) 四阶段交付：P0/E1/P1/P2 全部落地
+
+> **项目快照**：mawang 照 Doc 15 v1.2 实现 | 新增 contracts/engagement/entry 三模块 | simulate 收缩薄适配器 + PVE 接敌并入战报 | 影响战报的随机流全线注入 | 测试 581→630 全绿
+
+### 落点裁决（为什么落这里、否掉了哪里）
+
+1. **战报契约唯一拼装点 → `src/presentation/contracts.py` + `src/combat/engagement.py`（Doc 15 红线 1）**
+   - 裁决：Doc 14 四块结构一次建模到位（含当时尚未生产的 P1 字段，给中性默认）；装配逻辑（presentation_timeline → 契约模型）只住在裁判 Engagement 里，`/battle/simulate` 挂 `response_model=TimelineDocument` 后缩为薄适配器。
+   - 否掉的方案：JSONRenderer 补字段（Doc 14 v1.0 §8 原路线）——双装配点必然漂移，正是立项要消除的病根；实现后 JSONRenderer 全库零消费方，已删除（TextRenderer 保留，引擎在用）。
+2. **装配单点 → `src/combat/entry.py` BattleEntryService（Doc 15 红线 5）**
+   - 裁决：build_debug（simulate 静态配置+用户存档覆盖链）/ build_pve（locked_config 还原+时间回能+敌方实例化）两来源适配收编；battle_bridge 瘦身为"裁定后一次性写回"（305→200 行），PVE 侧零引擎 import（红线 2）。
+   - 否掉的方案：把装配留在 handler 各写一份（现状）——训练/PVP 接入时必然再添装配点。
+3. **快照值冻结 → 双层深拷贝**：EngagementSpec 构造即 `model_copy(deep=True)`（防调用方后续改动），resolve 时再拷一份喂引擎（引擎原地 mutate 快照）——init 块读 spec 原值，两层缺一不可。
+4. **失败原子 → 装配零 mutation + 写回后置**：build_pve 全程不碰 session（回能算进快照拷贝），enemy_states 新建条目推迟到裁定成功后落盘；resolve 抛错 = session 零变更（有测试深比对锁定）。
+5. **随机流注入 → 实例注入 + 模块回落（Doc 15 红线 3）**
+   - 裁决：`rng=None` 时组件持有 `random` 模块对象（调用期属性查找）——**既有 22+ 测试文件的 `patch("random.uniform"...)` 全部继续生效**，这是注入方案不破坏存量测试的关键；BattleContext.rng 走 ctx 携带（resolver/processor/skills 回调链本就持有 ctx）。
+   - 收编范围：影响战报的 12 点（圆桌/先手/距离/技能触发/本能/竞标×3/部位/状态词/片段×2）+ 六处战场内部 hook ctx；外围 4 类（掉落/装备生成/事件序列/隐藏节点）维持全局。
+6. **裁定口径**：ruling 弃引擎 `a_wins/b_wins`，直接看战后快照推导 finish（ko/decision/draw）+ winner 正交表达；`timeline.result` 与 `report.ruling` 同一对象（三产物同源不变量）。
+
+### 坑（下一个实现者会踩的）
+
+- **pyright 不收窄 `get_args()` 成员判断**：`x in get_args(Literal别名)` 运行时对、类型错；要收窄只能字面值元组内联（`x in ("a","b")`）。测试侧枚举集合用 `get_args` 保持单源，装配侧手抄元组漏改由测试兜底。
+- **MagicMock 的 ctx 自动属性会劫持 `(ctx.rng or random)`**：mock 的 BattleContext 任意属性恒真值，注入回落式判空拿到的不是 None 是 Mock——相关测试须显式 `ctx.rng = None`。
+- **模块级 patch 够不到注入流**：Engagement 恒注入后，`monkeypatch.setattr(random, "uniform", ...)` 类的旧式压点对裁判路径失效（这正是红线 3 语义）；要压注入流得 patch `random.Random.uniform`（类级，同时压住注入与回落）。
+- **金样张确定性**：P2 前靠测试内模块级 seed（用毕 `random.seed()` 复位防污染同进程其它测试）；P2 后 `EngagementSpec(seed=...)` 注入，重录用 `UPDATE_GOLDEN=1 pytest tests/test_battle_golden.py`。
+- **armor=1e9 靶船是确定性长局的好工具**：任何判定伤害恒 0 → 打满回合上限、结局只由初始 HP 决定；但兜底撞击武器 EN 恒 0，"EN 枯竭空回合"实际不存在——空回合只在 EN 消耗钩子抬价时出现（有专门测试构造）。
+- **预存地雷（本次未修，按现状交付）**：engage 端点母舰硬编码 `ms_01`（真实数据无此 ID，直调必 500，代码自带 Mock 注释）；`services._build_locked_config` 默认回退 ID `"rx78"`（真实 ID 是 `mech_rx78`，KeyError 被静默吞）；PVE 存量端点（engage/advance/extract/abandon）不查会话属主（新重放端点已带头做了全量校验，存量补齐择批统一）；loot 生成失败发生在残血写回之后（结算原子缺口，与旧实现同序）。
+
+### 验证与闸门
+
+- 全量 630 passed（基线 581 + 新增 49），pyright 0 errors；金样张锁 Doc 14 逐字段结构 + 体积 <512KB；确定性测试（同 seed 双跑全局流扰动下逐字段相等 + 概率技能链覆盖）；PVE 回归（残血写回行为与旧实现一致）+ 模拟器宏观验证（simulate_pve/sim_pres 全流程）。
+- 提交序列：e84eed1(P0-a) → 1196112(P0-b) → 8a2a41c(E1) → ad90796(P1-a) → 64f322a(P1-b) → e9ad3a3(P2)。
+- 前端切换时点达成：P1 完成 = ebs-duo 2.1 可切换真实数据源（Doc 15 §7 对接里程碑）。
+
+## 2026-09-17 战斗时间轴输出契约文档立项 (Doc 14) 与实施架构定为 Engagement 战报模块
+
+> **项目快照**：前后端战斗界面对接启动 | 新增输出契约 SSOT 文档 | 实施架构定为 Engagement 深模块 | 修订 Doc 0/1/6 交叉引用
+
+### 逻辑变化与核心思路
+
+1. **新增 `docs/14.battle_timeline_contract.md`（战斗时间轴输出契约 v1.0）**
+   - **逻辑变化**：定义 `POST /battle/simulate` 对前端的完整输出结构（`meta` / `init` / `rounds` / `result` 四块）、演出事件字段表（演出层/裁定层/状态快照层/高光触发层）、判定枚举映射红线表（AttackResult → 中文口径 → 前端浮字）、以及带优先级的实现差距清单（后经评审升级为 Engagement 架构路线，见第 3 条）。
+   - **设计思路**：对齐 `ebs-duo/docs/2.1战斗界面.md` §A5 的演出数据要求。研究结论：引擎内部已算出距离/先手/判定/数值快照，但 `JSONRenderer.render_timeline` 仅输出 7 个字段，且 `context_events`/`summary_events` 全库无生产者、`get_result()` 未被 API 调用——缺口以"字段三态（已输出/未序列化/待新增）+ 差距清单"形式固化，作为前后端对接的单一事实来源。
+
+2. **联动修订既有文档**
+   - `docs/6.combat_presentation.md`：版本号 v5.0 → v5.1（对齐代码与前端引用），新增"文档边界"一节声明内部管线与对外契约的分工，指向 Doc 14。
+   - `docs/1.battle_design_doc.md`：§7.1 结局表标注"战术脱离"引擎未实现；补对外输出口径说明（`finish`+`winner` 正交表达，禁止将内部 `a_wins/b_wins` 直接作为前端口径）。
+   - `docs/0.start.md`：§3.4 数据契约新增对外接口契约条目，声明战斗 API 字段变更须先修订 Doc 14。
+
+3. **实施架构定为 Engagement 战报模块（根本解，替代补丁路线）**
+   - **逻辑变化**：Doc 14 §8 由「renderer 补字段 + 两处 handler 装配」重写为「`src/combat/engagement.py`（EngagementSpec → resolve → BattleReport）+ `src/presentation/contracts.py`（契约唯一实现点）」架构。`/battle/simulate` 收缩为调试薄适配器；PVE `battle_bridge.py` 瘦身为输入组装 + `final_states` 写回两步；接敌确认卡走 spec 只读预览。差距清单按新架构重排 P0/P1/P2。
+   - **设计思路**：评审纠偏（用户拷问"将就 vs 根本解"）确认原补丁方案会在两个 handler 重复装配契约、并使 BattleBridge 进一步上帝化——恰是 Doc 14 立项要消除的漂移病根。根本解把"一场战斗"升为一等公民：接口窄（两份快照进，一份战报出），引擎/CPS/契约装配全部内聚于深模块；同时解锁可注入 RNG（消除全局随机流的并发污染）与 `initiative_holder` 等悬空字段的明确归属。PVE 会话（锁定/事件/经济/迷雾）为独立内聚轴，保留不动，经 `EngagementSpec`/`final_states` 窄接口握手。另在 §9 新增第 5 条待裁决：PVE 接入后战斗页必须重放已裁定时间轴（2.1 §4.8"重进=新对局"仅适用于调试路由），待探索系统立规格时由前端修订。
+
+4. **契约与实现架构文档分离（Doc 15 立项）**
+   - **逻辑变化**：新增 `docs/15.battle_engagement.md`（战斗编排层设计文档），承接原 Doc 14 §8 的目标架构并扩写（模块地图、核心接口与不变量、架构红线、消费方适配器、关键设计决策、实施阶段与契约锚点表、测试策略、内部待裁决）；Doc 14 §8 收敛为"实现状态与锚点说明"，元数据表新增"实现架构"指向 Doc 15，`0.start.md` §3.4 同步补引用。
+   - **设计思路**：Doc 14 是对外契约（前后端双方受众，实现后冻结归档），原 §8.1 是后端内部架构（单一受众、随代码演进）——受众与生命周期双错位。拆分后两文档互锚：Doc 15 §7 每个实施阶段标注交付 Doc 14 哪些章节能力，golden 测试三处同步规则（改字段 → 先改 Doc 14 → 改 `contracts.py` → 重录快照）跨两文档生效。
+
+---
+
 ## 2026-09-14 美术处理工具链收敛重构 (artgen 收拢为双核心脚本)
 
 > **项目快照**：美术脚本架构收敛 | 移除散落 JSON/处理脚本 | 形成生图与二次处理双核心
