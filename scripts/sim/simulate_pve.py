@@ -151,15 +151,14 @@ async def main():
                     time.sleep(0.3)
 
                     try:
-                        # 使用公开方法触发战斗，启用详细战斗过程
+                        # 使用公开方法触发战斗
                         result = PveEntryService.engage_battle(
                             session=session_data,
                             event_index=event.index,
                             loader=loader,
                             mothership_config=mothership_config,
                             mecha_factory=mecha_factory,
-                            player_index=0,
-                            verbose=True  # 显示详细战斗过程
+                            player_index=0
                         )
 
                         outcome_cn = {"WIN": "大获全胜", "LOSE": "任务失败", "DRAW": "战平"}.get(result.outcome.name, result.outcome.name)

@@ -265,8 +265,7 @@ class PveEntryService:
         loader: Any,
         mothership_config: MothershipConfig,
         mecha_factory: MechaFactory,
-        player_index: int = 0,
-        verbose: bool = False
+        player_index: int = 0
     ):
         """触发战斗（公开方法）
 
@@ -277,7 +276,6 @@ class PveEntryService:
             mothership_config: 母舰配置
             mecha_factory: 机体工厂
             player_index: 玩家索引
-            verbose: 是否显示详细战斗过程
 
         Returns:
             BattleResult: 战斗结果
@@ -290,8 +288,7 @@ class PveEntryService:
             loader=loader,
             mothership_config=mothership_config,
             mecha_factory=mecha_factory,
-            player_index=player_index,
-            verbose=verbose
+            player_index=player_index
         )
 
     @classmethod

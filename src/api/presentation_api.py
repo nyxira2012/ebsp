@@ -8,9 +8,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 
-from src.models import Mecha, PilotConfig, MechaConfig, Weapon, WeaponType
-from src.factory import MechaFactory
-from src.combat.engagement import Engagement, EngagementContext, EngagementSpec
+from src.combat.engagement import Engagement
+from src.combat.entry import BattleEntryService
 from src.presentation.contracts import TimelineDocument
 from src import DataLoader
 from src.api.context import set_loader, get_loader, initialize_presentation_registry
@@ -20,7 +19,6 @@ from src.database import init_db, close_db
 from src.database.session import get_async_session
 from src.database.models import User
 from src.api import user_api, inventory_api, pve_api
-from src.user.repository import UserAssetRepository
 from src.user.dependencies import get_optional_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -121,56 +119,18 @@ async def simulate_battle(
     try:
         loader = get_loader()
 
-        # 获取基础配置
-        config_a = loader.get_mecha_config(req.mecha_a_id)
-        config_b = loader.get_mecha_config(req.mecha_b_id)
-
-        if not config_a or not config_b:
-            raise HTTPException(status_code=404, detail="机体配置不存在")
-
-        # 创建基础快照
-        mecha_a = MechaFactory.create_mecha_snapshot(config_a, weapon_configs=loader.equipments)
-        mecha_b = MechaFactory.create_mecha_snapshot(config_b, weapon_configs=loader.equipments)
-
-        # 如果用户已登录，尝试加载出战小队阵容覆盖
-        if current_user is not None:
-            active_squad = await UserAssetRepository.get_active_squad(session, current_user.id)
-
-            if active_squad is not None and len(active_squad.mecha_ids) > 0:
-                try:
-                    # 获取工厂
-                    from src.core.factory import SnapshotFactory
-                    factory = SnapshotFactory(loader, UserAssetRepository())
-                    
-                    # 取出战小队的第一台和第二台机体进行覆盖
-                    # 实际业务中应配合请求参数选择出战序号，此处作为平滑过渡
-                    user_mechas = active_squad.mecha_ids
-                    
-                    if req.use_user_save_for_a and len(user_mechas) > 0:
-                        mecha_a = await factory.create_combat_snapshot(session, current_user.id, user_mechas[0])
-                    
-                    if req.use_user_save_for_b and len(user_mechas) > 1:
-                        mecha_b = await factory.create_combat_snapshot(session, current_user.id, user_mechas[1])
-                    elif req.use_user_save_for_b and len(user_mechas) > 0:
-                        # 兜底：如果选了B但只有一个机甲，用那个
-                        mecha_b = await factory.create_combat_snapshot(session, current_user.id, user_mechas[0])
-
-                except ValueError as e:
-                    # 养成数据无效，忽略并使用默认配置
-                    print(f"⚠️ 玩家出战数据无效，使用默认配置: {e}")
+        # 装配走收发室（红线 5：单点装配，E1 收编）；
+        # 未知机体 ID → KeyError → 404（Doc 14 §2 契约）
+        spec = await BattleEntryService.build_debug(loader, req, current_user, session)
 
         # 执行裁定：快照交裁判，拿完整战报（Doc 15 §5 simulate 行；
         # 契约即响应模型，序列化漏字段在结构上不可能——红线 1）
-        report = Engagement(
-            EngagementSpec(
-                mecha_a=mecha_a,
-                mecha_b=mecha_b,
-                context=EngagementContext(source="debug"),
-            )
-        ).resolve()
+        report = Engagement(spec).resolve()
 
         return report.timeline
 
+    except KeyError:
+        raise HTTPException(status_code=404, detail="机体配置不存在")
     except HTTPException:
         raise
     except Exception as e:

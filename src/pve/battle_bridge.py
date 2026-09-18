@@ -3,12 +3,10 @@ import random
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 
-from src.models import MechaSnapshot
-from src.pve.models import PveSessionData, PveEntityState, PveEnemyState
+from src.pve.models import PveSessionData, PveEntityState
 from src.pve.enums import CombatOutcome
-from src.factory import MechaFactory
-from src.combat.engine import BattleSimulator
-from src.pve.services import MothershipIntegrationService
+from src.combat.entry import BattleEntryService
+from src.combat.engagement import Engagement
 from src.core.item_generator import EquipmentGenerator
 
 @dataclass
@@ -31,64 +29,12 @@ class BattleResult:
     loot_drops: List[Dict[str, Any]]
 
 class BattleBridge:
-    """PVE 与战斗引擎之间的桥接层。
+    """PVE 与战斗编排层之间的桥接（Doc 15 §5 消费方表）。
 
-    负责准备战斗现场、处理战前恢复，并根据战斗结果更新 PVE 的持久化状态以及生成奖励。
+    只面向委托与战报（战斗知识零泄漏，红线 2）：装配走收发室
+    BattleEntryService，裁定走裁判 Engagement；裁定成功后一次性写回
+    会话（失败原子，Doc 15 §3）——resolve 抛异常时异常传播、session 零变更。
     """
-    
-    @staticmethod
-    def _apply_time_regen(state: PveEntityState, mothership: Any, current_time: float):
-        """应用基于现实时间的恢复补偿逻辑。
-
-        Args:
-            state (PveEntityState): 待恢复的目标实体状态。
-            mothership (Any): 母舰配置数据，用于获取恢复率。
-            current_time (float): 当前时间戳。
-        """
-        hp_regen, en_regen = MothershipIntegrationService.calculate_regeneration(
-            state.last_combat_time, current_time, mothership
-        )
-        state.current_hp = min(state.max_hp, state.current_hp + hp_regen)
-        state.current_en = min(state.max_en, state.current_en + en_regen)
-
-    @staticmethod
-    def _apply_scaling(enemy_snapshot: MechaSnapshot, scaling: Any) -> None:
-        """应用缩放系数到敌方快照。
-
-        Args:
-            enemy_snapshot: 敌方机体快照。
-            scaling: 缩放配置对象，包含 hp_mult, damage_mult, armor_mult, mobility_mult。
-        """
-        if not scaling:
-            return
-
-        # 缩放机体属性
-        enemy_snapshot.final_max_hp = int(enemy_snapshot.final_max_hp * scaling.hp_mult)
-        enemy_snapshot.current_hp = enemy_snapshot.final_max_hp
-        enemy_snapshot.final_armor = int(enemy_snapshot.final_armor * scaling.armor_mult)
-        enemy_snapshot.final_mobility = int(enemy_snapshot.final_mobility * scaling.mobility_mult)
-
-        # 缩放武器伤害
-        for weapon in enemy_snapshot.weapons:
-            weapon.final_power = int(weapon.final_power * scaling.damage_mult)
-
-    @staticmethod
-    def _translate_outcome(sim_result: Dict[str, Any]) -> CombatOutcome:
-        """翻译战斗引擎结果为枚举。
-
-        Args:
-            sim_result: 战斗模拟器返回的结果字典。
-
-        Returns:
-            CombatOutcome: 战斗结果枚举。
-        """
-        outcome_str = sim_result["outcome"]
-        if outcome_str == "a_wins":
-            return CombatOutcome.WIN
-        elif outcome_str == "b_wins":
-            return CombatOutcome.LOSE
-        else:
-            return CombatOutcome.DRAW
 
     @classmethod
     def _generate_loot(
@@ -151,24 +97,26 @@ class BattleBridge:
                     })
 
         return loot_drops
-        
+
     @classmethod
     def engage(cls, session: PveSessionData, event_index: int,
-               loader: Any, 
-               mothership_config: Any, 
-               mecha_factory: MechaFactory,
-               player_index: int = 0,
-               verbose: bool = False) -> BattleResult:
+               loader: Any,
+               mothership_config: Any,
+               mecha_factory: Any,
+               player_index: int = 0) -> BattleResult:
         """执行一场与当前事件中敌人的遭遇战。
+
+        流程：收发室装配（session 零变更）→ 裁判裁定 → 裁定成功后
+        一次性写回残血/事件/奖励。装配与裁定逻辑分别归
+        BattleEntryService 与 Engagement（Doc 15 §2）。
 
         Args:
             session (PveSessionData): 当前活跃的 PVE 会话实例。
             event_index (int): 触发战斗的事件索引（对应 event_sequence.current_index）。
             loader (Any): 静态资源加载器。
             mothership_config (Any): 玩家携带的母舰配置对象。
-            mecha_factory (MechaFactory): 用于构建战斗快照的工厂。
+            mecha_factory (Any): 用于构建战斗快照的工厂。
             player_index (int, optional): 指定己方阵营中第几个成员出战。默认为 0。
-            verbose (bool, optional): 是否显示详细战斗过程。默认为 False。
 
         Returns:
             BattleResult: 包含胜负、损耗及掉落的详细结算结果。
@@ -178,7 +126,7 @@ class BattleBridge:
         """
         current_time = time.time()
 
-        # 预加载副本配置（避免重复调用）
+        # 预加载副本配置（掉落表用；装配侧的敌方模板配置由 entry 自取）
         instance_config = None
         base_ilvl = 10
         try:
@@ -187,119 +135,59 @@ class BattleBridge:
         except KeyError:
             pass
 
-        # 1. 还原己方机体
-        player_state = session.squad_state.members[player_index]
-        cls._apply_time_regen(player_state, mothership_config, current_time)
+        # 1. 装配（收发室）→ 2. 裁定（裁判）。裁定成功前 session 零变更（失败原子）。
+        spec, assembly = BattleEntryService.build_pve(
+            session, event_index, loader, mothership_config, mecha_factory,
+            now=current_time, player_index=player_index,
+        )
+        report = Engagement(spec).resolve()
 
-        # 从 locked_config 还原实际编队数据
-        mechas_config = session.squad_state.locked_config.get("mechas", [])
-        if player_index < len(mechas_config):
-            m_config_data = mechas_config[player_index]
-            snapshot_dict = m_config_data.get("snapshot_dict")
+        # 3. 裁定成功，一次性写回（Doc 15 §3：残血出自同一次裁定）
+        result_player = report.final_states["a"]
+        result_enemy = report.final_states["b"]
 
-            if snapshot_dict:
-                player_snapshot = MechaSnapshot.model_validate(snapshot_dict)
-            else:
-                mecha_id = m_config_data.get("mecha_id", "rx78")
-                mecha_config = loader.get_mecha_config(mecha_id) if mecha_id in getattr(loader, 'mechas', {}) else loader.get_mecha_config("rx78")
-                player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
-        else:
-            mecha_config = loader.get_mecha_config("rx78")
-            player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
-
-        # 注入残血数据
-        player_snapshot.current_hp = player_state.current_hp
-        player_snapshot.current_en = player_state.current_en
-        player_snapshot.final_max_hp = player_state.max_hp
-        player_snapshot.final_max_en = player_state.max_en
-
-        # 2. 还原或创建敌方机体
-        events = session.event_sequence.events
-        if event_index < 0 or event_index >= len(events):
-            raise ValueError(f"Event index {event_index} out of range in event sequence")
-
-        current_event = events[event_index]
-        enemy_template_id = current_event.event_id or "zaku2"
-
-        # 解析敌方模板（Doc 13：由机体+驾驶员+缩放系数组成）
-        enemy_mecha_id = enemy_template_id
-        scaling = None
-
-        # 从 InstanceConfig 获取敌方模板
-        if instance_config and enemy_template_id in instance_config.enemy_templates:
-            template = instance_config.enemy_templates[enemy_template_id]
-            enemy_mecha_id = template.mecha_id
-            scaling = template.scaling
-
-        # 构建敌方机体
-        enemy_config = loader.get_mecha_config(enemy_mecha_id) if enemy_mecha_id in getattr(loader, 'mechas', {}) else loader.get_mecha_config("mech_grunt")
-        enemy_snapshot = mecha_factory.create_mecha_snapshot(enemy_config, weapon_configs=loader.equipments)
-
-        # 应用缩放系数
-        cls._apply_scaling(enemy_snapshot, scaling)
-        
-        if event_index in session.enemy_states:
-            enemy_pve_state = session.enemy_states[event_index].entity_state
-            enemy_snapshot.current_hp = enemy_pve_state.current_hp
-            enemy_snapshot.current_en = enemy_pve_state.current_en
-            enemy_snapshot.final_max_hp = enemy_pve_state.max_hp
-            enemy_snapshot.final_max_en = enemy_pve_state.max_en
-        else:
-            enemy_pve_state = PveEntityState(
-                entity_id=f"enemy_{event_index}",
-                current_hp=enemy_snapshot.max_hp,
-                current_en=enemy_snapshot.max_en,
-                max_hp=enemy_snapshot.max_hp,
-                max_en=enemy_snapshot.max_en,
-                last_combat_time=current_time
-            )
-            session.enemy_states[event_index] = PveEnemyState(
-                event_index=event_index,
-                entity_state=enemy_pve_state,
-                enemy_template_id=enemy_template_id
-            )
-
-        # 3. 发动战斗
-        simulator = BattleSimulator(player_snapshot, enemy_snapshot, enable_presentation=True, quiet=not verbose)
-        simulator.run_battle()
-        sim_result = simulator.get_result()
-
-        # 4. 更新战斗后状态
-        result_player = sim_result["mecha_a"]
-        result_enemy = sim_result["mecha_b"]
-
+        player_state = assembly.player_state
         player_state.current_hp = result_player["hp"]
         player_state.current_en = result_player["en"]
-        player_state.is_alive = result_player["alive"]
+        player_state.is_alive = bool(result_player["alive"])
         player_state.last_combat_time = current_time
 
+        if assembly.enemy_is_new:
+            session.enemy_states[assembly.event_index] = assembly.enemy_state
+        enemy_pve_state = assembly.enemy_state.entity_state
         enemy_pve_state.current_hp = result_enemy["hp"]
         enemy_pve_state.current_en = result_enemy["en"]
-        enemy_pve_state.is_alive = result_enemy["alive"]
+        enemy_pve_state.is_alive = bool(result_enemy["alive"])
         enemy_pve_state.last_combat_time = current_time
 
-        outcome = cls._translate_outcome(sim_result)
+        # 胜负翻译走裁定口径（Doc 14 §7.1：finish + winner 正交表达）
+        if report.ruling.winner == "a":
+            outcome = CombatOutcome.WIN
+        elif report.ruling.winner == "b":
+            outcome = CombatOutcome.LOSE
+        else:
+            outcome = CombatOutcome.DRAW
 
-        # 5. 更新事件状态
+        # 4. 更新事件状态
         if outcome == CombatOutcome.WIN:
-            if event_index < len(session.event_sequence.events):
-                session.event_sequence.events[event_index].cleared = True
-            if event_index in session.enemy_states:
-                del session.enemy_states[event_index]
+            assembly.event.cleared = True
+            if assembly.event_index in session.enemy_states:
+                del session.enemy_states[assembly.event_index]
 
-        # 6. 生成奖励
+        # 5. 生成奖励
         loot_drops = []
         credits_earned = 0
         if outcome == CombatOutcome.WIN:
             credits_earned = 100
-            event_type_name = events[event_index].event_type.name
-            loot_drops = cls._generate_loot(event_type_name, instance_config, loader, session.zone_id, base_ilvl)
-        
+            loot_drops = cls._generate_loot(
+                assembly.event.event_type.name, instance_config, loader, session.zone_id, base_ilvl
+            )
+
         return BattleResult(
             outcome=outcome,
             player_states=session.squad_state.members,
             enemy_state=enemy_pve_state if outcome == CombatOutcome.DRAW else None,
-            rounds_fought=sim_result["rounds"],
+            rounds_fought=report.ruling.rounds_fought,
             credits_earned=credits_earned,
             loot_drops=loot_drops
         )

@@ -137,19 +137,26 @@ def test_pve_battle_bridge_engage():
         def can_attack(self, weapon): return True
         def modify_will(self, val): pass
         def consume_en(self, val): pass
+        # EngagementSpec 构造时深拷贝快照（值冻结）——mock 快照提供同形钩子
+        def model_copy(self, deep=True): return self
 
     mock_factory.create_mecha_snapshot.return_value = MockSnapshot()
 
     # 对事件索引 1（COMBAT: mob_1）发起战斗
-    with __import__("unittest").mock.patch("src.pve.battle_bridge.BattleSimulator") as MockSimCls:
-        mock_sim_inst = Mock()
-        mock_sim_inst.get_result.return_value = {
-            "outcome": "a_wins",
-            "rounds": 2,
-            "mecha_a": {"hp": 800, "en": 50, "alive": True},
-            "mecha_b": {"hp": 0, "en": 0, "alive": False}
-        }
-        MockSimCls.return_value = mock_sim_inst
+    # B3 起装配走 BattleEntryService、裁定走 Engagement 裁判——
+    # mock 接线随之从 BattleSimulator 换到裁判层（断言语义不变）
+    mock_ruling = Mock()
+    mock_ruling.winner = "a"
+    mock_ruling.rounds_fought = 2
+    mock_report = Mock()
+    mock_report.ruling = mock_ruling
+    mock_report.final_states = {
+        "a": {"hp": 800, "en": 50, "alive": True},
+        "b": {"hp": 0, "en": 0, "alive": False}
+    }
+
+    with __import__("unittest").mock.patch("src.pve.battle_bridge.Engagement") as MockEngagement:
+        MockEngagement.return_value.resolve.return_value = mock_report
 
         battle_res = BattleBridge.engage(
             session=session,
