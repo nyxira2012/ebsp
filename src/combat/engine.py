@@ -670,7 +670,9 @@ class BattleSimulator:
             seq = PresentationAttackSequence(
                 attacker_id=attacker.id,
                 defender_id=defender.id,
-                events=pres_events_list
+                events=pres_events_list,
+                # 方位标记（编排层推导攻防侧位用）：镜像战时双方 ID 相同，方位不靠 ID 区分
+                attacker_side="a" if attacker is self.mecha_a else "b",
             )
             current_round_evt.attack_sequences.append(seq)
 

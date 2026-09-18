@@ -145,6 +145,8 @@ class PresentationAttackSequence:
     attacker_id: str
     defender_id: str
     events: List[PresentationAttackEvent] = field(default_factory=list)
+    # 攻方方位（"a"/"b"）：镜像战双方 ID 相同，编排层据此推导攻防侧位
+    attacker_side: str = ""
 
 
 @dataclass
