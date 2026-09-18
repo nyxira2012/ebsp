@@ -156,6 +156,10 @@ class PresentationRoundEvent:
     Supports multiple attackers or follow-up attacks.
     """
     round_number: int
+    # 回合字段（Doc 14 §5，引擎每回合开场生产）
+    distance: int = 0            # 本回合交战距离（米）
+    first_side: str = ""         # 先手方侧位 "a"/"b"（镜像战不依赖 ID 区分）
+    first_reason: str = ""       # 先手原因英文枚举键（InitiativeReason.name.lower()）
     context_events: List[PresentationAttackEvent] = field(default_factory=list) # e.g. Round start titles
     attack_sequences: List[PresentationAttackSequence] = field(default_factory=list)
     summary_events: List[PresentationAttackEvent] = field(default_factory=list) # e.g. Mecha destruction

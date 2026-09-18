@@ -41,10 +41,35 @@
   "rounds": [
     {
       "round_number": 1,
-      "distance": 0,
-      "first": null,
-      "first_reason": null,
-      "context_events": [],
+      "distance": 6556,
+      "first": "a",
+      "first_reason": "performance",
+      "context_events": [
+        {
+          "type": "CONTEXT",
+          "text": "第 1 回合｜交战距离 6556m｜先手：RX-78高达（机体性能优势）",
+          "timestamp": 0.0,
+          "tier": "T3_FALLBACK",
+          "anim_id": "default_anim",
+          "camera": "cam_default",
+          "vfx": [],
+          "sfx": [],
+          "attack_result": null,
+          "attacker": null,
+          "defender": null,
+          "weapon_name": null,
+          "motion_style": null,
+          "damage_material": null,
+          "hit_location": null,
+          "damage": null,
+          "en_cost": null,
+          "will_delta": null,
+          "state_after": null,
+          "is_lethal": null,
+          "triggered_skills": null,
+          "spirit_commands": null
+        }
+      ],
       "attack_sequences": [
         {
           "attacker_id": "m_rx78",
@@ -142,7 +167,7 @@
         {
           "attacker_id": "m_zaku",
           "defender_id": "m_rx78",
-          "is_first_attack": true,
+          "is_first_attack": false,
           "events": [
             {
               "type": "ACTION",
@@ -235,10 +260,35 @@
     },
     {
       "round_number": 2,
-      "distance": 0,
-      "first": null,
-      "first_reason": null,
-      "context_events": [],
+      "distance": 2279,
+      "first": "a",
+      "first_reason": "performance",
+      "context_events": [
+        {
+          "type": "CONTEXT",
+          "text": "第 2 回合｜交战距离 2279m｜先手：RX-78高达（机体性能优势）",
+          "timestamp": 0.0,
+          "tier": "T3_FALLBACK",
+          "anim_id": "default_anim",
+          "camera": "cam_default",
+          "vfx": [],
+          "sfx": [],
+          "attack_result": null,
+          "attacker": null,
+          "defender": null,
+          "weapon_name": null,
+          "motion_style": null,
+          "damage_material": null,
+          "hit_location": null,
+          "damage": null,
+          "en_cost": null,
+          "will_delta": null,
+          "state_after": null,
+          "is_lethal": null,
+          "triggered_skills": null,
+          "spirit_commands": null
+        }
+      ],
       "attack_sequences": [
         {
           "attacker_id": "m_rx78",
@@ -324,7 +374,56 @@
           ]
         }
       ],
-      "summary_events": []
+      "summary_events": [
+        {
+          "type": "SUMMARY",
+          "text": "扎古II 被击破！",
+          "timestamp": 0.0,
+          "tier": "T3_FALLBACK",
+          "anim_id": "default_anim",
+          "camera": "cam_default",
+          "vfx": [],
+          "sfx": [],
+          "attack_result": null,
+          "attacker": null,
+          "defender": null,
+          "weapon_name": null,
+          "motion_style": null,
+          "damage_material": null,
+          "hit_location": null,
+          "damage": null,
+          "en_cost": null,
+          "will_delta": null,
+          "state_after": null,
+          "is_lethal": null,
+          "triggered_skills": null,
+          "spirit_commands": null
+        },
+        {
+          "type": "SUMMARY",
+          "text": "战斗结束——RX-78高达 获胜（击破）",
+          "timestamp": 0.0,
+          "tier": "T3_FALLBACK",
+          "anim_id": "default_anim",
+          "camera": "cam_default",
+          "vfx": [],
+          "sfx": [],
+          "attack_result": null,
+          "attacker": null,
+          "defender": null,
+          "weapon_name": null,
+          "motion_style": null,
+          "damage_material": null,
+          "hit_location": null,
+          "damage": null,
+          "en_cost": null,
+          "will_delta": null,
+          "state_after": null,
+          "is_lethal": null,
+          "triggered_skills": null,
+          "spirit_commands": null
+        }
+      ]
     }
   ],
   "result": {

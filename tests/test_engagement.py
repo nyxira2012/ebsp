@@ -2,8 +2,9 @@
 战斗编排层不变量单测（Doc 15 §8）。
 
 覆盖：裁定封闭、快照值冻结、三产物同源、事件字段全量、
-裁定推导（ko/decision/draw）、meta/init/result 结构对齐 Doc 14、
-战报体积预算。
+回合字段与开场/终局播报（P1-a：距离/先手/先手原因/首攻标记/
+CONTEXT 与 SUMMARY 事件）、裁定推导（ko/decision/draw）、
+meta/init/result 结构对齐 Doc 14、战报体积预算。
 
 确定性策略（结构断言不依赖具体随机结果）：
 - ko 场景拦截 random.uniform 把圆桌掷点恒压到 HIT 段；
@@ -12,6 +13,7 @@
 """
 
 import random
+from typing import get_args
 
 import pytest
 
@@ -24,7 +26,7 @@ from src.combat.engagement import (
 )
 from src.config import Config
 from src.models import MechaSnapshot, WeaponSnapshot, WeaponType
-from src.presentation.contracts import TimelineDocument
+from src.presentation.contracts import FirstReason, TimelineDocument
 
 DEBUG_CONTEXT = EngagementContext(source="debug")
 
@@ -299,23 +301,145 @@ class TestDocumentStructure:
         assert result.summary.a.max_hp == 5500
         assert result.summary.b.max_hp == 4500
 
-    def test_round_fields_are_neutral_defaults_this_phase(self, gundam_rx78, zaku_ii):
-        """distance/first/first_reason/is_first_attack 为 P1 字段，本批中性默认。"""
-        report = _resolve(gundam_rx78, zaku_ii)
-        assert report.timeline.rounds, "正常对局应产出回合块"
-        for block in report.timeline.rounds:
-            assert block.distance == 0
-            assert block.first is None
-            assert block.first_reason is None
-            assert block.context_events == []
-            assert block.summary_events == []
-            assert block.attack_sequences
-            for seq in block.attack_sequences:
-                assert seq.is_first_attack is True
-
     def test_route_reflects_context_source(self, gundam_rx78, zaku_ii):
         report = _resolve(gundam_rx78, zaku_ii, context=EngagementContext(source="pve"))
         assert report.timeline.meta.route == "pve"
+
+
+# ============================================================================
+# 回合字段与开场/终局播报（Doc 14 §5/§5.1/§6.1，P1-a 引擎生产）
+# ============================================================================
+
+# 单一事实源：随 contracts.FirstReason 枚举扩展自动跟进（装配侧手抄元组漏改时由此兜底）
+FIRST_REASON_ENUM = set(get_args(FirstReason))
+
+
+class TestRoundFieldsAndBroadcastEvents:
+    def test_round_fields_and_opening_context_every_round(self, gundam_rx78, zaku_ii):
+        """每回合：距离>0、先手侧位与五枚举原因、开场播报含距离与先手方名。"""
+        report = _resolve(gundam_rx78, zaku_ii)
+        assert report.timeline.rounds, "正常对局应产出回合块"
+        for block in report.timeline.rounds:
+            # 距离边界：收敛窗可至 DISTANCE_FINAL_MIN=0，不保证恒正（Doc 14 §5）
+            assert Config.DISTANCE_FINAL_MIN <= block.distance <= Config.DISTANCE_INITIAL_MAX
+            assert block.first in ("a", "b")
+            assert block.first_reason in FIRST_REASON_ENUM
+            assert block.context_events, "回合开场播报由引擎生产（含无攻击的空回合）"
+            opening = block.context_events[0]
+            assert opening.type == "CONTEXT"
+            assert f"{block.distance}m" in opening.text
+            assert "先手" in opening.text
+            first_name = (
+                report.timeline.init.a.name if block.first == "a" else report.timeline.init.b.name
+            )
+            assert first_name in opening.text
+
+    def test_distance_converges_over_rounds(self):
+        """距离随回合收敛（Doc 14 §5 生成规则）：首回合不低于初始下限，
+        收敛窗（第 5 回合起上界=最终上限）内不再反弹，末回合必小于首回合。"""
+        report = _resolve(
+            _fortress("f_conv_a", "ConvA", max_hp=1000, current_hp=1000),
+            _fortress("f_conv_b", "ConvB", max_hp=1000, current_hp=999),
+        )
+        rounds = report.timeline.rounds
+        assert len(rounds) == Config.MAX_ROUNDS  # 超高装甲 → 打满回合上限
+        assert rounds[0].distance >= Config.DISTANCE_INITIAL_MIN
+        for block in rounds[4:]:  # 7000-1500*4 < 2000 → 第 5 回合起窗收敛
+            assert block.distance <= Config.DISTANCE_FINAL_MAX
+        assert rounds[-1].distance < rounds[0].distance
+
+    def test_first_attack_marker_matches_sequence_order(self):
+        """is_first_attack 与序列顺序一致：先手段 true、后手段 false；
+        先手方与首序列攻方一致（回合先手裁定的交叉验证）。
+        用装甲靶船对局保证确定性（伤害恒 0 → 双方每回合完整互攻，无随机死局）。"""
+        report = _resolve(
+            _fortress("f_mark_a", "MarkA", max_hp=1000, current_hp=1000),
+            _fortress("f_mark_b", "MarkB", max_hp=1000, current_hp=1000),
+        )
+        saw_pair = False
+        for block in report.timeline.rounds:
+            if len(block.attack_sequences) >= 2:
+                saw_pair = True
+                assert block.attack_sequences[0].is_first_attack is True
+                assert block.attack_sequences[1].is_first_attack is False
+            if block.attack_sequences:
+                first_seq_attackers = {event.attacker for event in block.attack_sequences[0].events}
+                assert first_seq_attackers == {block.first}
+        assert saw_pair, "正常对局应存在先攻+反击的完整回合"
+
+    def test_empty_round_still_presented(self, gundam_rx78, zaku_ii, monkeypatch):
+        """空回合仍进 timeline（Doc 14 §5 rounds=回合序列）：出招段被
+        HOOK_PRE_EN_COST_MULT 抬价挡下时，回合块有开场播报、无攻防序列。"""
+        from src.skills import SkillRegistry
+
+        def pricey_en_hook(hook, value, ctx):
+            if hook == "HOOK_PRE_EN_COST_MULT":
+                return 10**9  # 抬价到双方都出不起 → 每段攻击早退
+            return value
+
+        monkeypatch.setattr(
+            SkillRegistry, "process_hook", classmethod(lambda cls, h, v, c: pricey_en_hook(h, v, c))
+        )
+        report = _resolve(gundam_rx78, zaku_ii)
+        assert report.timeline.rounds, "空回合对局仍应有回合块"
+        empty = [b for b in report.timeline.rounds if not b.attack_sequences]
+        assert empty, "抬价对局应存在无攻防序列的空回合"
+        for block in empty:
+            assert block.context_events, "空回合也必须播报开场（含距离与先手）"
+            assert block.context_events[0].type == "CONTEXT"
+
+    def test_ko_battle_summary_events(self, gundam_rx78, zaku_ii, monkeypatch):
+        """击破局：击破播报与终局宣告同在最后一回合 summary_events，先破后宣告。"""
+        monkeypatch.setattr(random, "uniform", lambda low, high: 99.9)
+        zaku_ii.current_hp = 1
+        report = _resolve(gundam_rx78, zaku_ii)
+        assert report.ruling.finish == "ko"
+        texts = [event.text for event in report.timeline.rounds[-1].summary_events]
+        assert any("被击破" in text for text in texts)
+        assert any("战斗结束" in text and "击破" in text for text in texts)
+        assert next(i for i, t in enumerate(texts) if "被击破" in t) < next(
+            i for i, t in enumerate(texts) if "战斗结束" in t
+        )
+
+    def test_decision_and_draw_announcements_match_finish(self):
+        """终局宣告文案与 result.finish 一致：decision 含"判定"与胜者名，draw 含"平局"。"""
+        stronger = _fortress("f_da", "FortressDA", max_hp=1000, current_hp=1000)
+        weaker = _fortress("f_db", "FortressDB", max_hp=1000, current_hp=500)
+        report = _resolve(stronger, weaker)
+        assert report.ruling.finish == "decision"
+        announce = report.timeline.rounds[-1].summary_events[-1]
+        assert announce.type == "SUMMARY"
+        assert "判定" in announce.text
+        assert "FortressDA" in announce.text
+
+        twin_a = _fortress("f_dx", "Twin", max_hp=800, current_hp=800)
+        twin_b = _fortress("f_dy", "Twin", max_hp=800, current_hp=800)
+        draw_report = _resolve(twin_a, twin_b)
+        assert draw_report.ruling.finish == "draw"
+        assert "平局" in draw_report.timeline.rounds[-1].summary_events[-1].text
+
+    def test_context_summary_events_have_no_ruling_layers(self, gundam_rx78, zaku_ii):
+        """CONTEXT/SUMMARY 无引擎裁定：裁定层/快照层/高光层字段恒 null（Doc 14 §6）。"""
+        report = _resolve(gundam_rx78, zaku_ii)
+        broadcast_events = [
+            event
+            for block in report.timeline.rounds
+            for event in list(block.context_events) + list(block.summary_events)
+        ]
+        assert broadcast_events, "引擎应生产开场/终局播报事件"
+        for event in broadcast_events:
+            assert event.type in ("CONTEXT", "SUMMARY")
+            assert event.attack_result is None
+            assert event.attacker is None
+            assert event.defender is None
+            assert event.weapon_name is None
+            assert event.damage is None
+            assert event.en_cost is None
+            assert event.will_delta is None
+            assert event.state_after is None
+            assert event.is_lethal is None
+            assert event.triggered_skills is None
+            assert event.spirit_commands is None
 
 
 # ============================================================================

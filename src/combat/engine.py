@@ -11,7 +11,7 @@ from ..skill_system.event_manager import EventManager
 from .resolver import AttackTableResolver
 from typing import Callable, Any, List, Optional
 from ..models import TriggerEvent
-from ..presentation import EventMapper, TextRenderer, PresentationRoundEvent
+from ..presentation import EventMapper, TextRenderer, PresentationRoundEvent, PresentationAttackEvent
 from ..presentation.event_builder import AttackEventBuilder
 
 
@@ -393,6 +393,12 @@ class BattleSimulator:
         6. 显示双方当前状态
 
         如果任一机体在回合中被击破,立即结束回合。
+
+        演出时间轴行为 (Doc 14 §5 rounds=回合序列): 每回合开场即创建
+        PresentationRoundEvent (含距离/先手字段与开场播报)。无攻击的空回合
+        (如 HOOK_PRE_EN_COST_MULT 抬价使双方出不了招——兜底撞击 EN 恒为 0，
+        纯 EN 枯竭不构成空回合) 也会出现在 timeline——有 context_events、
+        无 attack_sequences，前端仍需播报回合开场。
         """
         if self.verbose:
             print(f"{'=' * 80}")
@@ -404,7 +410,7 @@ class BattleSimulator:
             distance: int = self.distance_provider(self.round_number)
         else:
             distance: int = self._generate_distance()
-            
+
         if self.verbose:
             print(f"交战距离: {distance}m")
 
@@ -419,6 +425,27 @@ class BattleSimulator:
             print(f"先手方: {first_mover.name} ({reason.value})")
             print()
 
+        # 演出：回合开场——回合字段 + 开场播报事件（Doc 14 §5/§6.1 CONTEXT）。
+        # 只产数据不改变换逻辑；先手原因对外输出英文枚举键，播报文案用中文口径。
+        if self.enable_presentation:
+            round_evt = PresentationRoundEvent(
+                round_number=self.round_number,
+                distance=distance,
+                first_side="a" if first_mover is self.mecha_a else "b",
+                first_reason=reason.name.lower(),
+            )
+            round_evt.context_events.append(
+                PresentationAttackEvent(
+                    event_type="CONTEXT",
+                    round_number=self.round_number,
+                    text=(
+                        f"第 {self.round_number} 回合｜交战距离 {distance}m｜"
+                        f"先手：{first_mover.name}（{reason.value}）"
+                    ),
+                )
+            )
+            self.presentation_timeline.append(round_evt)
+
         # HOOK: 回合开始监听器
         for listener in self._round_start_listeners:
             listener(self.round_number, distance, first_mover, second_mover, reason)
@@ -431,6 +458,8 @@ class BattleSimulator:
             if self.verbose:
                 print()
                 print(f"💀 {second_mover.name} 被击破！HP归零，战斗结束")
+            if self.enable_presentation:
+                self._emit_summary_event(f"{second_mover.name} 被击破！")
             return
 
         if self.verbose:
@@ -444,6 +473,8 @@ class BattleSimulator:
             if self.verbose:
                 print()
                 print(f"💀 {first_mover.name} 被击破！HP归零，战斗结束")
+            if self.enable_presentation:
+                self._emit_summary_event(f"{first_mover.name} 被击破！")
             return
 
         # 5. 回合结束 - 气力基础增长
@@ -479,6 +510,20 @@ class BattleSimulator:
             print(f"{self.mecha_b.name}: HP={self.mecha_b.current_hp}/{self.mecha_b.final_max_hp} | "
                   f"EN={self.mecha_b.current_en}/{self.mecha_b.final_max_en} | "
                   f"气力={self.mecha_b.current_will}")
+
+    def _emit_summary_event(self, text: str) -> None:
+        """向当前回合追加终局类播报事件（Doc 14 §6.1 SUMMARY）。
+
+        击破播报与终局宣告共用；无引擎裁定，裁定层字段由装配层保持 null。
+        调用前提：回合开场已创建当前回合事件（enable_presentation 路径恒成立）。
+        """
+        self.presentation_timeline[-1].summary_events.append(
+            PresentationAttackEvent(
+                event_type="SUMMARY",
+                round_number=self.round_number,
+                text=text,
+            )
+        )
 
     def _apply_en_regeneration(self, mecha: Mecha) -> None:
         """应用机体的 EN 回能 (每回合自动回复)
@@ -689,6 +734,9 @@ class BattleSimulator:
         1. 击破胜: 对方 HP 归零
         2. 判定胜: 回合数上限时,比较 HP 百分比
         3. 平局: HP 百分比完全相同
+
+        演出: 终局宣告追加到最后一回合 summary_events (Doc 14 §6.1 SUMMARY);
+        timeline 为空 (开战即终局, round_number=0) 时跳过——result 块已承载裁定。
         """
         if self.verbose:
             print()
@@ -696,11 +744,13 @@ class BattleSimulator:
             print("战斗结束")
             print("=" * 80)
 
-        # 判断胜负
+        # 判断胜负（分支同时生产终局宣告文案，供演出 timeline 消费）
         if not self.mecha_a.is_alive():
+            announce = f"战斗结束——{self.mecha_b.name} 获胜（击破）"
             if self.verbose:
                 print(f"胜者: {self.mecha_b.name} (击破)")
         elif not self.mecha_b.is_alive():
+            announce = f"战斗结束——{self.mecha_a.name} 获胜（击破）"
             if self.verbose:
                 print(f"胜者: {self.mecha_a.name} (击破)")
         else:
@@ -714,14 +764,20 @@ class BattleSimulator:
                 print(f"{self.mecha_b.name} HP: {hp_b:.1f}%")
 
             if hp_a > hp_b:
+                announce = f"回合数达到上限——判定：{self.mecha_a.name} 获胜"
                 if self.verbose:
                     print(f"胜者: {self.mecha_a.name} (判定胜)")
             elif hp_b > hp_a:
+                announce = f"回合数达到上限——判定：{self.mecha_b.name} 获胜"
                 if self.verbose:
                     print(f"胜者: {self.mecha_b.name} (判定胜)")
             else:
+                announce = "回合数达到上限——平局"
                 if self.verbose:
                     print(f"平局!")
+
+        if self.enable_presentation and self.presentation_timeline:
+            self._emit_summary_event(announce)
 
     def register_round_start_listener(self, callback: Callable) -> None:
         """注册回合开始监听器"""

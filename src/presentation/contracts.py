@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 Side = Literal["a", "b"]
 # Doc 14 §3 meta.route：战报入口标记（debug/training/pve/pvp，v1.3 增补）
 Route = Literal["debug", "training", "pve", "pvp"]
+# Doc 14 §5 first_reason 枚举（与引擎 InitiativeReason 对应，对外输出英文键）
+FirstReason = Literal["forced_switch", "performance", "pilot", "advantage", "counter"]
 
 
 class TimelineMeta(BaseModel):
@@ -117,8 +119,8 @@ class EventContract(BaseModel):
 class AttackSequenceBlock(BaseModel):
     """攻防序列（Doc 14 §5.1）——通常为 [ACTION, REACTION] 事件对。
 
-    ``is_first_attack`` 为 P1 字段：数据在 RawAttackEvent.is_first_attack，
-    引擎序列尚未带出，本阶段恒 true。
+    ``is_first_attack`` 取序列首个事件的 RawAttackEvent.is_first_attack
+    （引擎先攻/反击标记，P1-a 填实）。
     """
     attacker_id: str
     defender_id: str
@@ -129,13 +131,13 @@ class AttackSequenceBlock(BaseModel):
 class RoundBlock(BaseModel):
     """回合块（Doc 14 §5）。
 
-    ``distance`` / ``first`` / ``first_reason`` 为 P1 字段（引擎已算未存），
-    本阶段给中性默认不生产。
+    ``distance`` / ``first`` / ``first_reason`` 与 CONTEXT/SUMMARY 事件
+    由引擎每回合开场与终局生产（P1-a 填实）。
     """
     round_number: int
     distance: int = 0
     first: Optional[Side] = None
-    first_reason: Optional[str] = None
+    first_reason: Optional[FirstReason] = None
     context_events: List[EventContract] = Field(default_factory=list)
     attack_sequences: List[AttackSequenceBlock] = Field(default_factory=list)
     summary_events: List[EventContract] = Field(default_factory=list)

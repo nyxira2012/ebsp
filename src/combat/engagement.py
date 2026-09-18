@@ -16,7 +16,7 @@
 
 import random
 from dataclasses import dataclass
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, get_args
 
 from ..config import Config
 from ..models import MechaSnapshot
@@ -24,6 +24,7 @@ from ..presentation.contracts import (
     AttackSequenceBlock,
     CombatantState,
     EventContract,
+    FirstReason,
     InitBlock,
     ParticipantProfile,
     PilotProfile,
@@ -272,14 +273,16 @@ class Engagement:
     def _build_rounds(self, sim: BattleSimulator) -> list[RoundBlock]:
         """presentation_timeline → 契约回合块。
 
-        顺带回填 initiative_holder（红线 4：悬空字段有主）：以每回合首个
-        序列的攻方为本回合先手持有人，填入该回合各 raw_event——该字段
-        供内部消费，不入对外契约；P1 后改用回合块的 first_side。
+        回合字段（distance/first/first_reason）与 CONTEXT/SUMMARY 事件
+        由引擎生产（P1-a），此处直传。initiative_holder 回填（红线 4：
+        悬空字段有主）用回合先手值 round_evt.first_side（引擎权威裁定），
+        空则回退"首序列攻方"——first_side 仅在绕过 _execute_round 的守卫
+        裸回合（_execute_attack 直调场景）为空，回退即服务该场景。
         """
         round_blocks: list[RoundBlock] = []
         for round_evt in sim.presentation_timeline:
-            first_side: Optional[str] = None
-            if round_evt.attack_sequences:
+            first_side: Optional[str] = round_evt.first_side or None
+            if first_side is None and round_evt.attack_sequences:
                 first_side = round_evt.attack_sequences[0].attacker_side or None
             if first_side is not None:
                 for seq in round_evt.attack_sequences:
@@ -291,8 +294,12 @@ class Engagement:
                 AttackSequenceBlock(
                     attacker_id=seq.attacker_id,
                     defender_id=seq.defender_id,
-                    # P1 字段：引擎序列尚未带出先攻标记，本阶段恒 True
-                    is_first_attack=True,
+                    # 先攻标记取序列首个事件的引擎裁定；raw_event 缺失保底 true
+                    is_first_attack=(
+                        seq.events[0].raw_event.is_first_attack
+                        if seq.events and seq.events[0].raw_event is not None
+                        else True
+                    ),
                     events=[_build_event(evt, seq.attacker_side or None) for evt in seq.events],
                 )
                 for seq in round_evt.attack_sequences
@@ -300,6 +307,22 @@ class Engagement:
             round_blocks.append(
                 RoundBlock(
                     round_number=round_evt.round_number,
+                    distance=round_evt.distance,
+                    # 演出层字段是裸 str，契约是字面值类型——此处做运行时收窄，
+                    # 引擎外的旧时间轴（空串/未知值）降级为 None 而非带病入契约
+                    first=(
+                        round_evt.first_side
+                        if round_evt.first_side in ("a", "b")
+                        else None
+                    ),
+                    # 五键与 contracts.FirstReason 同源；此处字面值元组换来
+                    # pyright 严格收窄，漏改由测试侧 get_args 枚举校验兜底
+                    first_reason=(
+                        round_evt.first_reason
+                        if round_evt.first_reason
+                        in ("forced_switch", "performance", "pilot", "advantage", "counter")
+                        else None
+                    ),
                     context_events=[_build_event(evt, None) for evt in round_evt.context_events],
                     attack_sequences=seq_blocks,
                     summary_events=[_build_event(evt, None) for evt in round_evt.summary_events],
