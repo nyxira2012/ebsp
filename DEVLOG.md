@@ -1,5 +1,31 @@
 # Development Log (DEVLOG.md)
 
+## 2026-09-19 Doc 16 v1.2/v1.3 实现：环境通道 + 训练力场 + 防御测试木桩上线（mawang 两批交付）
+
+> **项目快照**：D9 设计落地 | 引擎零改动（engine/resolver 未动）| 列表契约七项→八项（增 `environment_id`，主 agent 裁决待追认）| 防御局 5 种子实测 45–53 回合落 D4 带带 | 测试 643→665 全绿 | 新增 data/environments.json（训练力场/靶场/野战）
+
+### 落点裁决
+
+1. **效果注入落装配层（entry.py 收发室），不落引擎也不落特质链**：`_apply_environment` 在存档覆盖之后、EngagementSpec 构造之前注入——降级到演示配置时力场同样生效；spec 构造即深拷贝（Effect 元素粒度也逐个拷贝），护栏结构性成立。否掉引擎侧方案：环境对引擎不可见（只见效果），`HOOK_ON_DAMAGE_TAKEN` 返回值即落血伤害的现成语义足够。
+2. **免死钳制身份判定用 `is` 不用 `==`**：pydantic BaseModel 相等按字段值，镜像同配双快照会误判；`ctx.get_defender()` 以 ctx.weapon 归属推导受击方，效果持有者由 processor 从 ctx 原对象配对——`owner is defender` 在真实引擎路径恒成立（攻击期 ctx 恒以 mecha_a=攻方构建）。
+3. **钳制效果 priority=100**：同钩子按优先级升序执行、高者最后执行拥有最终决定权——钳制必须吃在其他伤害修正之后，否则会被后续效果改写。
+4. **列表条目直带 `environment_id`（七项→八项）**：D9 留下的缺口——前端从哪拿条目环境 ID？隐映射（kind 反猜环境）是两处真相会漂的老病。环境 ID 是规则上下文引用不属红线封锁面（不泄数值、不携图片），D9 已授权 v1.2 契约版本化切换。会话内用户未应答，主 agent 按授权内判断落地，**Doc 16 §7 留痕待追认**（否决则删字段回退，可逆单点）。
+5. **环境不进战报 meta**（用户开工裁决）：前端自选自知，进 meta 只扩契约面；将来按环境渲染背景走 Doc 14 非破坏增补先例。
+
+### 坑（下一个实现者会踩的）
+
+- **生产链路被动技能是死链**：`TraitManager.apply_traits` 无任何 src 调用方（仅测试直调），快照 `.skills` 字符串列表从不转成 Effect——"现成模式"现成的是效果处理管线，不是特性自动挂载。环境效果必须自己显式 append（本次 `_apply_environment` 即是）。将来接特质挂载链时别假设它已生效。
+- **conftest 每测试清空 SkillRegistry 注册表 + reload 还原义务**：全战斗 API 测试要 `importlib.reload(src.skills)` 重注册回调；reload 会把模块属性重绑到新类，测试结束**必须还原模块属性**（processor 调用期按模块属性懒加载拿新类、engine 顶层导入持旧类，不还原则注册与查找落两类——实测红过 test_integration_complex/test_skills_processor 各一例）。夹具已上移 tests/conftest.py 共享（`reloaded_skills`），别再复制本地副本。
+- **兜底撞击会从距离空档劫持**：只配 EN 经济不够——第一回合距离收敛带 3000–7000，武器射程并集若留空档（如步枪 ≤6000 + 锤 ≤1200），空档回合双武器齐哑照样触发威力 600 兜底撞击。重火力木桩补了 `wpn_bazooka`（3000–8000）封死距离维，EN 维 20/回合 > 最贵 15/发，两个维度结构性不可达（5 种子零出现）。
+- **dict 撞键"保位置换值"，装载后去重不可达**：`container[obj.id] = obj` 对已有键只换值不换位置——加载完再想 keep-first 已无物可去重。先到先得必须在装载期拦截（`_load_from_json` 的 opt-in `keep_first` 参数，仅 environments/practice_scenarios 开启）。
+- **策展内容里免死护栏是待命态**：重火力木桩最高单发对演示机体非致死，钳制在策展局不实际触发——这是对的（护栏本该兜真实入场路径：登录玩家低血存档 `use_user_save_for_a` 才接致死刀）。别为了"验证护栏"去调高木桩单发，那会摧毁"看每回合被打穿多少"的观察价值。
+
+### 交付物
+
+- 代码（3 批提交）：环境通道（EnvironmentConfig/Grant + 容缺加载与交叉校验 + 装配期注入）、`env_regen_full`/`env_no_death` 两效果与回调、练习场契约切换（kind 环境派生 + environment_id 透传）、mech_defense_dummy + practice_defense_dummy 上线、撞键先到先得收口。金样张/debug 老路径零变化（缺省 environment_id=None 不注入）。
+- 文档：Doc 16 v1.3（八项契约、实现注记、实现偏差 §7）、Doc 14 v1.8（§2 请求增补 environment_id）。
+- 测试：test_environment_effects.py（19 测：钳制四态+镜像钉+全链路 processor+注入/隔离+加载校验）、test_practice_api.py（八项契约+content_floor 反转+防御局全链路免死断言）、test_loader.py（撞键 keep-first）。全量 665 passed、pyright 0 新增错误。
+
 ## 2026-09-19 D9 设计修订：防御测试机制改"快照注入 + 环境通道"（纯设计，引擎文档同步）
 
 > **项目快照**：用户两轮拍板（效果注入玩家快照 / 环境标注战斗类型）| Doc 16 v1.2 + Doc 15 v1.5 + Doc 1 §5.3 + roadmap §1 修账 | 顺手去重 kind 枚举声明 | 测试 643 不变全绿
