@@ -24,25 +24,19 @@ class PveSessionManager:
         if cls.get_session_by_user(user_id):
             raise ValueError(f"User {user_id} already has an active PVE session")
 
-        # 1. 获取区域与子区域配置
+        # 1. 获取子区域配置（Doc 13 新格式优先，缺失回退旧格式；均缺失走生成器默认）
         zone_config = None
-        instance_zone_config = None
         if loader:
             try:
-                # 优先尝试获取 InstanceZoneConfig（Doc 13）
-                instance_zone_config = loader.get_instance_zone_config(region_id, zone_id)
+                zone_config = loader.get_instance_zone_config(region_id, zone_id)
             except Exception:
-                # 回退到旧的 RegionConfig
                 try:
                     zone_config = loader.get_zone_config(region_id, zone_id)
                 except Exception:
                     pass
 
-        # 2. 生成事件序列（使用 instance_zone_config 或 zone_config）
-        event_sequence: EventSequence = EventSequenceGenerator.generate(
-            region_config=zone_config,
-            zone_config=instance_zone_config or zone_config
-        )
+        # 2. 生成事件序列（按配置类型分派：InstanceZoneConfig / ZoneConfig）
+        event_sequence: EventSequence = EventSequenceGenerator.generate(zone_config)
 
         # 3. 构造队伍状态
         members = []

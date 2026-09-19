@@ -9,6 +9,7 @@ from .models import (
     MechaSnapshot, PilotConfig, SubPilotConfig, WeaponSnapshot, WeaponType,
     MechaConfig, EquipmentConfig
 )
+from .presentation.constants import DamageMaterial, MotionStyle
 
 
 class MechaFactory:
@@ -406,29 +407,8 @@ class MechaFactory:
             will_req=config.weapon_will_req or 0,
             anim_id=config.weapon_anim_id or "default_anim",
             tags=config.weapon_tags or [],
-            # MDDC 多维数据契约 (Doc 6) - 从配置直接读取并转换为枚举
-            motion_style=MechaFactory._parse_motion_style(config.motion_style),
-            damage_material=MechaFactory._parse_damage_material(config.damage_material),
+            # MDDC 多维数据契约 (Doc 6) - 加载点一次校验：非法配置值在此抛 ValueError，
+            # 不静默降级默认（数据侧错误应当在装配边界暴露）
+            motion_style=MotionStyle(config.motion_style),
+            damage_material=DamageMaterial(config.damage_material),
         )
-
-    @staticmethod
-    def _parse_motion_style(value: str | None):
-        """安全地将字符串转换为 MotionStyle 枚举"""
-        from src.presentation.constants import MotionStyle, DEFAULT_MOTION_STYLE
-        if value is None:
-            return DEFAULT_MOTION_STYLE
-        try:
-            return MotionStyle[value] if value in MotionStyle.__members__ else MotionStyle(value)
-        except (ValueError, KeyError):
-            return DEFAULT_MOTION_STYLE
-
-    @staticmethod
-    def _parse_damage_material(value: str | None):
-        """安全地将字符串转换为 DamageMaterial 枚举"""
-        from src.presentation.constants import DamageMaterial, DEFAULT_DAMAGE_MATERIAL
-        if value is None:
-            return DEFAULT_DAMAGE_MATERIAL
-        try:
-            return DamageMaterial[value] if value in DamageMaterial.__members__ else DamageMaterial(value)
-        except (ValueError, KeyError):
-            return DEFAULT_DAMAGE_MATERIAL

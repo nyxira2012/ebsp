@@ -11,6 +11,10 @@ from src.database import init_db, close_db
 from src.database.session import _get_session_factory
 from src.pve.progress_service import PveProgressService
 from src.pve.services import PveEntryService
+from src.pve.battle_bridge import BattleBridge
+from src.pve.reward_controller import RewardController
+from src.pve.session_manager import PveSessionManager
+from src.user.inventory import InventoryService
 from src.factory import MechaFactory
 from src.pve.enums import CombatOutcome, ExitMethod
 from src.database.models import User, UserMecha, UserMothership
@@ -121,9 +125,8 @@ async def main():
 
             total_events = len(session_data.event_sequence.events)
 
-            while not PveEntryService.is_sequence_complete(session_data):
-                # 使用公开方法获取当前事件
-                event = PveEntryService.get_current_event(session_data)
+            while not session_data.event_sequence.is_complete():
+                event = session_data.event_sequence.current_event()
                 if event is None:
                     break
 
@@ -151,8 +154,7 @@ async def main():
                     time.sleep(0.3)
 
                     try:
-                        # 使用公开方法触发战斗
-                        result = PveEntryService.engage_battle(
+                        result = BattleBridge.engage(
                             session=session_data,
                             event_index=event.index,
                             loader=loader,
@@ -165,8 +167,8 @@ async def main():
                         print(f"   [战况总结] 结果: {outcome_cn} | 历经回合: {result.rounds_fought}")
 
                         if result.outcome == CombatOutcome.WIN:
-                            # 使用公开方法添加掉落
-                            PveEntryService.add_loot_rewards(session_data, result.loot_drops, result.credits_earned)
+                            RewardController.add_pending_loot(session_data, result.loot_drops)
+                            session_data.credits_earned += result.credits_earned
 
                             # 显示掉落
                             if result.loot_drops:
@@ -182,7 +184,7 @@ async def main():
                             print(f"   [状态监控] 接战后 HP: {new_state.current_hp}/{new_state.max_hp}")
                             
                             # 模拟主动撤退决策：血量低于30%且不是最后一关
-                            if new_state.current_hp / new_state.max_hp < 0.3 and not PveEntryService.is_sequence_complete(session_data):
+                            if new_state.current_hp / new_state.max_hp < 0.3 and not session_data.event_sequence.is_complete():
                                 print(f"   [指挥官决策] 警告！装甲受损严重。为避免彻底折损失去截获物资，放弃剩余探索，强行呼叫母舰撤退！")
                                 break
                         else:
@@ -196,8 +198,7 @@ async def main():
                 elif event.event_type.name == "LOOT":
                     print("   [探测结果] 发现一处被遗忘的货舱。")
                     dummy_loot = [{"type": "item", "item_id": "mat_scrap", "quantity": random.randint(5, 10)}]
-                    # 使用公开方法添加掉落
-                    PveEntryService.add_loot_rewards(session_data, dummy_loot)
+                    RewardController.add_pending_loot(session_data, dummy_loot)
                     print(f"   [获得资源] 废料碎片 x {dummy_loot[0]['quantity']}")
 
                 elif event.event_type.name == "EVENT":
@@ -207,8 +208,8 @@ async def main():
                     player_state.current_hp = min(player_state.max_hp, player_state.current_hp + recover)
                     print(f"   [现场维护] 系统已进行初步修补，HP 回复了 {recover} 点。")
 
-                # 使用公开方法推进索引
-                has_more = PveEntryService.advance_event(session_data)
+                # 推进事件索引（含战报暂存清理）
+                has_more = session_data.advance_event()
                 if not has_more:
                     print("\n[汇报] 区域内所有目标已清除，探索任务圆满完成。")
                     break
@@ -218,24 +219,25 @@ async def main():
             # Phase 4: 结算
             print("\n--- [阶段 4: 风险收益结算与归航] ---")
 
+            exit_method: ExitMethod | None = None
             try:
-                is_win = PveEntryService.is_sequence_complete(session_data)
+                is_win = session_data.event_sequence.is_complete()
                 new_state = session_data.squad_state.members[0]
-                
+
                 if is_win:
                     exit_method = ExitMethod.BOSS_CLEAR
                 elif new_state.current_hp > 0:
-                    exit_method = ExitMethod.RETREAT
+                    exit_method = ExitMethod.VOLUNTARY_EXIT
                 else:
                     exit_method = ExitMethod.DEFEATED
 
-                # 使用公开方法结算
-                summary = await PveEntryService.extract_rewards(
+                summary = await RewardController.finalize(
                     db=db,
-                    session=session_data,
+                    session_data=session_data,
                     exit_method=exit_method,
-                    loader=loader,
-                    mothership_config=mothership_config
+                    inventory_service=InventoryService(session=db, loader=loader),
+                    mothership_config=mothership_config,
+                    loader=loader
                 )
 
                 print("="*65)
@@ -254,10 +256,9 @@ async def main():
                 import traceback
                 traceback.print_exc()
 
-            # 使用公开方法销毁会话
-            PveEntryService.destroy_session(session_data.session_id)
+            PveSessionManager.destroy_session(session_data.session_id)
 
-            # 评估是否继续探索新区域
+            # 评估是否继续探索新区域（结算异常时 exit_method 为 None，同样终止）
             if exit_method != ExitMethod.BOSS_CLEAR:
                 print("\n>>> 机甲装甲告警或受损被击毁，无法执行连续深空探索，演练终止。")
                 break

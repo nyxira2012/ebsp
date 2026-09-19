@@ -81,3 +81,29 @@ class TemplateRegistry:
 
         self._action_bones.extend(action_bones)
         self._reaction_bones.extend(reaction_bones)
+
+
+# ============================================================================
+# 进程内共享注册表（唯一加载点）：API 启动期加载一次，引擎侧按需取用
+# ============================================================================
+
+_shared_registry: Optional[TemplateRegistry] = None
+
+
+def initialize_shared_registry(config_path: str) -> TemplateRegistry:
+    """加载并设置全局共享注册表。
+
+    Args:
+        config_path: YAML 配置文件路径
+
+    Returns:
+        TemplateRegistry: 初始化后的共享注册表
+    """
+    global _shared_registry
+    _shared_registry = TemplateRegistry(config_path)
+    return _shared_registry
+
+
+def get_shared_registry() -> Optional[TemplateRegistry]:
+    """获取全局共享注册表；未初始化时返回 None（调用方回落空注册表）。"""
+    return _shared_registry

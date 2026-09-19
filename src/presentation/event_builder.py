@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from .models import RawAttackEvent
-from .constants import MotionStyle, DamageMaterial
 
 if TYPE_CHECKING:
     # 避免循环导入：TYPE_CHECKING 块只在类型检查时导入
@@ -79,23 +78,7 @@ class AttackEventBuilder:
         Returns:
             RawAttackEvent: 可供 EventMapper 直接消费的原始攻击事件
         """
-        # MDDC 数据驱动：从武器快照直接读取枚举值
-        # 注意：工厂方法 (factory.py) 已完成字符串到枚举的转换
-        # 兼容性处理：如果是字符串则转换为枚举，如果是枚举则直接使用
-        motion_style_val = getattr(weapon, 'motion_style', None)
-        damage_material_val = getattr(weapon, 'damage_material', None)
-
-        # 转换为枚举（支持字符串和枚举输入）
-        if isinstance(motion_style_val, str):
-            motion_style = MotionStyle[motion_style_val] if motion_style_val in MotionStyle.__members__ else MotionStyle.STRIKE_BLUNT
-        else:
-            motion_style = motion_style_val or MotionStyle.STRIKE_BLUNT
-
-        if isinstance(damage_material_val, str):
-            damage_material = DamageMaterial[damage_material_val] if damage_material_val in DamageMaterial.__members__ else DamageMaterial.GENERIC
-        else:
-            damage_material = damage_material_val or DamageMaterial.GENERIC
-
+        # MDDC 数据驱动：武器快照字段已是枚举（工厂/加载点一次校验），直接透传
         return RawAttackEvent(
             # ── 基本信息 ──────────────────────────────────────────────
             round_number=round_number,
@@ -140,9 +123,8 @@ class AttackEventBuilder:
             defender_max_hp=defender.final_max_hp,
 
             # ── 演出系统数据契约 (MDDC v5.1) ─────────────────────────
-            # 直接从武器配置读取，消除关键词猜测
             is_lethal=(defender.current_hp <= 0),
-            motion_style=motion_style,
-            damage_material=damage_material,
+            motion_style=weapon.motion_style,
+            damage_material=weapon.damage_material,
             spirit_commands=spirit_commands,
         )

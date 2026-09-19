@@ -117,11 +117,9 @@ async def advance_sequence(
     if session.event_sequence.is_complete():
         raise HTTPException(status_code=400, detail="Event sequence already complete")
         
-    has_more = session.event_sequence.advance()
-
-    # 战报暂存至事件点消化完成（Doc 15 §6）：推进到新事件即清理旧事件点暂存
-    for stale_index in [k for k in session.battle_reports if k < session.event_sequence.current_index]:
-        del session.battle_reports[stale_index]
+    # 战报暂存至事件点消化完成（Doc 15 §6）：推进即清理旧事件点暂存，
+    # 不变量在会话本体（PveSessionData.advance_event）
+    has_more = session.advance_event()
 
     current_event = session.event_sequence.current_event()
     
@@ -181,14 +179,15 @@ async def engage_battle(
         RewardController.add_pending_loot(session, result.loot_drops)
         session.credits_earned += result.credits_earned
         
+    # 完整战报不经 engage 下发（Doc 15 §5）：已由 BattleBridge 暂存至
+    # session.battle_reports，前端经 GET /sessions/{id}/battle/{event_index} 拉取
     return BattleResultResponse(
         outcome=result.outcome.name,
         rounds_fought=result.rounds_fought,
         player_states=result.player_states,
         enemy_state=result.enemy_state,
         credits_earned=result.credits_earned,
-        loot_drops=result.loot_drops,
-        battle_report=result.battle_report
+        loot_drops=result.loot_drops
     )
 
 @router.get("/sessions/{session_id}/battle/{event_index}", response_model=BattleReplayResponse)

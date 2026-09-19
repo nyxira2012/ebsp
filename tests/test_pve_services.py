@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pve.services import MothershipIntegrationService, PveEntryService
+from src.models import InstanceZoneConfig, ZoneSequenceConfig
 
 
 # ============================================================================
@@ -160,25 +161,12 @@ class TestPveEntryService:
         region_config.zones = [mock_zone]
         loader.get_region_config.return_value = region_config
 
-        # Mock zone_config
-        zone_config = Mock()
-        zone_config.elite_pool = ["elite_1", "elite_2"]
-        zone_config.normal_pool = ["mob_1", "mob_2", "mob_3"]
-        zone_config.boss_template = "boss_1"
-        zone_config.event_count_range = [5, 8]
-        zone_config.event_weights = None
-        zone_config.sequence = Mock()
-        zone_config.sequence.length = 5
-        zone_config.sequence.fixed_encounters = {}
-        zone_config.sequence.random_encounter_chance = 0.4
-        zone_config.sequence.total_random_encounters = None
-        zone_config.sequence.event_chance = 0.2
-        loader.get_zone_config.return_value = zone_config
-
-        # Mock instance_zone_config（会优先使用）
-        instance_zone_config = Mock()
-        instance_zone_config.zone_id = "test_zone"
-        instance_zone_config.sequence = zone_config.sequence
+        # Mock zone config（子区域用真实 Doc 13 模型，生成器按类型分派）
+        instance_zone_config = InstanceZoneConfig(
+            zone_id="test_zone",
+            name="测试子区域",
+            sequence=ZoneSequenceConfig(length=5),
+        )
         loader.get_instance_zone_config.return_value = instance_zone_config
 
         # Mock 机体配置（提供完整的 MechaConfig）

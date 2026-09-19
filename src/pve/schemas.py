@@ -71,7 +71,8 @@ class BattleResultResponse(BaseModel):
     enemy_state: Optional[PveEntityState]  # DRAW 的车轮战残局才会返回
     credits_earned: int
     loot_drops: List[Dict[str, Any]]       # 本次战斗刚获得的临时收容掉落
-    battle_report: Dict[str, Any]  # 完整战报时间轴（Doc 14 四块）——裁定成功恒含（Doc 15 §5 engage 行）
+    # 完整战报不经本响应下发（Doc 15 §5）：engage 是裁定命令只返回终局摘要，
+    # 战报是易失大资源，经 GET /pve/sessions/{id}/battle/{event_index} 按引用取用
 
 class BattleReplayResponse(BaseModel):
     """重放已裁定战报（Doc 14 §9.5：PVE 战斗页重入重放，非新对局）"""

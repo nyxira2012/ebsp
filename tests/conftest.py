@@ -34,6 +34,25 @@ def reduce_bcrypt_cost():
     yield
     src.user.security.ROUNDS = original_rounds
 
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_presentation_registry():
+    """演出模板共享注册表：镜像生产启动一次加载，会话内全局一致。
+
+    引擎经 get_shared_registry 消费模板——注册表状态影响演出竞标的
+    随机流消耗（与圆桌/技能同流），必须对全部测试统一初始化，
+    否则金样张等输出随测试执行顺序漂移。
+    """
+    from src.presentation.registry import get_shared_registry, initialize_shared_registry
+    if get_shared_registry() is None:
+        try:
+            initialize_shared_registry(
+                os.path.join(str(project_root), "data", "presentation", "templates.yaml")
+            )
+        except FileNotFoundError:
+            pass
+    yield
+
 # ============================================================================
 # 导入项目模块
 # ============================================================================

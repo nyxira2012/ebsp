@@ -281,11 +281,14 @@ class TextAssembler:
         2. 变量注入
         3. 附加判定结果和伤害数值
 
-        注意：理论上 Bidder 已经保证了有骨架提供，bone 不应为 None
+        bone 为 None（空注册表/模板缺失）时使用 T3 兜底文本——
+        演出降级可用，不中断战斗。
         """
-        # 断言 Bidder 已提供有效骨架
-        assert bone and bone.text_fragments, "Bidder should always provide a valid bone with text_fragments"
-        base_text = self._rng.choice(bone.text_fragments)
+        if bone and bone.text_fragments:
+            base_text = self._rng.choice(bone.text_fragments)
+        else:
+            fallbacks = T3_FALLBACK_TEXTS.get(event.attack_result)
+            base_text = self._rng.choice(fallbacks) if fallbacks else "{defender}被击中了。"
 
         # 变量注入
         try:

@@ -2,12 +2,15 @@
 PVE 接敌并入时间轴 + 战报暂存与重放（Doc 15 §6/§7 P1-b，Doc 14 §9.5）。
 
 覆盖：
-- BattleBridge.engage 产出完整战报（Doc 14 四块结构，meta.route=="pve"），
-  并以同一 dump 对象暂存到 session.battle_reports（响应与暂存不重复 dump）；
+- BattleBridge.engage 裁定成功 → 完整战报（Doc 14 四块结构，
+  meta.route=="pve"）以单次 dump 暂存到 session.battle_reports
+  （战报唯一去向=会话暂存，命令与资源分离）；
+- engage 响应瘦身为终局摘要（不含 battle_report 键），战报经
+  GET /api/pve/sessions/{id}/battle/{event_index} 取用（战报唯一出口）；
 - advance 推进后旧事件点暂存被清理、新事件点接敌不受影响
   （Doc 15 §6"下一次推进即消化完成"）；
-- GET /api/pve/sessions/{id}/battle/{event_index} 重放：200 与 engage 响应一致、
-  未接敌事件点 404、他人会话 404、会话不存在 404（前端降级仅终局摘要）；
+- 重放端点：200 与会话暂存逐字一致、未接敌事件点 404、
+  他人会话 404、会话不存在 404（前端降级仅终局摘要）；
 - 失败原子的 battle_reports 零写入断言并入 tests/test_battle_entry.py。
 
 进程重启丢失（内存态天然失效）不做测试——裁决 #3：内存态即用即弃。
@@ -122,12 +125,12 @@ def patched_mothership(monkeypatch):
 
 
 # ============================================================================
-# 桥接层：engage 产出完整战报 + 暂存（同一 dump 对象）
+# 桥接层：engage 裁定成功 → 战报暂存至会话（唯一去向）
 # ============================================================================
 
-def test_engage_returns_full_timeline_and_stages(real_loader, pve_sessions):
-    """engage 成功 → BattleResult.battle_report 为 Doc 14 四块结构
-    （meta.route=="pve"），且暂存与响应引用同一 dump 字典。"""
+def test_engage_stages_full_timeline_in_session(real_loader, pve_sessions):
+    """engage 成功 → session.battle_reports[event_index] 为 Doc 14 四块结构
+    （meta.route=="pve"）——战报的唯一去向是会话暂存，命令与资源分离。"""
     from src.factory import MechaFactory
 
     session = pve_sessions(_combat_session())
@@ -139,25 +142,25 @@ def test_engage_returns_full_timeline_and_stages(real_loader, pve_sessions):
         mecha_factory=MechaFactory,
     )
 
-    report = result.battle_report
+    # 战报不在 BattleResult（命令只返回裁定摘要），在会话暂存里
+    assert not hasattr(result, "battle_report")
+    report = session.battle_reports[1]
     assert isinstance(report, dict)
     assert set(report.keys()) == {"meta", "init", "rounds", "result"}
     assert report["meta"]["route"] == "pve"
     assert report["result"]["rounds_fought"] == result.rounds_fought
     assert isinstance(report["rounds"], list)
 
-    # 暂存存在且为同一字典对象（勿重复 dump 两份）
-    assert session.battle_reports[1] is report
-
 
 # ============================================================================
-# API 层：engage 响应带战报 + advance 清理 + 重放端点
+# API 层：engage 响应=终局摘要 + 战报经重放端点 + advance 清理
 # ============================================================================
 
-async def test_api_engage_response_contains_battle_report(
+async def test_api_engage_returns_summary_without_battle_report(
     auth_client, pve_sessions, patched_mothership
 ):
-    """engage 响应自动带出 battle_report 四块（BattleResultResponse 增字段）。"""
+    """engage 响应只含终局摘要（无 battle_report 键）；战报经重放端点
+    GET /battle/{event_index} 拿到四块结构（战报唯一出口）。"""
     client, user = auth_client
     session = pve_sessions(_combat_session(user_id=user.id))
 
@@ -166,9 +169,23 @@ async def test_api_engage_response_contains_battle_report(
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body["battle_report"].keys()) == {"meta", "init", "rounds", "result"}
-    assert body["battle_report"]["meta"]["route"] == "pve"
-    assert 1 in session.battle_reports
+    # 终局摘要字段齐备，且不再内联战报
+    assert set(body.keys()) == {
+        "outcome", "rounds_fought", "player_states",
+        "enemy_state", "credits_earned", "loot_drops",
+    }
+    assert "battle_report" not in body
+    assert 1 in session.battle_reports  # 裁定成功瞬间暂存必在内存
+
+    # 完整战报走重放端点（首渲与重入同路）
+    replay_resp = await client.get(
+        f"/api/pve/sessions/{session.session_id}/battle/1"
+    )
+    assert replay_resp.status_code == 200
+    report = replay_resp.json()["battle_report"]
+    assert set(report.keys()) == {"meta", "init", "rounds", "result"}
+    assert report["meta"]["route"] == "pve"
+    assert report["result"]["rounds_fought"] == body["rounds_fought"]
 
 
 async def test_api_advance_clears_stale_battle_reports(
@@ -221,10 +238,11 @@ async def test_api_sync_correction_keeps_battle_reports(
     assert set(session.battle_reports.keys()) == {1}  # 未推进：战报保留供重放
 
 
-async def test_api_replay_returns_same_report_as_engage(
+async def test_api_replay_returns_staged_report_verbatim(
     auth_client, pve_sessions, patched_mothership
 ):
-    """engage 后 GET 重放 → 200 且 battle_report 与 engage 响应逐字一致。"""
+    """engage 后 GET 重放 → 200 且 battle_report 与会话暂存逐字一致
+    （重放端点=战报唯一出口，首渲与重入拿到的是同一份）。"""
     client, user = auth_client
     session = pve_sessions(_combat_session(user_id=user.id))
 
@@ -232,12 +250,13 @@ async def test_api_replay_returns_same_report_as_engage(
         f"/api/pve/sessions/{session.session_id}/engage", json={"event_index": 1}
     )
     assert engage_resp.status_code == 200
+    assert "battle_report" not in engage_resp.json()
 
     replay_resp = await client.get(
         f"/api/pve/sessions/{session.session_id}/battle/1"
     )
     assert replay_resp.status_code == 200
-    assert replay_resp.json()["battle_report"] == engage_resp.json()["battle_report"]
+    assert replay_resp.json()["battle_report"] == session.battle_reports[1]
 
 
 async def test_api_replay_uncached_event_returns_404(

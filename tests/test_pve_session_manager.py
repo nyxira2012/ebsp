@@ -13,6 +13,7 @@ from unittest.mock import Mock
 from src.pve.session_manager import PveSessionManager
 from src.pve.models import PveSessionData, PveSquadState, EventSequence
 from src.pve.enums import SessionStatus
+from src.models import InstanceZoneConfig, ZoneSequenceConfig
 
 
 @pytest.fixture(autouse=True)
@@ -41,31 +42,14 @@ def basic_locked_config():
 
 @pytest.fixture
 def mock_loader():
-    """模拟 DataLoader"""
+    """模拟 DataLoader（子区域用真实 Doc 13 模型，生成器按类型分派）"""
     loader = Mock()
 
-    # Mock zone config — 设置 event_count_range 供 EventSequenceGenerator 使用
-    zone_config = Mock()
-    zone_config.event_count_range = [3, 5]
-    zone_config.boss_template = "test_boss"
-    zone_config.elite_pool = ["elite_1"]
-    zone_config.normal_pool = ["mob_1"]
-    zone_config.event_weights = None  # 使用默认权重
-
-    # Mock sequence 配置（供 instance_zone_config 使用）
-    zone_config.sequence = Mock()
-    zone_config.sequence.length = 3
-    zone_config.sequence.fixed_encounters = {}
-    zone_config.sequence.random_encounter_chance = 0.4
-    zone_config.sequence.total_random_encounters = None
-    zone_config.sequence.event_chance = 0.2
-
-    loader.get_zone_config.return_value = zone_config
-
-    # Mock instance_zone_config（会优先使用）
-    instance_zone_config = Mock()
-    instance_zone_config.zone_id = "test_zone"
-    instance_zone_config.sequence = zone_config.sequence
+    instance_zone_config = InstanceZoneConfig(
+        zone_id="test_zone",
+        name="测试子区域",
+        sequence=ZoneSequenceConfig(length=3),
+    )
     loader.get_instance_zone_config.return_value = instance_zone_config
 
     return loader

@@ -36,7 +36,7 @@ class TestDeterminism:
         finally:
             random.seed()  # 复位，防止固定种子污染同进程其它测试的随机流
         assert first.timeline.model_dump() == second.timeline.model_dump()
-        assert first.final_states == second.final_states
+        assert first.ruling == second.ruling
         assert first.seed_used == second.seed_used == 20260918
 
     def test_same_seed_same_report_with_probability_skill(self, gundam_rx78, zaku_ii):

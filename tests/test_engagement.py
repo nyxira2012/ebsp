@@ -10,7 +10,9 @@ meta/init/result 结构对齐 Doc 14、战报体积预算。
 - ko 场景拦截 random.Random.uniform（类级——裁判持有本场随机流，模块级
   patch 够不到注入流）把圆桌掷点恒压到 HIT 段；
 - decision/draw 场景用超高装甲靶船（任何判定下伤害恒 0），终局与掷点无关；
-- 推导函数的分支覆盖直接构造快照终态单测 _derive_ruling。
+- 推导函数的分支覆盖直接构造快照终态单测 _derive_ruling；
+  判定本体 engine.derive_verdict（引擎播报与裁判裁定共用的单一事实源）
+  另以鸭子类型 stub 单测其五分支。
 """
 
 import random
@@ -25,6 +27,7 @@ from src.combat.engagement import (
     EngagementSpec,
     _derive_ruling,
 )
+from src.combat.engine import derive_verdict
 from src.config import Config
 from src.models import MechaSnapshot, WeaponSnapshot, WeaponType
 from src.presentation.contracts import FirstReason, TimelineDocument
@@ -113,20 +116,17 @@ class TestSnapshotValueFrozen:
 
 
 # ============================================================================
-# 三产物同源（Doc 15 §3）
+# 两产物同源（Doc 15 §3）
 # ============================================================================
 
-class TestThreeArtifactsSameRuling:
-    def test_result_identity_and_final_states_consistency(self, gundam_rx78, zaku_ii):
+class TestTwoArtifactsSameRuling:
+    def test_result_identity(self, gundam_rx78, zaku_ii):
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.timeline.result is report.ruling
-        assert set(report.final_states) == {"a", "b"}
-        for side, summary in (("a", report.ruling.summary.a), ("b", report.ruling.summary.b)):
-            state = report.final_states[side]
-            assert state["hp"] == summary.hp
-            assert state["en"] == summary.en
-            assert state["will"] == summary.will
-            assert state["alive"] == summary.alive
+        # 裁定 summary 即双方战后残血（PVE 写回唯一来源）
+        for side in (report.ruling.summary.a, report.ruling.summary.b):
+            assert side.max_hp > 0
+            assert side.alive == (side.hp > 0)
 
 
 # ============================================================================
@@ -181,6 +181,48 @@ class TestEventContractFields:
 
 
 # ============================================================================
+# 终局判定单一事实源（engine.derive_verdict，引擎播报与裁判裁定共用）
+# ============================================================================
+
+
+class _VerdictStub:
+    """derive_verdict 的鸭子类型最小实现。
+
+    只含 is_alive/get_hp_percentage 两个方法——验证判定函数的入参
+    契约不依赖 Mecha/MechaSnapshot 的其余任何字段。
+    """
+
+    def __init__(self, alive: bool, hp_pct: float) -> None:
+        self._alive = alive
+        self._hp_pct = hp_pct
+
+    def is_alive(self) -> bool:
+        return self._alive
+
+    def get_hp_percentage(self) -> float:
+        return self._hp_pct
+
+
+class TestDeriveVerdict:
+    def test_a_alive_b_dead_is_ko_for_a(self):
+        assert derive_verdict(_VerdictStub(True, 30.0), _VerdictStub(False, 0.0)) == ("ko", "a")
+
+    def test_a_dead_b_alive_is_ko_for_b(self):
+        assert derive_verdict(_VerdictStub(False, 0.0), _VerdictStub(True, 80.0)) == ("ko", "b")
+
+    def test_both_alive_higher_pct_wins_by_decision(self):
+        assert derive_verdict(_VerdictStub(True, 90.0), _VerdictStub(True, 40.0)) == ("decision", "a")
+        assert derive_verdict(_VerdictStub(True, 40.0), _VerdictStub(True, 90.0)) == ("decision", "b")
+
+    def test_both_alive_equal_pct_is_draw(self):
+        assert derive_verdict(_VerdictStub(True, 50.0), _VerdictStub(True, 50.0)) == ("draw", None)
+
+    def test_both_dead_is_draw(self):
+        # 统一口径：双死 → draw（当前引擎不可达，防未来同回合双伤机制静默误判）
+        assert derive_verdict(_VerdictStub(False, 0.0), _VerdictStub(False, 0.0)) == ("draw", None)
+
+
+# ============================================================================
 # 裁定推导（Doc 14 §7.1：finish + winner 正交）
 # ============================================================================
 
@@ -220,8 +262,8 @@ class TestRulingDerivation:
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.ruling.finish == "ko"
         assert report.ruling.winner == "a"
-        assert report.final_states["b"]["alive"] is False
-        assert report.final_states["a"]["alive"] is True
+        assert report.ruling.summary.b.alive is False
+        assert report.ruling.summary.a.alive is True
         # 致死事件存在，且其快照层标出受击方 HP 清零（侧位映射正确性）
         lethal = [event for event in _all_attack_events(report) if event.is_lethal]
         assert lethal
@@ -236,8 +278,8 @@ class TestRulingDerivation:
         report = _resolve(gundam_rx78, zaku_ii)
         assert report.ruling.finish == "ko"
         assert report.ruling.winner == "b"
-        assert report.final_states["a"]["alive"] is False
-        assert report.final_states["b"]["alive"] is True
+        assert report.ruling.summary.a.alive is False
+        assert report.ruling.summary.b.alive is True
         lethal = [event for event in _all_attack_events(report) if event.is_lethal]
         assert lethal
         for event in lethal:
@@ -252,9 +294,9 @@ class TestRulingDerivation:
         assert report.ruling.finish == "decision"
         assert report.ruling.winner == "a"
         assert report.ruling.rounds_fought == Config.MAX_ROUNDS
-        assert report.final_states["a"]["hp"] == 1000
-        assert report.final_states["b"]["hp"] == 500
-        assert report.final_states["a"]["alive"] is True
+        assert report.ruling.summary.a.hp == 1000
+        assert report.ruling.summary.b.hp == 500
+        assert report.ruling.summary.a.alive is True
 
         twin_a = _fortress("f_x", "Twin", max_hp=800, current_hp=800)
         twin_b = _fortress("f_y", "Twin", max_hp=800, current_hp=800)

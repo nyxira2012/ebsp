@@ -148,12 +148,12 @@ def test_pve_battle_bridge_engage():
     mock_ruling = Mock()
     mock_ruling.winner = "a"
     mock_ruling.rounds_fought = 2
+    # 残血写回走裁定 summary（Doc 15 §3）
+    from types import SimpleNamespace as _NS
+    mock_ruling.summary.a = _NS(hp=800, en=50, alive=True)
+    mock_ruling.summary.b = _NS(hp=0, en=0, alive=False)
     mock_report = Mock()
     mock_report.ruling = mock_ruling
-    mock_report.final_states = {
-        "a": {"hp": 800, "en": 50, "alive": True},
-        "b": {"hp": 0, "en": 0, "alive": False}
-    }
 
     with __import__("unittest").mock.patch("src.pve.battle_bridge.Engagement") as MockEngagement:
         MockEngagement.return_value.resolve.return_value = mock_report

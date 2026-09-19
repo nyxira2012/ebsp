@@ -2,13 +2,14 @@
 战斗裁判 (Engagement) — Doc 15 §3
 
 把"打一场仗"包装成黑盒：两份冻结快照进 → 引擎与演出只跑一次 →
-三件产物（完整战报 TimelineDocument / 裁定 ResultBlock / 残血 final_states）
-出自同一次裁定。装配散落与战果丢弃的病根都在这里收口。
+两件产物（完整战报 TimelineDocument / 裁定 ResultBlock）出自同一次
+裁定——裁定 summary 即双方战后残血，PVE 写回同源。装配散落与战果
+丢弃的病根都在这里收口。
 
 不变量（Doc 15 §3，评审即打回项）：
 - 裁定封闭：开赛后委托不可再变，二次 resolve 抛 RuntimeError；
 - 值冻结：EngagementSpec 构造即深拷贝快照，格纳库后续改动不影响已开打的这场仗；
-- 三产物同源：timeline.result 与 report.ruling 为同一对象。
+- 两产物同源：timeline.result 与 report.ruling 为同一对象。
 
 随机流（红线 3）：resolve 以 seed_used 建本场随机流并注入引擎与演出，
 替换一切影响战报的全局随机——并发会话互不污染，同委托同种子必得同一
@@ -17,7 +18,7 @@
 
 import random
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, get_args
+from typing import Any, Optional, get_args
 
 from ..config import Config
 from ..models import MechaSnapshot
@@ -41,7 +42,7 @@ from ..presentation.contracts import (
     WillDelta,
 )
 from ..presentation.models import PresentationAttackEvent
-from .engine import BattleSimulator
+from .engine import BattleSimulator, derive_verdict
 
 
 @dataclass(frozen=True)
@@ -73,15 +74,14 @@ class EngagementSpec:
 
 @dataclass
 class BattleReport:
-    """战报：三件产物出自同一次裁定（Doc 15 §3）。
+    """战报：两件产物出自同一次裁定（Doc 15 §3）。
 
-    - timeline：Doc 14 全结构时间轴（其 result 与 ruling 为同一对象）；
-    - final_states：双方战后残血（供 PVE 写回；气力是场内资源，随战报走）；
+    - timeline：Doc 14 全结构时间轴（其 result 与 ruling 为同一对象；
+      ruling.summary 即双方战后残血，供 PVE 写回——气力是场内资源，随战报走）；
     - seed_used：仅后端侧记录，不入契约（裁决 #2）。
     """
     timeline: TimelineDocument
     ruling: ResultBlock
-    final_states: dict[str, dict[str, int | bool]]
     seed_used: int
 
 
@@ -163,32 +163,19 @@ def _derive_ruling(a: MechaSnapshot, b: MechaSnapshot, rounds_fought: int) -> Re
     """从战后快照推导终局（Doc 14 §7.1：finish + winner 正交表达）。
 
     一方死一方活 → ko + 活方；双活比 HP 百分比，高者 → decision；
-    相等 → draw（winner 为 None）。不用引擎 get_result() 的口径——
-    a_wins/b_wins 无法区分击破与判定。
+    相等 → draw（winner 为 None）。不用引擎旧的 a_wins/b_wins 口径——
+    那无法区分击破与判定。
 
-    双死边界：双方同时不存活按 draw 处理（双活等百分比分支的自然延伸）；
-    当前引擎每回合攻击即时结算，不存在同一结算点双死，此分支不可达——
-    留声明防未来引入同回合双伤机制时静默误判。
+    判定本体出自 engine.derive_verdict（全仓库唯一的终局判定实现，
+    与引擎终局播报同源），此处只做契约装配；双死→draw 的统一口径
+    与不可达声明见该函数 docstring。
     """
-    a_alive = a.is_alive()
-    b_alive = b.is_alive()
-    finish: Literal["ko", "decision", "draw"]
-    winner: Optional[Side]
-    if a_alive != b_alive:
-        finish = "ko"
-        winner = "a" if a_alive else "b"
-    else:
-        pct_a = a.get_hp_percentage()
-        pct_b = b.get_hp_percentage()
-        if pct_a > pct_b:
-            finish, winner = "decision", "a"
-        elif pct_b > pct_a:
-            finish, winner = "decision", "b"
-        else:
-            finish, winner = "draw", None
+    finish, winner = derive_verdict(a, b)
+    # winner 收窄：engine 侧 Optional[Literal["a","b"]] 与契约 Side 同构
+    contract_winner: Optional[Side] = winner
     return ResultBlock(
         finish=finish,
-        winner=winner,
+        winner=contract_winner,
         rounds_fought=rounds_fought,
         summary=ResultSummary(
             a=_build_side_summary(a),
@@ -261,15 +248,6 @@ class Engagement:
         report = BattleReport(
             timeline=timeline,
             ruling=ruling,
-            final_states={
-                side: {
-                    "hp": snap.current_hp,
-                    "en": snap.current_en,
-                    "will": snap.current_will,
-                    "alive": snap.is_alive(),
-                }
-                for side, snap in (("a", sim.mecha_a), ("b", sim.mecha_b))
-            },
             seed_used=seed_used,
         )
         self._report = report

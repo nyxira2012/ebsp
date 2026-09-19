@@ -125,7 +125,8 @@ def _combat_session(locked_mechas=None, player_hp=1000, player_en=100,
     )
 
 
-def _build_pve(session, loader=None, mothership=None, now=1000.0, event_index=1):
+def _build_pve(session, loader=None, mothership=None, now=1000.0, event_index=1,
+               instance_config=None):
     """build_pve 便捷入口（默认参数与残血断言解耦：now == last_combat_time → 回能为 0）。"""
     return BattleEntryService.build_pve(
         session=session,
@@ -134,6 +135,7 @@ def _build_pve(session, loader=None, mothership=None, now=1000.0, event_index=1)
         mothership_config=mothership if mothership is not None else _mothership(),
         mecha_factory=_FakeFactory(),
         now=now,
+        instance_config=instance_config,
     )
 
 
@@ -299,18 +301,17 @@ def test_build_pve_regen_into_snapshot_only():
 
 
 def test_build_pve_enemy_template_and_scaling():
-    """敌方事件点实例化：模板命中 → 指定机体 + 缩放档应用。"""
+    """敌方事件点实例化：模板命中 → 指定机体 + 缩放档应用（配置由调用方传入）。"""
     scaling = SimpleNamespace(hp_mult=2.0, damage_mult=3.0, armor_mult=1.5, mobility_mult=1.2)
     template = SimpleNamespace(mecha_id="m_grunt", scaling=scaling)
     instance = SimpleNamespace(enemy_templates={"mob_1": template}, loot_tables={}, zones={})
     loader = _FakeLoader(
         mechas=[_MechaCfg("m_alpha"), _MechaCfg("m_grunt", max_hp=100, power=50)],
-        instance_config=instance,
     )
     session = _combat_session()
     now = 7777.0
 
-    spec, assembly = _build_pve(session, loader, now=now)
+    spec, assembly = _build_pve(session, loader, now=now, instance_config=instance)
 
     assert spec.mecha_b.instance_id == "m_grunt"
     assert spec.mecha_b.final_max_hp == 200       # 100 * 2.0
@@ -430,12 +431,11 @@ def test_engage_draw_keeps_enemy_residual_state():
     mock_ruling = Mock()
     mock_ruling.winner = None  # 平局
     mock_ruling.rounds_fought = 9
+    # 残血写回走裁定 summary（Doc 15 §3）
+    mock_ruling.summary.a = SimpleNamespace(hp=500, en=40, alive=True)
+    mock_ruling.summary.b = SimpleNamespace(hp=200, en=60, alive=True)
     mock_report = Mock()
     mock_report.ruling = mock_ruling
-    mock_report.final_states = {
-        "a": {"hp": 500, "en": 40, "alive": True},
-        "b": {"hp": 200, "en": 60, "alive": True},
-    }
 
     with patch("src.pve.battle_bridge.Engagement") as mock_engagement:
         mock_engagement.return_value.resolve.return_value = mock_report

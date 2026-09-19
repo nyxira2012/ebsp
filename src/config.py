@@ -23,6 +23,12 @@ class Config:
     DISTANCE_FINAL_MIN = 0          # 最终最小距离
     DISTANCE_FINAL_MAX = 2000       # 最终最大距离
     
+    # ========== PVE 装配缺省资源 ID ==========
+    # 收发室（entry）与锁定回退（services）共用的兜底口径；数据侧声明缺省前先在此收口
+    DEFAULT_PLAYER_MECHA_ID = "rx78"
+    DEFAULT_ENEMY_TEMPLATE_ID = "zaku2"
+    DEFAULT_ENEMY_MECHA_ID = "mech_grunt"
+
     # ========== 圆桌基础概率 ==========
     BASE_MISS_RATE = 12.0       # 基础未命中率 %
     BASE_DODGE_RATE = 6.0      # 基础躲闪率 %

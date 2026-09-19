@@ -12,7 +12,8 @@ from src.combat.engagement import Engagement
 from src.combat.entry import BattleEntryService
 from src.presentation.contracts import TimelineDocument
 from src import DataLoader
-from src.api.context import set_loader, get_loader, initialize_presentation_registry
+from src.api.context import set_loader, get_loader
+from src.presentation.registry import initialize_shared_registry
 
 # 数据库与用户系统
 from src.database import init_db, close_db
@@ -62,13 +63,14 @@ async def startup_event():
     set_loader(loader)
     print(f"✅ 数据加载完成: {len(loader.mechas)} 机体, {len(loader.equipments)} 装备")
 
-    # 3. 加载演出模板 (CPS v5.1)
+    # 3. 加载演出模板 (CPS v5.1)：进程内唯一加载点，引擎侧经 get_shared_registry 共用
     # 使用异常处理代替 os.path.exists() 避免 TOCTOU 反模式
-    from src.api.context import initialize_presentation_registry
     import os
     template_path = os.path.join("data", "presentation", "templates.yaml")
     try:
-        initialize_presentation_registry(template_path)
+        shared_registry = initialize_shared_registry(template_path)
+        print(f"✅ 演出模板加载完成: {len(shared_registry.action_bones)} ActionBone, "
+              f"{len(shared_registry.reaction_bones)} ReactionBone")
     except FileNotFoundError:
         print(f"⚠️  演出模板文件不存在: {template_path}，将使用 T3 兜底文本")
 

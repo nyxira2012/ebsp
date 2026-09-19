@@ -148,9 +148,26 @@ class PveSessionData(BaseModel):
     credits_earned: int = 0
 
     # 已裁定战报暂存：key=事件索引（Doc 15 §6 内存态，裁决 #3 不落库）。
-    # 暂存至事件点消化完成——advance 推进后旧事件点即清理（pve_api.advance），
+    # 暂存至事件点消化完成——advance_event 推进后旧事件点即清理，
     # 进程重启随会话对象丢失=前端降级仅终局摘要。
     battle_reports: Dict[int, dict] = Field(default_factory=dict)
 
     created_at: float
     last_heartbeat: float
+
+    def advance_event(self) -> bool:
+        """推进事件序列，并清理已消化事件点的战报暂存（Doc 15 §6）。
+
+        暂存生命周期是会话级不变量，归属会话本体——任何推进路径
+        （API handler、模拟器、未来的心跳/超时推进）都经此方法，
+        不在调用方各自维护。
+
+        Returns:
+            bool: 序列未完成为 True，已结束为 False。
+        """
+        has_more = self.event_sequence.advance()
+        for stale_index in [
+            k for k in self.battle_reports if k < self.event_sequence.current_index
+        ]:
+            del self.battle_reports[stale_index]
+        return has_more

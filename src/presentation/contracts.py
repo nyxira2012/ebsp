@@ -162,7 +162,7 @@ class ResultSummary(BaseModel):
 class ResultBlock(BaseModel):
     """终局结果（Doc 14 §7.1）：finish + winner 正交表达。
 
-    不用引擎 get_result() 的 a_wins/b_wins 口径——那无法区分击破与判定。
+    不用引擎旧的 a_wins/b_wins 口径——那无法区分击破与判定。
     """
     finish: Literal["ko", "decision", "draw"]
     winner: Optional[Side] = None

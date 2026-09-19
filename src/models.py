@@ -8,6 +8,12 @@ from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from dataclasses import dataclass, field
 from .config import Config
+from .presentation.constants import (
+    DEFAULT_DAMAGE_MATERIAL,
+    DEFAULT_MOTION_STYLE,
+    DamageMaterial,
+    MotionStyle,
+)
 
 # ============================================================================
 # 枚举类型 (Enums)
@@ -425,11 +431,11 @@ class WeaponSnapshot(BaseModel):
 
     tags: List[str] = []
 
-    # MDDC 多维数据契约 (Doc 6) - 演出系统核心数据（枚举类型）
+    # MDDC 多维数据契约 (Doc 6) - 演出系统核心数据（枚举类型，加载点一次校验）
     # 维度 A：动作风格 - 描述"驾驶员如何操作武器"
-    motion_style: str = "STRIKE_BLUNT"  # 在工厂中转换为 MotionStyle 枚举
+    motion_style: MotionStyle = DEFAULT_MOTION_STYLE
     # 维度 B：物理材质 - 描述"交互的物理本质"
-    damage_material: str = "GENERIC"    # 在工厂中转换为 DamageMaterial 枚举
+    damage_material: DamageMaterial = DEFAULT_DAMAGE_MATERIAL
 
     def can_use_at_distance(self, distance: int) -> bool:
         return self.range_min <= distance <= self.range_max

@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.config import Config
 from src.factory import MechaFactory
 from src.models import MechaSnapshot
 from src.pve.models import PveEntityState, PveEnemyState, PveEvent, PveSessionData
@@ -154,11 +155,12 @@ class BattleEntryService:
         mecha_factory: MechaFactory,
         now: float,
         player_index: int = 0,
+        instance_config: Any = None,
     ) -> tuple[EngagementSpec, PveAssemblyContext]:
         """PVE 接敌装配（Doc 15 §5：会话还原 + 事件点实例化）。
 
         我方从 locked_config 还原（回退链 snapshot_dict → mecha_id →
-        默认 rx78），时间回能与残血注入全部算进快照——不触碰
+        默认机体），时间回能与残血注入全部算进快照——不触碰
         PveEntityState（失败原子的前提）；敌方由事件点模板 + 缩放
         实例化，已接敌过的事件点注入敌方残血。全程不 mutate session。
 
@@ -170,6 +172,8 @@ class BattleEntryService:
             mecha_factory: 用于构建战斗快照的工厂。
             now: 当前时间戳（时间回能基准）。
             player_index: 己方出战成员下标（恒首机出战，Doc 15 §6 裁决 #6）。
+            instance_config: 副本配置（敌方模板与缩放来源），由调用方
+                加载一次传入；None 时走默认敌方模板。
 
         Returns:
             tuple[EngagementSpec, PveAssemblyContext]: 值冻结的委托 + 写回定位。
@@ -177,14 +181,7 @@ class BattleEntryService:
         Raises:
             ValueError: 当 event_index 在序列中越界时。
         """
-        # 副本配置（敌方模板与缩放来源；无配置走默认模板）
-        instance_config = None
-        try:
-            instance_config = loader.get_instance_config(session.region_id)
-        except KeyError:
-            pass
-
-        # 1. 还原己方机体（回退链 snapshot_dict → mecha_id → 默认 rx78）
+        # 1. 还原己方机体（回退链 snapshot_dict → mecha_id → 默认机体）
         player_state = session.squad_state.members[player_index]
 
         mechas_config = session.squad_state.locked_config.get("mechas", [])
@@ -195,11 +192,14 @@ class BattleEntryService:
             if snapshot_dict:
                 player_snapshot = MechaSnapshot.model_validate(snapshot_dict)
             else:
-                mecha_id = m_config_data.get("mecha_id", "rx78")
-                mecha_config = loader.get_mecha_config(mecha_id) if mecha_id in getattr(loader, 'mechas', {}) else loader.get_mecha_config("rx78")
+                mecha_id = m_config_data.get("mecha_id", Config.DEFAULT_PLAYER_MECHA_ID)
+                try:
+                    mecha_config = loader.get_mecha_config(mecha_id)
+                except KeyError:
+                    mecha_config = loader.get_mecha_config(Config.DEFAULT_PLAYER_MECHA_ID)
                 player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
         else:
-            mecha_config = loader.get_mecha_config("rx78")
+            mecha_config = loader.get_mecha_config(Config.DEFAULT_PLAYER_MECHA_ID)
             player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
 
         # 2. 时间回能 + 残血注入：算进快照拷贝，不触碰 PveEntityState（失败原子）
@@ -211,13 +211,13 @@ class BattleEntryService:
         player_snapshot.final_max_hp = player_state.max_hp
         player_snapshot.final_max_en = player_state.max_en
 
-        # 3. 敌方：事件点模板实例化（模板缺失回退 mech_grunt）
+        # 3. 敌方：事件点模板实例化（模板缺失回退默认杂兵）
         events = session.event_sequence.events
         if event_index < 0 or event_index >= len(events):
             raise ValueError(f"Event index {event_index} out of range in event sequence")
 
         current_event = events[event_index]
-        enemy_template_id = current_event.event_id or "zaku2"
+        enemy_template_id = current_event.event_id or Config.DEFAULT_ENEMY_TEMPLATE_ID
 
         # 解析敌方模板（Doc 13：由机体+驾驶员+缩放系数组成）
         enemy_mecha_id = enemy_template_id
@@ -228,7 +228,10 @@ class BattleEntryService:
             enemy_mecha_id = template.mecha_id
             scaling = template.scaling
 
-        enemy_config = loader.get_mecha_config(enemy_mecha_id) if enemy_mecha_id in getattr(loader, 'mechas', {}) else loader.get_mecha_config("mech_grunt")
+        try:
+            enemy_config = loader.get_mecha_config(enemy_mecha_id)
+        except KeyError:
+            enemy_config = loader.get_mecha_config(Config.DEFAULT_ENEMY_MECHA_ID)
         enemy_snapshot = mecha_factory.create_mecha_snapshot(enemy_config, weapon_configs=loader.equipments)
 
         _apply_scaling(enemy_snapshot, scaling)

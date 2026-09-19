@@ -9,10 +9,60 @@ from ..models import Mecha, Weapon, WeaponType, BattleContext, InitiativeReason,
 from ..skills import SkillRegistry, EffectManager
 from ..skill_system.event_manager import EventManager
 from .resolver import AttackTableResolver
-from typing import Callable, Any, List, Optional
+from typing import Callable, Any, List, Literal, Optional, Protocol
 from ..models import TriggerEvent
 from ..presentation import EventMapper, TextRenderer, PresentationRoundEvent, PresentationAttackEvent
 from ..presentation.event_builder import AttackEventBuilder
+
+
+class _VerdictCombatant(Protocol):
+    """derive_verdict 入参的鸭子类型契约。
+
+    引擎侧 Mecha 与裁判层 MechaSnapshot 共同满足的最小接口——
+    终局判定不依赖机体其余任何字段。
+    """
+
+    def is_alive(self) -> bool: ...
+
+    def get_hp_percentage(self) -> float: ...
+
+
+def derive_verdict(
+    a: _VerdictCombatant, b: _VerdictCombatant
+) -> tuple[Literal["ko", "decision", "draw"], Optional[Literal["a", "b"]]]:
+    """终局判定的单一事实源：由双方终态推导 (finish, winner)。
+
+    判定规则（引擎终局播报与裁判层正式战报共用，全仓库唯一实现）：
+    - 一方死一方活 → ("ko", 活方)；
+    - 双活比 HP 百分比，高者 → ("decision", 高方)；
+    - 其余（双活等百分比、双死）→ ("draw", None)。
+
+    双死边界：双方同时不存活按 draw 处理（双活等百分比分支的自然延伸）；
+    当前引擎每回合攻击即时结算，不存在同一结算点双死，此分支不可达——
+    留声明防未来引入同回合双伤机制时静默误判。
+
+    Args:
+        a: A 方机体/快照（鸭子类型：只需 is_alive() 与 get_hp_percentage()）
+        b: B 方机体/快照（同上）
+
+    Returns:
+        (finish, winner)：finish ∈ {"ko","decision","draw"}；
+        winner ∈ {"a","b",None}（draw 恒为 None）。
+    """
+    a_alive = a.is_alive()
+    b_alive = b.is_alive()
+    if a_alive != b_alive:
+        return "ko", ("a" if a_alive else "b")
+    if not a_alive:
+        # 双死 → draw（统一口径，当前引擎不可达，见 docstring）
+        return "draw", None
+    pct_a = a.get_hp_percentage()
+    pct_b = b.get_hp_percentage()
+    if pct_a > pct_b:
+        return "decision", "a"
+    if pct_b > pct_a:
+        return "decision", "b"
+    return "draw", None
 
 
 class InitiativeCalculator:
@@ -313,18 +363,10 @@ class BattleSimulator:
 
         if self.enable_presentation:
             # v5.0: 新架构是唯一路径，不再需要 use_new_pipeline 参数
-            self.mapper = EventMapper(rng=self._rng)
-            # Try loading templates from config
-            try:
-                import os
-                config_path = os.path.join("config", "presentation_templates.yaml")
-                if os.path.exists(config_path):
-                    self.mapper.registry.load_from_config(config_path)
-                    # Re-initialize bidder after loading templates
-                    self.mapper._initialize_bidder()
-            except Exception as e:
-                print(f"Warning: Failed to load presentation templates: {e}")
-
+            # 模板用进程内共享注册表（API 启动期加载一次）；
+            # 未初始化（测试/脚本直跑引擎）时回落空注册表走兜底文案
+            from ..presentation.registry import get_shared_registry
+            self.mapper = EventMapper(rng=self._rng, registry=get_shared_registry())
             self.text_renderer = TextRenderer()
 
         # Statistics Integration: Event listener list for RawAttackEvent
@@ -740,10 +782,13 @@ class BattleSimulator:
     def _conclude_battle(self) -> None:
         """执行战斗结算并显示胜负结果。
 
-        胜负判定优先级:
-        1. 击破胜: 对方 HP 归零
-        2. 判定胜: 回合数上限时,比较 HP 百分比
-        3. 平局: HP 百分比完全相同
+        判定只出自模块级 derive_verdict（与裁判层 engagement 共用的
+        单一事实源），本方法不再自带 is_alive/HP 百分比分支，仅做
+        (finish, winner) → 播报文案/日志的映射：
+        1. ko: 击破胜——对方 HP 归零
+        2. decision: 回合数上限时 HP 百分比更高
+        3. draw: HP 百分比完全相同（统一口径：双死亦按平局，
+           当前引擎不可达该分支）
 
         演出: 终局宣告追加到最后一回合 summary_events (Doc 14 §6.1 SUMMARY);
         timeline 为空 (开战即终局, round_number=0) 时跳过——result 块已承载裁定。
@@ -754,37 +799,34 @@ class BattleSimulator:
             print("战斗结束")
             print("=" * 80)
 
-        # 判断胜负（分支同时生产终局宣告文案，供演出 timeline 消费）
-        if not self.mecha_a.is_alive():
-            announce = f"战斗结束——{self.mecha_b.name} 获胜（击破）"
+        # 终局裁定唯一来源
+        finish, winner = derive_verdict(self.mecha_a, self.mecha_b)
+        winner_name = (
+            self.mecha_a.name
+            if winner == "a"
+            else self.mecha_b.name
+            if winner == "b"
+            else None
+        )
+
+        # 判定局日志（纯展示，不参与裁定）：进入判定 + 双方残血比
+        if finish != "ko" and self.verbose:
+            print("回合数达到上限! 进入判定...")
+            print(f"{self.mecha_a.name} HP: {self.mecha_a.get_hp_percentage():.1f}%")
+            print(f"{self.mecha_b.name} HP: {self.mecha_b.get_hp_percentage():.1f}%")
+
+        if finish == "ko":
+            announce = f"战斗结束——{winner_name} 获胜（击破）"
             if self.verbose:
-                print(f"胜者: {self.mecha_b.name} (击破)")
-        elif not self.mecha_b.is_alive():
-            announce = f"战斗结束——{self.mecha_a.name} 获胜（击破）"
+                print(f"胜者: {winner_name} (击破)")
+        elif finish == "decision":
+            announce = f"回合数达到上限——判定：{winner_name} 获胜"
             if self.verbose:
-                print(f"胜者: {self.mecha_a.name} (击破)")
+                print(f"胜者: {winner_name} (判定胜)")
         else:
-            # 判定胜
-            hp_a: float = self.mecha_a.get_hp_percentage()
-            hp_b: float = self.mecha_b.get_hp_percentage()
-
+            announce = "回合数达到上限——平局"
             if self.verbose:
-                print(f"回合数达到上限! 进入判定...")
-                print(f"{self.mecha_a.name} HP: {hp_a:.1f}%")
-                print(f"{self.mecha_b.name} HP: {hp_b:.1f}%")
-
-            if hp_a > hp_b:
-                announce = f"回合数达到上限——判定：{self.mecha_a.name} 获胜"
-                if self.verbose:
-                    print(f"胜者: {self.mecha_a.name} (判定胜)")
-            elif hp_b > hp_a:
-                announce = f"回合数达到上限——判定：{self.mecha_b.name} 获胜"
-                if self.verbose:
-                    print(f"胜者: {self.mecha_b.name} (判定胜)")
-            else:
-                announce = "回合数达到上限——平局"
-                if self.verbose:
-                    print(f"平局!")
+                print("平局!")
 
         if self.enable_presentation and self.presentation_timeline:
             self._emit_summary_event(announce)
@@ -845,34 +887,3 @@ class BattleSimulator:
         # 注意：当前 EventManager 设计没有历史事件存储
         # 这里返回空列表，实际使用时可能需要扩展 EventManager
         return []
-
-    def get_result(self) -> dict:
-        """返回战后结构化结果（供 PVE 等外部系统使用）"""
-        if not self.mecha_a.is_alive():
-            outcome = "b_wins"
-        elif not self.mecha_b.is_alive():
-            outcome = "a_wins"
-        else:
-            hp_a = self.mecha_a.get_hp_percentage()
-            hp_b = self.mecha_b.get_hp_percentage()
-            if hp_a > hp_b:
-                outcome = "a_wins"
-            elif hp_b > hp_a:
-                outcome = "b_wins"
-            else:
-                outcome = "draw"
-        
-        return {
-            "outcome": outcome,
-            "rounds": self.round_number,
-            "mecha_a": {
-                "hp": self.mecha_a.current_hp,
-                "en": self.mecha_a.current_en,
-                "alive": self.mecha_a.is_alive()
-            },
-            "mecha_b": {
-                "hp": self.mecha_b.current_hp,
-                "en": self.mecha_b.current_en,
-                "alive": self.mecha_b.is_alive()
-            }
-        }

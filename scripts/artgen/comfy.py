@@ -153,67 +153,6 @@ DEFAULT_WORKFLOW_TEMPLATE: dict[str, Any] = json.loads(r"""
     "class_type": "Anything Everywhere",
     "_meta": {"title": "Anything Everywhere"}
   },
-  "880": {
-    "inputs": {
-      "rgthree_comparer": {
-        "images": [
-          {
-            "name": "A",
-            "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_vsdli_00003_.png&type=temp&subfolder=&rand=0.6074284451251168"
-          }
-        ]
-      },
-      "image_a": ["829", 0],
-      "image_b": ["869", 0]
-    },
-    "class_type": "Image Comparer (rgthree)",
-    "_meta": {"title": "Image Comparer (rgthree)"}
-  },
-  "874": {
-    "inputs": {
-      "filename_prefix": "ComfyUI",
-      "filename_keys": "%F %H-%M-%S",
-      "foldername_prefix": "",
-      "foldername_keys": "ckpt_name",
-      "delimiter": "-",
-      "save_job_data": "disabled",
-      "job_data_per_image": false,
-      "job_custom_text": "",
-      "save_metadata": true,
-      "counter_digits": 4,
-      "counter_position": "last",
-      "one_counter_per_folder": true,
-      "image_preview": false,
-      "output_ext": ".webp",
-      "quality": 75,
-      "images": ["869", 0]
-    },
-    "class_type": "SaveImageExtended",
-    "_meta": {"title": "💾 Save Image Extended (2pass)"}
-  },
-  "881": {
-    "inputs": {
-      "filename_prefix": "ComfyUI",
-      "filename_keys": "%F %H-%M-%S",
-      "foldername_prefix": "",
-      "foldername_keys": "ckpt_name",
-      "delimiter": "-",
-      "save_job_data": "disabled",
-      "job_data_per_image": false,
-      "job_custom_text": "",
-      "save_metadata": true,
-      "counter_digits": 4,
-      "counter_position": "last",
-      "one_counter_per_folder": true,
-      "image_preview": false,
-      "output_ext": ".webp",
-      "quality": 75,
-      "images": ["829", 0]
-    },
-    "class_type": "SaveImageExtended",
-    "_meta": {"title": "💾 Save Image Extended (1pass)"}
-  },
   "860:755": {
     "inputs": {"clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default"},
     "class_type": "CLIPLoader",
@@ -343,6 +282,35 @@ PRESET_OUT_DIRS: dict[str, str] = {
 }
 
 
+def resolve_params(
+    preset: dict[str, Any] | None,
+    width: int | None,
+    height: int | None,
+    background: str | None,
+) -> tuple[int, int, str]:
+    """预设 + 显式覆盖 → 实际画布尺寸与背景模式（无预设走通用缺省）。"""
+    if preset:
+        return (
+            width or int(preset["width"]),
+            height or int(preset["height"]),
+            background or str(preset.get("background", "none")),
+        )
+    return (width or 800, height or 1200, background or "white")
+
+
+def resolve_max_side(preset: dict[str, Any] | None, export_max_side: int | None) -> int | None:
+    """导出最长边上限：显式参数优先，否则读预设，无则不缩放。"""
+    return export_max_side or (preset.get("optimize_max_side") if preset else None)
+
+
+def scale_note(width: int, height: int, max_side: int | None) -> str:
+    """导出缩放说明文案：生图尺寸（必要时附默认导出尺寸）。"""
+    if max_side and max(width, height) > max_side:
+        scale = max_side / max(width, height)
+        return f"{width}x{height} -> 默认导出 {round(width*scale)}x{round(height*scale)}"
+    return f"{width}x{height}"
+
+
 def assemble_prompt(
     user_prompt: str,
     background: str = "none",
@@ -378,7 +346,7 @@ class ComfyUIClient:
         if headers:
             self.headers.update(headers)
 
-    def submit(self, workflow: dict[str, object]) -> str:
+    def submit(self, workflow: dict[str, Any]) -> str:
         """提交工作流到执行队列。"""
         payload = json.dumps(
             {"prompt": workflow, "client_id": str(uuid.uuid4())}
@@ -396,14 +364,14 @@ class ComfyUIClient:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"提交工作流失败（HTTP {exc.code}）：{detail}") from exc
 
-    def wait(self, prompt_id: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
+    def wait(self, prompt_id: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
         """阻塞等待指定任务执行完成。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             with urllib.request.urlopen(
                 f"{self.base_url}/history/{prompt_id}", timeout=30
             ) as resp:
-                history: dict[str, dict[str, object]] = json.load(resp)
+                history: dict[str, dict[str, Any]] = json.load(resp)
             if prompt_id in history:
                 entry = history[prompt_id]
                 status = entry.get("status", {})
@@ -428,47 +396,33 @@ def prepare_workflow(
     height: int,
     filename_prefix: str,
     two_pass: bool = True,
-) -> dict[str, dict[str, object]]:
-    """基于模板生成待提交的工作流副本，支持 1pass / 2pass 动态切换。"""
-    workflow: dict[str, dict[str, object]] = copy.deepcopy(template)
-    seed_node_id: str | None = None
-    save_source: list[object] | None = None
-    drop_ids: list[str] = []
+) -> dict[str, dict[str, Any]]:
+    """基于模板生成待提交的工作流副本，支持 1pass / 2pass 动态切换。
 
-    # 1. 采样模式调整：2次采样开启 vs 关闭
-    has_2pass_node = "868" in workflow
-    if two_pass and has_2pass_node:
-        # 1pass 提前保留残差噪声（0->6步）
-        if "599" in workflow:
-            inputs_599 = workflow["599"].setdefault("inputs", {})
-            inputs_599["start_at_step"] = 0
-            inputs_599["end_at_step"] = 6
-            inputs_599["return_with_leftover_noise"] = "enable"
-        # 2pass 从第6步接力去噪（6->999步）
+    种子只经 SeedNode 一处注入（1pass/2pass 的 noise_seed 均引用它）；
+    产物落盘由脚本端统一追加的 __save__ 节点承担，模板内不保存存档节点。
+    """
+    workflow: dict[str, dict[str, Any]] = copy.deepcopy(template)
+
+    # 采样模式调整：2pass 接力（1pass 0-6 步留残差 -> 2pass 6-999 步细化）
+    # vs 1pass 全程 8 步出图（清理 2pass 相关节点）
+    if two_pass:
+        save_source: list[object] = ["869", 0]
+    else:
+        workflow.pop("868", None)
+        workflow.pop("869", None)
+        save_source = ["829", 0]
+    inputs_599 = workflow["599"].setdefault("inputs", {})
+    inputs_599["start_at_step"] = 0
+    inputs_599["end_at_step"] = 6 if two_pass else 8
+    inputs_599["return_with_leftover_noise"] = "enable" if two_pass else "disable"
+    if two_pass:
         inputs_868 = workflow["868"].setdefault("inputs", {})
         inputs_868["start_at_step"] = 6
         inputs_868["end_at_step"] = 999
         inputs_868["return_with_leftover_noise"] = "disable"
-        # 优先输出 2pass 解码图
-        if "869" in workflow:
-            save_source = ["869", 0]
-    else:
-        # 单次采样：1pass 完整8步出图，清理2pass相关节点
-        if "599" in workflow:
-            inputs_599 = workflow["599"].setdefault("inputs", {})
-            inputs_599["start_at_step"] = 0
-            inputs_599["end_at_step"] = 8
-            inputs_599["return_with_leftover_noise"] = "disable"
-        if "868" in workflow:
-            drop_ids.append("868")
-        if "869" in workflow:
-            drop_ids.append("869")
-        if "874" in workflow:
-            drop_ids.append("874")
-        if "829" in workflow:
-            save_source = ["829", 0]
 
-    for node_id, workflow_node in workflow.items():
+    for workflow_node in workflow.values():
         inputs = workflow_node.get("inputs", {})
         class_type = str(workflow_node.get("class_type", ""))
         if class_type == "CLIPTextEncode" and "text" in inputs:
@@ -477,36 +431,12 @@ def prepare_workflow(
             inputs["width"] = width
             inputs["height"] = height
         elif class_type == "SeedNode":
-            seed_node_id = node_id
             inputs["seed"] = seed
-        elif class_type.startswith("SaveImage"):
-            if save_source is None:
-                save_source = list(inputs.get("images", []))
-            drop_ids.append(node_id)
-        elif "Comparer" in class_type:
-            drop_ids.append(node_id)
 
-    # 兜底：所有包含数值型 noise_seed 的节点同步设置种子
-    for workflow_node in workflow.values():
-        inputs = workflow_node.get("inputs", {})
-        if "noise_seed" in inputs and not isinstance(inputs["noise_seed"], list):
-            inputs["noise_seed"] = seed
-
-    if seed_node_id is None:
-        for workflow_node in workflow.values():
-            inputs = workflow_node.get("inputs", {})
-            if "noise_seed" in inputs:
-                inputs["noise_seed"] = seed
-
-    for node_id in drop_ids:
-        if node_id in workflow:
-            del workflow[node_id]
-
-    if save_source is not None:
-        workflow["__save__"] = {
-            "class_type": "SaveImage",
-            "inputs": {"images": save_source, "filename_prefix": filename_prefix},
-        }
+    workflow["__save__"] = {
+        "class_type": "SaveImage",
+        "inputs": {"images": save_source, "filename_prefix": filename_prefix},
+    }
     return workflow
 
 
@@ -528,7 +458,7 @@ def postprocess_and_save(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.open(BytesIO(raw_bytes))
     saved_files: list[Path] = []
-    actual_max_side = max_side if max_side is not None else (preset.get("optimize_max_side") if preset else None)
+    actual_max_side = resolve_max_side(preset, max_side)
 
     if preset and not skip_postprocess:
         import process_asset
@@ -573,7 +503,9 @@ def postprocess_and_save(
     # 普通保存流程（若有指定缩放，执行等比缩小）
     if actual_max_side is not None and max(image.size) > actual_max_side:
         scale = actual_max_side / max(image.size)
-        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+        image = image.resize(
+            (round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS
+        )
 
     suffix = output_path.suffix.lower()
     if suffix == ".webp":
@@ -643,15 +575,7 @@ def generate(
 
     actual_seed = seed if seed is not None else random.randint(0, 2**48)
     preset = PRESETS.get(preset_name) if preset_name else None
-
-    if preset:
-        actual_width = width or preset["width"]
-        actual_height = height or preset["height"]
-        bg_mode = background or preset.get("background", "none")
-    else:
-        actual_width = width or 800
-        actual_height = height or 1200
-        bg_mode = background or "white"
+    actual_width, actual_height, bg_mode = resolve_params(preset, width, height, background)
     final_prompt = assemble_prompt(
         prompt,
         background=bg_mode,
@@ -742,13 +666,7 @@ def main(argv: list[str] | None = None) -> int:
         for key, p in PRESETS.items():
             trans = " [自动抠图]" if p.get("has_transparency") else ""
             bg_prev = " [遮挡质检]" if p.get("is_background") else ""
-            export_side = p.get("optimize_max_side")
-            if export_side and max(p['width'], p['height']) > export_side:
-                scale = export_side / max(p['width'], p['height'])
-                w_out, h_out = round(p['width'] * scale), round(p['height'] * scale)
-                size_str = f"{p['width']}x{p['height']} -> 默认导出 {w_out}x{h_out}"
-            else:
-                size_str = f"{p['width']}x{p['height']}"
+            size_str = scale_note(int(p['width']), int(p['height']), p.get("optimize_max_side"))
             print(f"• {key:<14} | {p['title']} ({size_str}){trans}{bg_prev}")
         print()
         return 0
@@ -759,26 +677,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         preset = PRESETS.get(args.preset) if args.preset else None
-        if preset:
-            w = args.width or preset["width"]
-            h = args.height or preset["height"]
-            bg_mode = args.background or preset.get("background", "none")
-        else:
-            w = args.width or 800
-            h = args.height or 1200
-            bg_mode = args.background or "white"
+        w, h, bg_mode = resolve_params(preset, args.width, args.height, args.background)
         final = assemble_prompt(
             args.prompt,
             background=bg_mode,
             orientation=args.orientation,
             is_background=bool(preset and preset.get("is_background")),
         )
-        actual_max_side = args.export_max_side or (preset.get("optimize_max_side") if preset else None)
-        if actual_max_side and max(w, h) > actual_max_side:
-            scale = actual_max_side / max(w, h)
-            size_info = f"生图: {w}x{h} -> 默认缩放导出: {round(w*scale)}x{round(h*scale)}"
-        else:
-            size_info = f"生图/导出: {w}x{h}"
+        actual_max_side = resolve_max_side(preset, args.export_max_side)
+        size_info = scale_note(w, h, actual_max_side)
         sampling_info = "2次采样 (1pass er_sde 0-6步 -> 2pass dpmpp_2m_sde 6-999步)" if args.two_pass else "单次采样 (1pass 8步)"
         print("=" * 72)
         print(f"【DRY-RUN】{preset['title'] if preset else '无预设'} ({args.preset or '-'}) · {size_info} · {sampling_info}")

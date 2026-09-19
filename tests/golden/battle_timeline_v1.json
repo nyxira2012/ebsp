@@ -83,13 +83,8 @@
               "tier": "T3_FALLBACK",
               "anim_id": "anim_generic_attack",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_armor_impact"
-              ],
-              "sfx": [
-                "sfx_clash_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "BLOCK",
               "attacker": "a",
               "defender": "b",
@@ -121,18 +116,13 @@
             },
             {
               "type": "REACTION",
-              "text": "扎古II稳稳顶住压力，防线依然坚固！（格挡！）",
+              "text": "迎面而来的攻击被扎古II强行格挡，装甲冒出黑烟！（格挡！）",
               "timestamp": 1.5,
               "tier": "T2_5_DECAY",
               "anim_id": "anim_block",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_armor_impact"
-              ],
-              "sfx": [
-                "sfx_clash_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "BLOCK",
               "attacker": "a",
               "defender": "b",
@@ -176,12 +166,8 @@
               "tier": "T3_FALLBACK",
               "anim_id": "anim_generic_attack",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_dodge_trail"
-              ],
-              "sfx": [
-                "sfx_dodge"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "DODGE",
               "attacker": "b",
               "defender": "a",
@@ -213,17 +199,13 @@
             },
             {
               "type": "REACTION",
-              "text": "RX-78高达后撤步闪避，致命的近身攻击险险擦过！（躲闪！）",
+              "text": "RX-78高达在千钧一发之际完成了闪避机动！（躲闪！）",
               "timestamp": 1.5,
               "tier": "T2_5_DECAY",
               "anim_id": "anim_evade",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_dodge_trail"
-              ],
-              "sfx": [
-                "sfx_dodge"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "DODGE",
               "attacker": "b",
               "defender": "a",
@@ -302,13 +284,8 @@
               "tier": "T3_FALLBACK",
               "anim_id": "anim_generic_attack",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_deflect"
-              ],
-              "sfx": [
-                "sfx_clash_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "PARRY",
               "attacker": "b",
               "defender": "a",
@@ -340,18 +317,13 @@
             },
             {
               "type": "REACTION",
-              "text": "RX-78高达架住攻势的同时，机体已展开反制行动！（招架！）",
+              "text": "RX-78高达 招架了攻击。（招架！）",
               "timestamp": 1.5,
-              "tier": "T2_5_DECAY",
+              "tier": "T3_FALLBACK",
               "anim_id": "anim_evade",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_deflect"
-              ],
-              "sfx": [
-                "sfx_clash_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "PARRY",
               "attacker": "b",
               "defender": "a",
@@ -395,13 +367,8 @@
               "tier": "T3_FALLBACK",
               "anim_id": "anim_generic_attack",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_armor_impact"
-              ],
-              "sfx": [
-                "sfx_collision_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "HIT",
               "attacker": "a",
               "defender": "b",
@@ -433,18 +400,13 @@
             },
             {
               "type": "REACTION",
-              "text": "近身攻击突破了防御，扎古II的肩部遭受严重损伤（命中！-4436，濒死）",
+              "text": "恐怖的冲击力让扎古II的肩部装甲严重变形！（命中！-4436，濒死）",
               "timestamp": 1.5,
               "tier": "T2_5_DECAY",
               "anim_id": "anim_hit_impact",
               "camera": "cam_long_shot",
-              "vfx": [
-                "vfx_impact_shock",
-                "vfx_armor_impact"
-              ],
-              "sfx": [
-                "sfx_collision_heavy"
-              ],
+              "vfx": [],
+              "sfx": [],
               "attack_result": "HIT",
               "attacker": "a",
               "defender": "b",

@@ -11,7 +11,7 @@ from src.core.item_generator import EquipmentGenerator
 
 @dataclass
 class BattleResult:
-    """遭遇战的完整结算结果。
+    """遭遇战的裁定摘要（命令返回值）。
 
     Attributes:
         outcome (CombatOutcome): 胜负平结果枚举。
@@ -20,9 +20,9 @@ class BattleResult:
         rounds_fought (int): 战斗实际进行的回合数。
         credits_earned (int): 本场战斗掉落的信用点金额。
         loot_drops (List[Dict[str, Any]]): 产生的战利品列表（包含装备字典或物品详情）。
-        battle_report (dict): 完整战报时间轴（Doc 14 四块结构的
-            model_dump(mode="json")；Doc 15 §3 三件产物之一，补上烂摊子 2）——
-            engage 裁定成功恒含。
+
+    完整战报不在本类（命令与资源分离）：战报的唯一去向是会话暂存
+    session.battle_reports（Doc 15 §6），前端经重放端点按引用取用。
     """
     outcome: CombatOutcome
     player_states: List[PveEntityState]
@@ -30,7 +30,6 @@ class BattleResult:
     rounds_fought: int
     credits_earned: int
     loot_drops: List[Dict[str, Any]]
-    battle_report: dict
 
 class BattleBridge:
     """PVE 与战斗编排层之间的桥接（Doc 15 §5 消费方表）。
@@ -80,12 +79,12 @@ class BattleBridge:
             # 应用掉落率倍率（如果配置了）
             drop_chance = drop.chance
             zone_config = instance_config.zones.get(zone_id)
-            if zone_config and hasattr(zone_config, 'drop_rate_mult'):
+            if zone_config is not None:
                 drop_chance *= zone_config.drop_rate_mult
 
             if random.random() <= drop_chance:
                 if drop.type == "equipment" and drop.equipment_id:
-                    if hasattr(loader, 'equipments') and drop.equipment_id in loader.equipments:
+                    if drop.equipment_id in loader.equipments:
                         random_stats = generator.generate_equipment(drop.equipment_id, base_ilvl)
                         loot_drops.append({
                             "type": "equipment",
@@ -130,12 +129,12 @@ class BattleBridge:
         """
         current_time = time.time()
 
-        # 预加载副本配置（掉落表用；装配侧的敌方模板配置由 entry 自取）
+        # 副本配置加载单点（掉落表、装等、装配侧敌方模板共用）
         instance_config = None
         base_ilvl = 10
         try:
             instance_config = loader.get_instance_config(session.region_id)
-            base_ilvl = getattr(instance_config, 'base_ilvl', 10)
+            base_ilvl = instance_config.base_ilvl
         except KeyError:
             pass
 
@@ -143,27 +142,29 @@ class BattleBridge:
         spec, assembly = BattleEntryService.build_pve(
             session, event_index, loader, mothership_config, mecha_factory,
             now=current_time, player_index=player_index,
+            instance_config=instance_config,
         )
         report = Engagement(spec).resolve()
-        # dump 一次、响应与暂存共用同一字典（Doc 14 四块结构，Doc 15 §3）
+        # dump 一次、唯一去向是会话暂存（Doc 14 四块结构，Doc 15 §3/§6）
         battle_report = report.timeline.model_dump(mode="json")
 
-        # 3. 裁定成功，一次性写回（Doc 15 §3：残血出自同一次裁定）
-        result_player = report.final_states["a"]
-        result_enemy = report.final_states["b"]
+        # 3. 裁定成功，一次性写回（Doc 15 §3：残血出自同一次裁定，
+        # 唯一来源是裁定 summary）
+        result_player = report.ruling.summary.a
+        result_enemy = report.ruling.summary.b
 
         player_state = assembly.player_state
-        player_state.current_hp = result_player["hp"]
-        player_state.current_en = result_player["en"]
-        player_state.is_alive = bool(result_player["alive"])
+        player_state.current_hp = result_player.hp
+        player_state.current_en = result_player.en
+        player_state.is_alive = bool(result_player.alive)
         player_state.last_combat_time = current_time
 
         if assembly.enemy_is_new:
             session.enemy_states[assembly.event_index] = assembly.enemy_state
         enemy_pve_state = assembly.enemy_state.entity_state
-        enemy_pve_state.current_hp = result_enemy["hp"]
-        enemy_pve_state.current_en = result_enemy["en"]
-        enemy_pve_state.is_alive = bool(result_enemy["alive"])
+        enemy_pve_state.current_hp = result_enemy.hp
+        enemy_pve_state.current_en = result_enemy.en
+        enemy_pve_state.is_alive = bool(result_enemy.alive)
         enemy_pve_state.last_combat_time = current_time
 
         # 胜负翻译走裁定口径（Doc 14 §7.1：finish + winner 正交表达）
@@ -189,8 +190,8 @@ class BattleBridge:
                 assembly.event.event_type.name, instance_config, loader, session.zone_id, base_ilvl
             )
 
-        # 6. 暂存战报（Doc 15 §6）：发生在全部成功路径之后——裁定失败时
-        # 异常早已传播，暂存零写入（失败原子不受影响）
+        # 6. 暂存战报（Doc 15 §6）：战报唯一去向——发生在全部成功路径之后，
+        # 裁定失败时异常早已传播，暂存零写入（失败原子不受影响）
         session.battle_reports[event_index] = battle_report
 
         return BattleResult(
@@ -199,6 +200,5 @@ class BattleBridge:
             enemy_state=enemy_pve_state if outcome == CombatOutcome.DRAW else None,
             rounds_fought=report.ruling.rounds_fought,
             credits_earned=credits_earned,
-            loot_drops=loot_drops,
-            battle_report=battle_report
+            loot_drops=loot_drops
         )
