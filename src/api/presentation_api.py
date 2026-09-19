@@ -59,9 +59,8 @@ class PracticeScenarioItem(BaseModel):
 
     立绘解析归前端"配置 ID → 图片路径"对照表（Doc 14 §9.1 裁决）；
     机体官方名由加载器从机体配置派生（单一真相），不进练习场配置文件。
-    v1.2 主 agent 裁决（待用户追认）：条目增补 environment_id 直取自场景
-    配置——前端拿它透传 simulate，隐映射（角标 kind 反查环境）会造成
-    两处真相漂移。
+    environment_id 直取自场景配置（用户追认生效，Doc 16 v1.4）——前端拿它
+    透传 simulate，隐映射（角标 kind 反查环境）会造成两处真相漂移。
     """
     name: str
     description: str
