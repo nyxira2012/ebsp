@@ -1,55 +1,79 @@
-"""练习场 API 契约测试（Doc 16）
+"""练习场 API 契约测试（Doc 16 v1.1）
 
 只读列表接口的红线：
-1. 条目字段恰为 名字/描述/敌我机体 ID 四项——不泄露机体面板、
-   不携带任何图片资源引用（Doc 14 §9.1：后端契约只报 ID）；
-2. 下发的机体 ID 必须真实存在于 mechas.json（加载期交叉校验）；
-3. 列表是开战的唯一前置——条目 ID 直接可打 POST /battle/simulate。
+1. 条目字段恰为七项（名字/描述/敌我机体 ID/敌我机体官方名/类别）——不泄露
+   机体面板、不携带任何图片资源引用（Doc 14 §9.1：后端契约只报 ID）；
+2. 下发的机体 ID 必须真实存在于 mechas.json，官方名从机体配置派生
+   （名字单一真相归后端，练习场配置文件不写名字）；
+3. 列表是开战的唯一前置——条目 ID 直接可打 POST /battle/simulate，
+   且练习场对局 route=training 落进战报 meta（Doc 14 v1.7）；
+4. 加载期坏配置处置：无效机体引用/非法 kind 枚举的条目剔除，不阻断启动。
 """
+
+import json
+from pathlib import Path
+import tempfile
 
 import pytest
 from httpx import AsyncClient
 
 from src import DataLoader
 from src.api.context import set_loader, get_loader
+from src.models import MechaConfig, PracticeScenarioConfig
 
-EXPECTED_FIELDS = {"name", "description", "mecha_a_id", "mecha_b_id"}
+EXPECTED_FIELDS = {
+    "name", "description",
+    "mecha_a_id", "mecha_b_id",
+    "mecha_a_name", "mecha_b_name",
+    "kind",
+}
+VALID_KINDS = {"standard", "attack_test", "defense_test"}
 
 
 @pytest.mark.asyncio
 async def test_practice_list_returns_scenarios(async_client: AsyncClient):
-    """列表非空、免鉴权可读、保持配置文件顺序"""
+    """列表非空、免鉴权可读、保持配置文件顺序（首个为经典演示局）"""
     resp = await async_client.get("/battle/practice")
     assert resp.status_code == 200
     scenarios = resp.json()
-    assert isinstance(scenarios, list)
-    assert len(scenarios) > 0
-    # 顺序即配置文件顺序（首个为经典演示局）
+    assert isinstance(scenarios, list) and len(scenarios) > 0
     assert scenarios[0]["name"] == "初次出击"
 
 
 @pytest.mark.asyncio
 async def test_practice_item_fields_exactly_minimal(async_client: AsyncClient):
-    """契约最小化：条目字段恰为四项，无 id/面板/图片路径等任何多余字段"""
+    """契约最小化：条目字段恰为七项，无面板数值/胜率/图片路径等任何多余字段"""
     resp = await async_client.get("/battle/practice")
     assert resp.status_code == 200
     for item in resp.json():
         assert set(item.keys()) == EXPECTED_FIELDS
-        assert isinstance(item["name"], str) and item["name"]
-        assert isinstance(item["description"], str)
-        assert isinstance(item["mecha_a_id"], str) and item["mecha_a_id"]
-        assert isinstance(item["mecha_b_id"], str) and item["mecha_b_id"]
+        assert item["name"] and isinstance(item["description"], str)
+        assert item["mecha_a_id"] and item["mecha_b_id"]
+        assert item["kind"] in VALID_KINDS
 
 
 @pytest.mark.asyncio
-async def test_practice_mecha_refs_exist(async_client: AsyncClient):
-    """下发的一切机体 ID 必须能在 mechas.json 找到（前端拿去查立绘对照表）"""
+async def test_practice_mecha_refs_and_names_derived(async_client: AsyncClient):
+    """机体 ID 必须存在，官方名必须与机体配置逐字一致（派生而非另写）"""
     loader = get_loader()
     resp = await async_client.get("/battle/practice")
     assert resp.status_code == 200
     for item in resp.json():
         assert item["mecha_a_id"] in loader.mechas
         assert item["mecha_b_id"] in loader.mechas
+        assert item["mecha_a_name"] == loader.mechas[item["mecha_a_id"]].name
+        assert item["mecha_b_name"] == loader.mechas[item["mecha_b_id"]].name
+
+
+@pytest.mark.asyncio
+async def test_practice_content_floor(async_client: AsyncClient):
+    """内容底线（Doc 16 §3）：v1.1 至少标准局 >=2、攻击测试 >=1；
+    defense_test 条目必须随 v1.2 上线——引擎能力（训练力场）就绪前不得出现"""
+    resp = await async_client.get("/battle/practice")
+    kinds = [item["kind"] for item in resp.json()]
+    assert kinds.count("standard") >= 2
+    assert kinds.count("attack_test") >= 1
+    assert "defense_test" not in kinds
 
 
 @pytest.mark.asyncio
@@ -62,15 +86,32 @@ async def test_practice_scenario_is_simulatable(async_client: AsyncClient):
     battle = await async_client.post("/battle/simulate", json={
         "mecha_a_id": first["mecha_a_id"],
         "mecha_b_id": first["mecha_b_id"],
+        "route": "training",
     })
     assert battle.status_code == 200
     timeline = battle.json()
-    # Doc 14 四块结构与结算在场
-    assert timeline["meta"]["contract_version"]
+    # Doc 14 四块结构、结算与入口标记在场
+    assert timeline["meta"]["route"] == "training"
     assert timeline["init"]["a"]["mecha_id"] == first["mecha_a_id"]
     assert timeline["init"]["b"]["mecha_id"] == first["mecha_b_id"]
     assert len(timeline["rounds"]) >= 1
     assert timeline["result"]["finish"] in ("ko", "decision", "draw")
+
+
+@pytest.mark.asyncio
+async def test_simulate_route_default_and_rejected(async_client: AsyncClient):
+    """route 参数：缺省 debug 不变（金样张同路径）；pve/pvp 伪造被 422 拒绝"""
+    default_resp = await async_client.post("/battle/simulate", json={
+        "mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku",
+    })
+    assert default_resp.status_code == 200
+    assert default_resp.json()["meta"]["route"] == "debug"
+
+    for forged in ("pve", "pvp"):
+        resp = await async_client.post("/battle/simulate", json={
+            "mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku", "route": forged,
+        })
+        assert resp.status_code == 422
 
 
 def test_loader_drops_scenarios_with_unknown_mecha():
@@ -88,3 +129,29 @@ def test_loader_drops_scenarios_with_unknown_mecha():
 
     assert "broken" not in loader.practice_scenarios
     assert set(loader.practice_scenarios) == before
+
+
+def test_loader_drops_scenarios_with_invalid_kind():
+    """加载期坏配置总则：kind 非法枚举值在解析期被拒（条目级剔除+告警）"""
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        (td / "mechas.json").write_text(json.dumps([
+            {"id": "m1", "name": "M1", "portrait_id": "p1",
+             "init_hp": 100, "init_en": 10, "init_armor": 10, "init_mobility": 10,
+             "init_hit": 0, "init_precision": 0, "init_crit": 0,
+             "init_dodge": 0, "init_parry": 0, "init_block": 0, "init_block_red": 0}
+        ], ensure_ascii=False), encoding="utf-8")
+        (td / "practice_scenarios.json").write_text(json.dumps([
+            {"id": "ok", "name": "好条目", "description": "",
+             "mecha_a_id": "m1", "mecha_b_id": "m1"},
+            {"id": "bad_kind", "name": "坏类别", "description": "",
+             "kind": "attak_test",  # 手滑拼错的枚举值
+             "mecha_a_id": "m1", "mecha_b_id": "m1"},
+        ], ensure_ascii=False), encoding="utf-8")
+
+        loader = DataLoader(data_dir=str(td))
+        loader._load_from_json("mechas.json", MechaConfig, loader.mechas)
+        loader._load_from_json("practice_scenarios.json", PracticeScenarioConfig, loader.practice_scenarios)
+        loader._validate_practice_scenarios()
+
+    assert set(loader.practice_scenarios) == {"ok"}

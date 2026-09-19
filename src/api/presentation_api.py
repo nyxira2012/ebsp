@@ -6,7 +6,7 @@ FastAPI 主应用文件
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from src.combat.engagement import Engagement
 from src.combat.entry import BattleEntryService
@@ -40,21 +40,28 @@ class BattleRequest(BaseModel):
     mecha_a_id: str
     mecha_b_id: str
 
+    # 战报入口标记（Doc 14 v1.7）：客户端只可声明 debug/training，
+    # pve/pvp 为服务端内部标签，经此参数声明一律 422 拒绝
+    route: Literal["debug", "training"] = "debug"
+
     # 可选: 使用用户存档覆盖机体配置
     use_user_save_for_a: bool = False
     use_user_save_for_b: bool = False
 
 
 class PracticeScenarioItem(BaseModel):
-    """练习场对局条目（Doc 16）：契约只报配置 ID，不携带任何图片资源引用。
+    """练习场对局条目（Doc 16 v1.1 七字段）：契约不携带任何图片资源引用。
 
     立绘解析归前端"配置 ID → 图片路径"对照表（Doc 14 §9.1 裁决）；
-    机体名称等档案信息随战斗数据 init 块下发，列表不重复。
+    机体官方名由加载器从机体配置派生（单一真相），不进练习场配置文件。
     """
     name: str
     description: str
-    mecha_a_id: str   # 我方（画面左侧）
+    mecha_a_id: str   # 我方（画面左侧；登录时为演示/降级配置）
     mecha_b_id: str   # 敌方（画面右侧）
+    mecha_a_name: str
+    mecha_b_name: str
+    kind: Literal["standard", "attack_test", "defense_test"]
 
 # ==============================================================================
 # 生命周期事件
@@ -133,6 +140,10 @@ def list_practice_scenarios():
             description=s.description,
             mecha_a_id=s.mecha_a_id,
             mecha_b_id=s.mecha_b_id,
+            # 官方名从机体配置派生（Doc 16 §3：名字单一真相归后端）
+            mecha_a_name=loader.mechas[s.mecha_a_id].name,
+            mecha_b_name=loader.mechas[s.mecha_b_id].name,
+            kind=s.kind,
         )
         for s in loader.get_all_practice_scenarios()
     ]
@@ -148,6 +159,7 @@ async def simulate_battle(
 
     - **mecha_a_id**: 机体 A 的配置 ID
     - **mecha_b_id**: 机体 B 的配置 ID
+    - **route**: 战报入口标记（debug/training，默认 debug）
     - **use_user_save_for_a**: 是否使用用户存档覆盖机体 A (需要登录)
     - **use_user_save_for_b**: 是否使用用户存档覆盖机体 B (需要登录)
 

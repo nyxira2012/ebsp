@@ -400,11 +400,13 @@ class MechaFactory:
             definition_id=config.id,
             name=config.name,
             type=config.weapon_type or WeaponType.SHOOTING,
-            final_power=config.weapon_power or 1000,
-            en_cost=config.weapon_en_cost or 10,
-            range_min=config.weapon_range_min or 0,
-            range_max=config.weapon_range_max or 6000,
-            will_req=config.weapon_will_req or 0,
+            # 数值字段的 0 是合法配置值（如 wpn_dummy 的零耗能），只对缺省(None)回退默认；
+            # falsy-or 会把 0 静默吞成默认值——装配边界不得改写数据侧语义
+            final_power=config.weapon_power if config.weapon_power is not None else 1000,
+            en_cost=config.weapon_en_cost if config.weapon_en_cost is not None else 10,
+            range_min=config.weapon_range_min if config.weapon_range_min is not None else 0,
+            range_max=config.weapon_range_max if config.weapon_range_max is not None else 6000,
+            will_req=config.weapon_will_req if config.weapon_will_req is not None else 0,
             anim_id=config.weapon_anim_id or "default_anim",
             tags=config.weapon_tags or [],
             # MDDC 多维数据契约 (Doc 6) - 加载点一次校验：非法配置值在此抛 ValueError，

@@ -2,29 +2,41 @@
   {
     "id": "practice_classic",
     "name": "初次出击",
-    "description": "联邦的白色恶魔对阵红色彗星——一年战争的经典对局，攻防节奏均衡，适合第一场。",
+    "description": "红色彗星的专用扎古在前方候着——一年战争的经典开局，对手火力与机动均衡，适合第一场。",
+    "kind": "standard",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_zaku"
   },
   {
     "id": "practice_finale",
     "name": "宿命对决",
-    "description": "ν高达与沙扎比的最终决战：双方火力与机动俱佳，暴击与招架的演出密度最高。",
+    "description": "沙扎比的重火力与高机动——终局级对手，暴击与招架的演出密度最高。",
+    "kind": "standard",
     "mecha_a_id": "mech_nu",
     "mecha_b_id": "mech_sazabi"
   },
   {
     "id": "practice_suppression",
     "name": "扫荡工兵",
-    "description": "旧式防卫工兵几乎无力还手——想看碾压局伤害数字与击破链，选这一场。",
+    "description": "旧式防卫工兵几乎无力还手——想轻松看一场碾压演出，选这场。",
+    "kind": "standard",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_grunt"
   },
   {
     "id": "practice_boss",
     "name": "失控的镇守原型机",
-    "description": "厚装甲的失控原型机。火力不足时会拖入判定长局，适合检验多回合续航与气力曲线。",
+    "description": "厚装甲的失控原型机。火力不足会拖入判定长局，适合检验多回合续航与气力曲线。",
+    "kind": "standard",
     "mecha_a_id": "mech_nu",
     "mecha_b_id": "mech_boss_weak"
+  },
+  {
+    "id": "practice_attack_dummy",
+    "name": "木桩靶场",
+    "description": "全装甲测试木桩，血厚到单局能打约五十回合，手里只有威力约等于零的训练武器——站着挨打，专心看你的输出数字。",
+    "kind": "attack_test",
+    "mecha_a_id": "mech_rx78",
+    "mecha_b_id": "mech_dummy"
   }
 ]

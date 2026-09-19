@@ -97,12 +97,12 @@ class BattleEntryService:
 
         Args:
             loader: 静态资源加载器。
-            req: 调试请求（双方机体 ID 与存档覆盖开关）。
+            req: 调试请求（双方机体 ID、入口标记与存档覆盖开关）。
             user: 当前登录用户（匿名为 None）。
             db_session: 数据库会话（用户存档查询用）。
 
         Returns:
-            EngagementSpec: 值冻结的战斗委托（source="debug"）。
+            EngagementSpec: 值冻结的战斗委托（source 取 req.route，Doc 14 v1.7）。
 
         Raises:
             KeyError: 机体 ID 不存在（由 handler 翻译为 404，Doc 14 §2）。
@@ -143,7 +143,9 @@ class BattleEntryService:
         return EngagementSpec(
             mecha_a=mecha_a,
             mecha_b=mecha_b,
-            context=EngagementContext(source="debug"),
+            # route 由客户端声明（debug/training，练习场发 training——Doc 16 §2.1；
+            # BattleRequest 的 Literal 校验已挡住 pve/pvp 伪造）
+            context=EngagementContext(source=req.route),
         )
 
     @staticmethod

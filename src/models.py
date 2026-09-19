@@ -4,7 +4,7 @@
 """
 
 from enum import Enum
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from dataclasses import dataclass, field
 from .config import Config
@@ -411,6 +411,9 @@ class InstanceConfig(BaseModel):
 # 练习场配置模型 (Practice Ground - Doc 16)
 # ============================================================================
 
+PracticeScenarioKind = Literal["standard", "attack_test", "defense_test"]
+
+
 class PracticeScenarioConfig(BaseModel):
     """练习场对局配置 (data/practice_scenarios.json)
 
@@ -418,11 +421,13 @@ class PracticeScenarioConfig(BaseModel):
     mecha_a_id/mecha_b_id 调 POST /battle/simulate。本配置不携带任何
     图片资源引用——立绘由前端"配置 ID → 图片路径"对照表解析
     （Doc 14 §9.1 裁决：后端契约只报 ID）。
+    kind 非法枚举值在加载期被 Pydantic 拒绝 → 条目剔除（Doc 16 §3 坏配置总则）。
     """
     id: str
     name: str
     description: str = ""
-    mecha_a_id: str   # 我方（画面左侧，Doc 14 §1.4 侧位命名）
+    kind: PracticeScenarioKind = "standard"
+    mecha_a_id: str   # 我方（画面左侧，Doc 14 §1.4 侧位命名；登录时为演示/降级配置）
     mecha_b_id: str   # 敌方（画面右侧）
 
 
