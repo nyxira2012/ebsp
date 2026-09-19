@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 from src.loader import DataLoader
-from src.models import Pilot, Weapon, Mecha, WeaponType
+from src.models import Pilot, Weapon, Mecha, WeaponType, MechaConfig, EnvironmentConfig, PracticeScenarioConfig
 
 
 # ============================================================================
@@ -643,3 +643,60 @@ class TestEdgeCases:
         loader.load_all()
 
         assert len(loader.mechas) == 0
+
+
+class TestIdCollisionKeepFirst:
+    """内容级容器 id 撞键先到先得（Doc 16 §3 坏配置总则）。
+
+    keep-first 必须发生在装载期（通用加载器同键覆盖会先毁掉先到条目，
+    加载后无物可去重）——与 load_all 一致以 keep_first=True 走 _load_from_json。
+    """
+
+    @staticmethod
+    def _write_mechas(temp_data_dir):
+        (temp_data_dir / "mechas.json").write_text(json.dumps([
+            {"id": "m1", "name": "M1", "portrait_id": "p1",
+             "init_hp": 100, "init_en": 10, "init_armor": 10, "init_mobility": 10,
+             "init_hit": 0, "init_precision": 0, "init_crit": 0,
+             "init_dodge": 0, "init_parry": 0, "init_block": 0, "init_block_red": 0}
+        ], ensure_ascii=False), encoding="utf-8")
+
+    def test_practice_scenarios_keep_first_on_duplicate_id(self, temp_data_dir, capsys):
+        self._write_mechas(temp_data_dir)
+        (temp_data_dir / "environments.json").write_text(json.dumps([
+            {"id": "env_field", "name": "野战", "kind": "standard"},
+        ], ensure_ascii=False), encoding="utf-8")
+        (temp_data_dir / "practice_scenarios.json").write_text(json.dumps([
+            {"id": "dup", "name": "先到条目", "description": "",
+             "environment_id": "env_field",
+             "mecha_a_id": "m1", "mecha_b_id": "m1"},
+            {"id": "dup", "name": "后到条目", "description": "",
+             "environment_id": "env_field",
+             "mecha_a_id": "m1", "mecha_b_id": "m1"},
+        ], ensure_ascii=False), encoding="utf-8")
+
+        loader = DataLoader(data_dir=str(temp_data_dir))
+        loader._load_from_json("mechas.json", MechaConfig, loader.mechas)
+        loader._load_from_json("environments.json", EnvironmentConfig, loader.environments, keep_first=True)
+        loader._load_from_json("practice_scenarios.json", PracticeScenarioConfig,
+                               loader.practice_scenarios, keep_first=True)
+        loader._validate_practice_scenarios()
+
+        assert list(loader.practice_scenarios) == ["dup"]
+        assert loader.practice_scenarios["dup"].name == "先到条目"
+        # 告警带重复 id（Doc 16 §3：剔除+告警）
+        assert "dup" in capsys.readouterr().out
+
+    def test_environments_keep_first_on_duplicate_id(self, temp_data_dir, capsys):
+        (temp_data_dir / "environments.json").write_text(json.dumps([
+            {"id": "env_dup", "name": "先到环境", "kind": "standard"},
+            {"id": "env_dup", "name": "后到环境", "kind": "defense_test"},
+        ], ensure_ascii=False), encoding="utf-8")
+
+        loader = DataLoader(data_dir=str(temp_data_dir))
+        loader._load_from_json("environments.json", EnvironmentConfig, loader.environments, keep_first=True)
+
+        assert list(loader.environments) == ["env_dup"]
+        assert loader.environments["env_dup"].name == "先到环境"
+        assert loader.environments["env_dup"].kind == "standard"
+        assert "env_dup" in capsys.readouterr().out

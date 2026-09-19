@@ -76,16 +76,21 @@ class DataLoader:
         # 8. 加载环境配置 (Doc 16 §5.3)：内容级配置，文件缺省=无环境（不阻断启动）
         environments_path = self.data_dir / "environments.json"
         if environments_path.exists():
-            self._load_from_json("environments.json", EnvironmentConfig, self.environments)
+            self._load_from_json("environments.json", EnvironmentConfig, self.environments, keep_first=True)
 
         # 9. 加载练习场对局配置 (Doc 16)：内容级配置，文件缺省=无练习场（不阻断启动）
         practice_path = self.data_dir / "practice_scenarios.json"
         if practice_path.exists():
-            self._load_from_json("practice_scenarios.json", PracticeScenarioConfig, self.practice_scenarios)
+            self._load_from_json("practice_scenarios.json", PracticeScenarioConfig, self.practice_scenarios, keep_first=True)
             self._validate_practice_scenarios()
     
-    def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
-        """通用的 JSON 加载方法"""
+    def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T],
+                        keep_first: bool = False) -> None:
+        """通用的 JSON 加载方法
+
+        keep_first（Doc 16 §3 内容级容器撞键先到先得）：仅练习场/环境两个
+        内容文件启用；缺省 False 维持后到覆盖的既有语义，其他容器零变化。
+        """
         file_path = self.data_dir / filename
 
         try:
@@ -110,8 +115,13 @@ class DataLoader:
             # Pydantic 会自动处理嵌套字典和枚举
             try:
                 obj = model_cls.model_validate(item)
-                # 所有具体的配置类都有 id 属性
-                container[obj.id] = obj  # type: ignore
+                # 所有具体的配置类都有 id 属性（BaseModel 层面未声明，压类型告警）
+                obj_id = obj.id  # type: ignore
+                if keep_first and obj_id in container:
+                    print(f"{filename} 中 id 撞键，保留先到条目，已剔除后到: "
+                          f"{obj_id} (name={item.get('name', 'unknown')})")
+                    continue
+                container[obj_id] = obj
             except Exception as e:
                 print(f"加载 {filename} 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
 
