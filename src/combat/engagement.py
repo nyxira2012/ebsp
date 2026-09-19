@@ -50,10 +50,12 @@ class EngagementContext:
     """战斗委托上下文（Doc 15 §3 场景标签）。
 
     source 落到战报 meta.route（debug/training/pve/pvp）；
-    scene 为战区等纯展示标签，暂不进契约。
+    environment_id 为规则环境引用（Doc 16 §5.3 环境通道）：编排层只
+    透传环境 ID 不解其义，效果在装配期注入参战快照，引擎只见效果
+    不见环境。不进战报契约。
     """
     source: Route
-    scene: str = ""
+    environment_id: str = ""
 
 
 @dataclass(frozen=True)

@@ -49,6 +49,10 @@ class BattleRequest(BaseModel):
     use_user_save_for_a: bool = False
     use_user_save_for_b: bool = False
 
+    # 规则环境（Doc 16 §5.3）：练习场防御测试局声明战斗规则环境；
+    # None = 不注入，调试老路径零变化
+    environment_id: Optional[str] = None
+
 
 class PracticeScenarioItem(BaseModel):
     """练习场对局条目（Doc 16 v1.1 七字段）：契约不携带任何图片资源引用。
@@ -144,7 +148,9 @@ def list_practice_scenarios():
             # 官方名从机体配置派生（Doc 16 §3：名字单一真相归后端）
             mecha_a_name=loader.mechas[s.mecha_a_id].name,
             mecha_b_name=loader.mechas[s.mecha_b_id].name,
-            kind=s.kind,
+            # kind 从环境派生（v1.2 契约切换，Doc 16 §5.3）——坏环境引用
+            # 已在加载期剔除，运行时不可能缺
+            kind=loader.environments[s.environment_id].kind,
         )
         for s in loader.get_all_practice_scenarios()
     ]
@@ -161,6 +167,7 @@ async def simulate_battle(
     - **mecha_a_id**: 机体 A 的配置 ID
     - **mecha_b_id**: 机体 B 的配置 ID
     - **route**: 战报入口标记（debug/training，默认 debug）
+    - **environment_id**: 规则环境 ID（可选，Doc 16 §5.3；None 不注入）
     - **use_user_save_for_a**: 是否使用用户存档覆盖机体 A (需要登录)
     - **use_user_save_for_b**: 是否使用用户存档覆盖机体 B (需要登录)
 

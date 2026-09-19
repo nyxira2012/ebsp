@@ -19,9 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import Config
 from src.factory import MechaFactory
-from src.models import MechaSnapshot
+from src.models import EnvironmentConfig, MechaSnapshot
 from src.pve.models import PveEntityState, PveEnemyState, PveEvent, PveSessionData
 from src.pve.services import MothershipIntegrationService
+from src.skill_system.effect_factory import EffectFactory
 from src.user.repository import UserAssetRepository
 from src.core.factory import SnapshotFactory
 
@@ -76,6 +77,29 @@ def _apply_scaling(enemy_snapshot: MechaSnapshot, scaling: Any) -> None:
         weapon.final_power = int(weapon.final_power * scaling.damage_mult)
 
 
+def _apply_environment(env: EnvironmentConfig, mecha_a: MechaSnapshot, mecha_b: MechaSnapshot) -> None:
+    """把环境声明的效果注入对应侧参战快照（Doc 16 §5.3 环境通道）。
+
+    不走 TraitManager 链（该链无 src 生产调用方）——装配期显式注入是
+    本设计的结构性护栏：效果只进本场快照，不落存档/共用机体表。
+    按效果 id 幂等去重，重复注入不叠加。
+
+    Args:
+        env: 环境配置（grants 声明按侧授予的效果）。
+        mecha_a: 我方快照（注入目标之一）。
+        mecha_b: 敌方快照（注入目标之一）。
+    """
+    targets = {"a": (mecha_a,), "b": (mecha_b,), "all": (mecha_a, mecha_b)}
+    for grant in env.grants:
+        for snapshot in targets[grant.side]:
+            owned_ids = {effect.id for effect in snapshot.effects}
+            for effect_id in grant.effect_ids:
+                if effect_id in owned_ids:
+                    continue
+                snapshot.effects.extend(EffectFactory.create_trait_effects(effect_id))
+                owned_ids.add(effect_id)
+
+
 class BattleEntryService:
     """收发室：各界面进战斗的唯一装配口（Doc 15 §2/§4 红线 5）。
 
@@ -97,7 +121,7 @@ class BattleEntryService:
 
         Args:
             loader: 静态资源加载器。
-            req: 调试请求（双方机体 ID、入口标记与存档覆盖开关）。
+            req: 调试请求（双方机体 ID、入口标记、存档覆盖开关与可选规则环境）。
             user: 当前登录用户（匿名为 None）。
             db_session: 数据库会话（用户存档查询用）。
 
@@ -140,12 +164,23 @@ class BattleEntryService:
                     # （404 只指向请求字段；存档缺陷走降级语义，Doc 14 §2）
                     print(f"⚠️ 玩家出战数据无效，使用默认配置: {e}")
 
+        # 规则环境（Doc 16 §5.3）：存档覆盖之后、值冻结之前注入——降级到
+        # 演示配置时力场同样生效；快照随 EngagementSpec 深拷贝冻结，效果
+        # 只活在委托副本里。未知环境 ID 的 KeyError 走上层 404 通道（同机体）。
+        if req.environment_id is not None:
+            _apply_environment(
+                loader.get_environment_config(req.environment_id), mecha_a, mecha_b
+            )
+
         return EngagementSpec(
             mecha_a=mecha_a,
             mecha_b=mecha_b,
             # route 由客户端声明（debug/training，练习场发 training——Doc 16 §2.1；
             # BattleRequest 的 Literal 校验已挡住 pve/pvp 伪造）
-            context=EngagementContext(source=req.route),
+            context=EngagementContext(
+                source=req.route,
+                environment_id=req.environment_id or "",
+            ),
         )
 
     @staticmethod

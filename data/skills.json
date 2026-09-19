@@ -774,6 +774,27 @@
             "duration": -1
         }
     ],
+    "env_regen_full": [
+        {
+            "id": "env_regen_full",
+            "name": "训练力场·回合回满",
+            "hook": "HOOK_ON_TURN_END",
+            "operation": "callback",
+            "value": "cb_regen_hp_full",
+            "duration": -1
+        }
+    ],
+    "env_no_death": [
+        {
+            "id": "env_no_death",
+            "name": "训练力场·免死",
+            "hook": "HOOK_ON_DAMAGE_TAKEN",
+            "operation": "callback",
+            "value": "cb_no_death_clamp",
+            "duration": -1,
+            "priority": 100
+        }
+    ],
     "trait_spirit_boost": [
         {
             "id": "trait_spirit_boost",

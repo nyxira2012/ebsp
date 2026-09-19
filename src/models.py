@@ -414,6 +414,26 @@ class InstanceConfig(BaseModel):
 PracticeScenarioKind = Literal["standard", "attack_test", "defense_test"]
 
 
+class EnvironmentEffectGrant(BaseModel):
+    """环境按侧授予效果（Doc 16 §5.3 环境通道）"""
+    side: Literal["a", "b", "all"] = "a"
+    effect_ids: List[str] = []
+
+
+class EnvironmentConfig(BaseModel):
+    """战斗规则环境配置 (data/environments.json)
+
+    环境是全游戏概念（PVE 将来复用，Doc 1 §5.3）：对局进入环境时，grants
+    声明的效果在装配期注入对应侧参战快照——引擎只见效果不见环境。
+    kind 值集暂与练习场场景共享（v1.2 起练习场列表角标从环境派生，
+    Doc 16 §5.3），环境自身不独占该枚举的语义。
+    """
+    id: str
+    name: str
+    kind: PracticeScenarioKind = "standard"
+    grants: List[EnvironmentEffectGrant] = []
+
+
 class PracticeScenarioConfig(BaseModel):
     """练习场对局配置 (data/practice_scenarios.json)
 
@@ -421,12 +441,14 @@ class PracticeScenarioConfig(BaseModel):
     mecha_a_id/mecha_b_id 调 POST /battle/simulate。本配置不携带任何
     图片资源引用——立绘由前端"配置 ID → 图片路径"对照表解析
     （Doc 14 §9.1 裁决：后端契约只报 ID）。
-    kind 非法枚举值在加载期被 Pydantic 拒绝 → 条目剔除（Doc 16 §3 坏配置总则）。
+    v1.2 契约切换（Doc 16 §5.3）：kind 被环境吸收，本配置只引用
+    environment_id（列表角标从环境派生）；引用的环境不存在在加载期
+    被交叉校验剔除——归 loader（Doc 16 §3 坏配置总则）。
     """
     id: str
     name: str
     description: str = ""
-    kind: PracticeScenarioKind = "standard"
+    environment_id: str = "env_field"   # 缺省野战=零效果标签环境
     mecha_a_id: str   # 我方（画面左侧，Doc 14 §1.4 侧位命名；登录时为演示/降级配置）
     mecha_b_id: str   # 敌方（画面右侧）
 

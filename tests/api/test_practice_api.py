@@ -1,4 +1,4 @@
-"""练习场 API 契约测试（Doc 16 v1.1）
+"""练习场 API 契约测试（Doc 16 v1.2）
 
 只读列表接口的红线：
 1. 条目字段恰为七项（名字/描述/敌我机体 ID/敌我机体官方名/类别）——不泄露
@@ -7,7 +7,8 @@
    （名字单一真相归后端，练习场配置文件不写名字）；
 3. 列表是开战的唯一前置——条目 ID 直接可打 POST /battle/simulate，
    且练习场对局 route=training 落进战报 meta（Doc 14 v1.7）；
-4. 加载期坏配置处置：无效机体引用/非法 kind 枚举的条目剔除，不阻断启动。
+4. 加载期坏配置处置：无效机体/环境引用的条目剔除，不阻断启动
+   （v1.2 起 kind 被环境吸收，列表角标从 environment_id 派生）。
 """
 
 import json
@@ -19,7 +20,7 @@ from httpx import AsyncClient
 
 from src import DataLoader
 from src.api.context import set_loader, get_loader
-from src.models import MechaConfig, PracticeScenarioConfig
+from src.models import MechaConfig, PracticeScenarioConfig, EnvironmentConfig
 
 EXPECTED_FIELDS = {
     "name", "description",
@@ -67,13 +68,15 @@ async def test_practice_mecha_refs_and_names_derived(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_practice_content_floor(async_client: AsyncClient):
-    """内容底线（Doc 16 §3）：v1.1 至少标准局 >=2、攻击测试 >=1；
-    defense_test 条目必须随 v1.2 上线——引擎能力（训练力场）就绪前不得出现"""
+    """内容底线（Doc 16 §3）：v1.1 至少标准局 >=2、攻击测试 >=1。
+
+    defense_test 底线（>=1）随批次 2（防御木桩内容条目）反转——本批
+    （v1.2 批次 1）引擎能力就绪但内容未上，不预设数量断言。
+    """
     resp = await async_client.get("/battle/practice")
     kinds = [item["kind"] for item in resp.json()]
     assert kinds.count("standard") >= 2
     assert kinds.count("attack_test") >= 1
-    assert "defense_test" not in kinds
 
 
 @pytest.mark.asyncio
@@ -131,8 +134,8 @@ def test_loader_drops_scenarios_with_unknown_mecha():
     assert set(loader.practice_scenarios) == before
 
 
-def test_loader_drops_scenarios_with_invalid_kind():
-    """加载期坏配置总则：kind 非法枚举值在解析期被拒（条目级剔除+告警）"""
+def test_loader_drops_scenarios_with_unknown_environment():
+    """加载期交叉校验（v1.2）：引用不存在环境的条目被剔除，不进运行时"""
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         (td / "mechas.json").write_text(json.dumps([
@@ -141,16 +144,21 @@ def test_loader_drops_scenarios_with_invalid_kind():
              "init_hit": 0, "init_precision": 0, "init_crit": 0,
              "init_dodge": 0, "init_parry": 0, "init_block": 0, "init_block_red": 0}
         ], ensure_ascii=False), encoding="utf-8")
+        (td / "environments.json").write_text(json.dumps([
+            {"id": "env_field", "name": "野战", "kind": "standard"},
+        ], ensure_ascii=False), encoding="utf-8")
         (td / "practice_scenarios.json").write_text(json.dumps([
             {"id": "ok", "name": "好条目", "description": "",
+             "environment_id": "env_field",
              "mecha_a_id": "m1", "mecha_b_id": "m1"},
-            {"id": "bad_kind", "name": "坏类别", "description": "",
-             "kind": "attak_test",  # 手滑拼错的枚举值
+            {"id": "bad_env", "name": "坏环境", "description": "",
+             "environment_id": "no_such_env",
              "mecha_a_id": "m1", "mecha_b_id": "m1"},
         ], ensure_ascii=False), encoding="utf-8")
 
         loader = DataLoader(data_dir=str(td))
         loader._load_from_json("mechas.json", MechaConfig, loader.mechas)
+        loader._load_from_json("environments.json", EnvironmentConfig, loader.environments)
         loader._load_from_json("practice_scenarios.json", PracticeScenarioConfig, loader.practice_scenarios)
         loader._validate_practice_scenarios()
 

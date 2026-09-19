@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
     WeaponType, MothershipConfig, RegionConfig, AffixConfig, InstanceConfig,
-    PracticeScenarioConfig
+    PracticeScenarioConfig, EnvironmentConfig
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -38,6 +38,7 @@ class DataLoader:
         self.regions: Dict[str, RegionConfig] = {}
         self.affixes: Dict[str, AffixConfig] = {}
         self.instances: Dict[str, InstanceConfig] = {}
+        self.environments: Dict[str, EnvironmentConfig] = {}
         self.practice_scenarios: Dict[str, PracticeScenarioConfig] = {}
 
     @property
@@ -72,7 +73,12 @@ class DataLoader:
         # 7. 加载副本配置 (Doc 13)
         self._load_from_json("instances.json", InstanceConfig, self.instances)
 
-        # 8. 加载练习场对局配置 (Doc 16)：内容级配置，文件缺省=无练习场（不阻断启动）
+        # 8. 加载环境配置 (Doc 16 §5.3)：内容级配置，文件缺省=无环境（不阻断启动）
+        environments_path = self.data_dir / "environments.json"
+        if environments_path.exists():
+            self._load_from_json("environments.json", EnvironmentConfig, self.environments)
+
+        # 9. 加载练习场对局配置 (Doc 16)：内容级配置，文件缺省=无练习场（不阻断启动）
         practice_path = self.data_dir / "practice_scenarios.json"
         if practice_path.exists():
             self._load_from_json("practice_scenarios.json", PracticeScenarioConfig, self.practice_scenarios)
@@ -110,15 +116,16 @@ class DataLoader:
                 print(f"加载 {filename} 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
 
     def _validate_practice_scenarios(self) -> None:
-        """剔除引用了不存在机体的练习场条目（配置错误在加载期暴露，不进运行时）"""
+        """剔除引用了不存在机体/环境的练习场条目（配置错误在加载期暴露，不进运行时）"""
         invalid_ids = [
             sid for sid, s in self.practice_scenarios.items()
             if s.mecha_a_id not in self.mechas or s.mecha_b_id not in self.mechas
+            or s.environment_id not in self.environments
         ]
         for sid in invalid_ids:
             scenario = self.practice_scenarios.pop(sid)
-            print(f"练习场配置引用了不存在的机体，已剔除: {sid} "
-                  f"(a={scenario.mecha_a_id}, b={scenario.mecha_b_id})")
+            print(f"练习场配置引用了不存在的机体或环境，已剔除: {sid} "
+                  f"(a={scenario.mecha_a_id}, b={scenario.mecha_b_id}, env={scenario.environment_id})")
 
     def _load_pilots_with_sub(self) -> None:
         """加载驾驶员和副驾驶配置，根据 type 字段区分"""
@@ -198,6 +205,12 @@ class DataLoader:
         if zone_id not in instance.zones:
             raise KeyError(f"副本子区域配置不存在: {instance_id} -> {zone_id}")
         return instance.zones[zone_id]
+
+    def get_environment_config(self, environment_id: str) -> EnvironmentConfig:
+        """获取环境配置 (Doc 16 §5.3 环境通道)"""
+        if environment_id not in self.environments:
+            raise KeyError(f"环境配置不存在: {environment_id}")
+        return self.environments[environment_id]
 
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""

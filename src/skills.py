@@ -220,6 +220,27 @@ def cb_regen_hp(val, ctx, owner):
     return val
 
 
+@SkillRegistry.register_callback("cb_regen_hp_full")
+def cb_regen_hp_full(val, ctx, owner):
+    """训练力场: 回合结束 HP 回满（环境授予效果，Doc 16 §5.3；不产生事件）"""
+    owner.current_hp = owner.final_max_hp
+    return val
+
+
+@SkillRegistry.register_callback("cb_no_death_clamp")
+def cb_no_death_clamp(val, ctx, owner):
+    """训练力场: 免死——致死伤钳到当前 HP-1，非致死伤原样穿透（Doc 16 §5.3）
+
+    该钩子返回值即最终落血伤害（resolver 落血前最后一站），钳制在此即免死。
+    效果定义 priority=100：同钩子按 priority 升序执行、高优先级最后执行，
+    钳制必须吃在其他伤害修正之后、拿最终落血决定权。
+    身份判定必须用 is：pydantic == 按字段值比较，镜像同配的双快照会误判。
+    """
+    if owner is ctx.get_defender() and val >= owner.current_hp:
+        return max(0, owner.current_hp - 1)
+    return val
+
+
 @SkillRegistry.register_callback("cb_spirit_boost")
 def cb_spirit_boost(val, ctx, owner):
     """精神增幅: 战斗结束回复50% SP（纯日志，不产生事件）"""

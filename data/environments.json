@@ -1,0 +1,22 @@
+[
+  {
+    "id": "env_training_field",
+    "name": "训练力场",
+    "kind": "defense_test",
+    "grants": [
+      {"side": "a", "effect_ids": ["env_regen_full", "env_no_death"]}
+    ]
+  },
+  {
+    "id": "env_target_range",
+    "name": "靶场",
+    "kind": "attack_test",
+    "grants": []
+  },
+  {
+    "id": "env_field",
+    "name": "野战",
+    "kind": "standard",
+    "grants": []
+  }
+]
