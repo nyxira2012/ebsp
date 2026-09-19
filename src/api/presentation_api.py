@@ -55,10 +55,13 @@ class BattleRequest(BaseModel):
 
 
 class PracticeScenarioItem(BaseModel):
-    """练习场对局条目（Doc 16 v1.1 七字段）：契约不携带任何图片资源引用。
+    """练习场对局条目（Doc 16 v1.2 八字段）：契约不携带任何图片资源引用。
 
     立绘解析归前端"配置 ID → 图片路径"对照表（Doc 14 §9.1 裁决）；
     机体官方名由加载器从机体配置派生（单一真相），不进练习场配置文件。
+    v1.2 主 agent 裁决（待用户追认）：条目增补 environment_id 直取自场景
+    配置——前端拿它透传 simulate，隐映射（角标 kind 反查环境）会造成
+    两处真相漂移。
     """
     name: str
     description: str
@@ -66,6 +69,7 @@ class PracticeScenarioItem(BaseModel):
     mecha_b_id: str   # 敌方（画面右侧）
     mecha_a_name: str
     mecha_b_name: str
+    environment_id: str
     kind: PracticeScenarioKind
 
 # ==============================================================================
@@ -148,8 +152,10 @@ def list_practice_scenarios():
             # 官方名从机体配置派生（Doc 16 §3：名字单一真相归后端）
             mecha_a_name=loader.mechas[s.mecha_a_id].name,
             mecha_b_name=loader.mechas[s.mecha_b_id].name,
-            # kind 从环境派生（v1.2 契约切换，Doc 16 §5.3）——坏环境引用
-            # 已在加载期剔除，运行时不可能缺
+            # environment_id 直取场景配置（前端透传 simulate）；kind 从环境
+            # 派生（v1.2 契约切换，Doc 16 §5.3）——坏环境引用已在加载期
+            # 剔除，运行时不可能缺
+            environment_id=s.environment_id,
             kind=loader.environments[s.environment_id].kind,
         )
         for s in loader.get_all_practice_scenarios()

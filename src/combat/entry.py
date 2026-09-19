@@ -96,7 +96,15 @@ def _apply_environment(env: EnvironmentConfig, mecha_a: MechaSnapshot, mecha_b: 
             for effect_id in grant.effect_ids:
                 if effect_id in owned_ids:
                     continue
-                snapshot.effects.extend(EffectFactory.create_trait_effects(effect_id))
+                # 空创建 = 未定义效果 id：不告警会静默变成零效果标签，
+                # 环境承诺的保护（如力场免死）不存在却无迹可查（告警风格
+                # 对齐 loader 加载/剔除告警）
+                created = EffectFactory.create_trait_effects(effect_id)
+                if not created:
+                    # 「未注入」而非「已跳过」：与上方去重 continue 的 skip 消歧
+                    print(f"环境 {env.id} 引用了未定义的效果，未注入: {effect_id} (side={grant.side})")
+                    continue
+                snapshot.effects.extend(created)
                 owned_ids.add(effect_id)
 
 

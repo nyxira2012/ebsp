@@ -6,6 +6,7 @@ pytest 共享配置和 Fixtures
 import sys
 import os
 import io
+import importlib
 from pathlib import Path
 import pytest  # pytest fixture 装饰器需要
 
@@ -78,6 +79,24 @@ def reset_skill_registry():
     # 测试结束后执行清理
     SkillRegistry._hooks.clear()
     SkillRegistry._callbacks.clear()
+
+
+@pytest.fixture
+def reloaded_skills():
+    """回调重注册夹具：importlib.reload(src.skills) 让装饰器把回调重挂到
+    新类注册表（conftest autouse 每测试后清空的是本模块持有的旧类）。
+
+    还原义务（测试设施事实，why）：EffectProcessor 在调用期按模块属性
+    懒加载 SkillRegistry，而 conftest/引擎等顶层导入持旧类引用——测试
+    结束必须把模块属性还原回旧类，否则后续用例的注册与查找落在不同类上
+    （批次 1 实测踩中 test_integration_complex / test_skills_processor 各
+    红一例）。还原后 autouse 清空照常作用在旧类上。
+    """
+    import src.skills
+    original_registry = src.skills.SkillRegistry
+    importlib.reload(src.skills)
+    yield src.skills
+    src.skills.SkillRegistry = original_registry
 
 # ============================================================================
 # 基础 Fixtures（测试数据）

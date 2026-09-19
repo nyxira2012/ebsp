@@ -38,5 +38,13 @@
     "environment_id": "env_target_range",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_dummy"
+  },
+  {
+    "id": "practice_defense_dummy",
+    "name": "重火力木桩",
+    "description": "重火力测试木桩，光束步枪与重锤全火力招呼——但训练力场每回合结束把你的 HP 回满、且免于击破。看的是每回合被打穿多少、闪避/招架/格挡怎么触发；人不死，测试不中断。",
+    "environment_id": "env_training_field",
+    "mecha_a_id": "mech_rx78",
+    "mecha_b_id": "mech_defense_dummy"
   }
 ]

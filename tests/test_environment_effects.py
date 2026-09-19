@@ -10,12 +10,10 @@
 
 注册表事实（conftest autouse 每测试后清空 SkillRegistry._callbacks，且只清
 conftest 持有的旧类引用）：回调用 import 函数本体温测（不受清空影响）；
-EffectProcessor 全链路用 importlib.reload(src.skills) 重注册——processor 在
-调用期经模块属性懒加载拿到新类。重注册夹具在测试结束把模块属性还原回旧类，
-避免新类注册态泄漏到后续测试。
+EffectProcessor 全链路用 reloaded_skills 共享夹具（tests/conftest.py）做
+importlib.reload(src.skills) 重注册——processor 在调用期经模块属性懒加载
+拿到新类。
 """
-
-import importlib
 
 import pytest
 
@@ -152,19 +150,9 @@ def test_env_effect_definitions_from_json():
 
 
 # ============================================================================
-# EffectProcessor 全链路（reload 重注册回调；夹具结束清空新类注册表）
+# EffectProcessor 全链路（reloaded_skills 共享夹具见 tests/conftest.py：
+# reload 重注册回调；夹具结束清空新类注册表）
 # ============================================================================
-
-@pytest.fixture
-def reloaded_skills():
-    import src.skills
-    original_registry = src.skills.SkillRegistry
-    importlib.reload(src.skills)
-    yield src.skills
-    # 还原模块属性指向旧类：processor 在调用期按模块属性懒加载，既有测试
-    # （conftest/引擎/其他用例）持旧类引用并往旧类注册回调——不还原会让
-    # 它们的注册与查找落在不同类上。还原后 conftest 照常清空旧类注册表。
-    src.skills.SkillRegistry = original_registry
 
 
 def test_processor_clamps_lethal_damage_full_chain(reloaded_skills):
@@ -238,6 +226,17 @@ class TestApplyEnvironment:
         _apply_environment(env, a, b)
 
         assert len(a.effects) == 2
+
+    def test_unknown_effect_id_warns_and_skips(self, capsys):
+        """未定义效果 id：注入不炸、零效果落袋，并打出带 effect_id 与环境 id 的告警"""
+        a, b = _make_mecha("m_a"), _make_mecha("m_b")
+        env = _env(side="a", effect_ids=["no_such_effect"])
+
+        _apply_environment(env, a, b)
+
+        assert a.effects == []
+        out = capsys.readouterr().out
+        assert "no_such_effect" in out and "env_test" in out
 
 
 class TestSpecFreezeIsolation:

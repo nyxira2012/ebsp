@@ -228,7 +228,7 @@ def cb_regen_hp_full(val, ctx, owner):
 
 
 @SkillRegistry.register_callback("cb_no_death_clamp")
-def cb_no_death_clamp(val, ctx, owner):
+def cb_no_death_clamp(damage, ctx, owner):
     """训练力场: 免死——致死伤钳到当前 HP-1，非致死伤原样穿透（Doc 16 §5.3）
 
     该钩子返回值即最终落血伤害（resolver 落血前最后一站），钳制在此即免死。
@@ -236,9 +236,9 @@ def cb_no_death_clamp(val, ctx, owner):
     钳制必须吃在其他伤害修正之后、拿最终落血决定权。
     身份判定必须用 is：pydantic == 按字段值比较，镜像同配的双快照会误判。
     """
-    if owner is ctx.get_defender() and val >= owner.current_hp:
+    if owner is ctx.get_defender() and damage >= owner.current_hp:
         return max(0, owner.current_hp - 1)
-    return val
+    return damage
 
 
 @SkillRegistry.register_callback("cb_spirit_boost")
