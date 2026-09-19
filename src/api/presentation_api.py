@@ -14,6 +14,7 @@ from src.presentation.contracts import TimelineDocument
 from src import DataLoader
 from src.api.context import set_loader, get_loader
 from src.presentation.registry import initialize_shared_registry
+from src.models import PracticeScenarioKind
 
 # 数据库与用户系统
 from src.database import init_db, close_db
@@ -61,7 +62,7 @@ class PracticeScenarioItem(BaseModel):
     mecha_b_id: str   # 敌方（画面右侧）
     mecha_a_name: str
     mecha_b_name: str
-    kind: Literal["standard", "attack_test", "defense_test"]
+    kind: PracticeScenarioKind
 
 # ==============================================================================
 # 生命周期事件
