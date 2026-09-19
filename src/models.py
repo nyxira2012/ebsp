@@ -408,6 +408,25 @@ class InstanceConfig(BaseModel):
 
 
 # ============================================================================
+# 练习场配置模型 (Practice Ground - Doc 16)
+# ============================================================================
+
+class PracticeScenarioConfig(BaseModel):
+    """练习场对局配置 (data/practice_scenarios.json)
+
+    练习场是读配置的只读对战列表（Doc 16）：前端选一场后直接以
+    mecha_a_id/mecha_b_id 调 POST /battle/simulate。本配置不携带任何
+    图片资源引用——立绘由前端"配置 ID → 图片路径"对照表解析
+    （Doc 14 §9.1 裁决：后端契约只报 ID）。
+    """
+    id: str
+    name: str
+    description: str = ""
+    mecha_a_id: str   # 我方（画面左侧，Doc 14 §1.4 侧位命名）
+    mecha_b_id: str   # 敌方（画面右侧）
+
+
+# ============================================================================
 # 快照模型 (Runtime Snapshots) - Pydantic
 # ============================================================================
 

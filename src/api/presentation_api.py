@@ -6,7 +6,7 @@ FastAPI 主应用文件
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 from src.combat.engagement import Engagement
 from src.combat.entry import BattleEntryService
@@ -43,6 +43,18 @@ class BattleRequest(BaseModel):
     # 可选: 使用用户存档覆盖机体配置
     use_user_save_for_a: bool = False
     use_user_save_for_b: bool = False
+
+
+class PracticeScenarioItem(BaseModel):
+    """练习场对局条目（Doc 16）：契约只报配置 ID，不携带任何图片资源引用。
+
+    立绘解析归前端"配置 ID → 图片路径"对照表（Doc 14 §9.1 裁决）；
+    机体名称等档案信息随战斗数据 init 块下发，列表不重复。
+    """
+    name: str
+    description: str
+    mecha_a_id: str   # 我方（画面左侧）
+    mecha_b_id: str   # 敌方（画面右侧）
 
 # ==============================================================================
 # 生命周期事件
@@ -101,6 +113,29 @@ async def shutdown_event():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/battle/practice", response_model=List[PracticeScenarioItem])
+def list_practice_scenarios():
+    """
+    练习场对局列表（只读配置，Doc 16）。
+
+    - 纯静态投影：读 `data/practice_scenarios.json`，无状态、无鉴权、不触战斗引擎。
+    - 前端选一场后，以条目里的 `mecha_a_id` / `mecha_b_id` 直接调
+      `POST /battle/simulate`（列表不发明第二个开战入口）。
+    - 立绘规则（Doc 14 §9.1 裁决）：后端契约只报配置 ID，图片路径由前端
+      对照表解析，缺图走前端自有降级。
+    """
+    loader = get_loader()
+    return [
+        PracticeScenarioItem(
+            name=s.name,
+            description=s.description,
+            mecha_a_id=s.mecha_a_id,
+            mecha_b_id=s.mecha_b_id,
+        )
+        for s in loader.get_all_practice_scenarios()
+    ]
 
 @app.post("/battle/simulate", response_model=TimelineDocument)
 async def simulate_battle(

@@ -11,7 +11,8 @@ from pydantic import BaseModel
 
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
-    WeaponType, MothershipConfig, RegionConfig, AffixConfig, InstanceConfig
+    WeaponType, MothershipConfig, RegionConfig, AffixConfig, InstanceConfig,
+    PracticeScenarioConfig
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -37,6 +38,7 @@ class DataLoader:
         self.regions: Dict[str, RegionConfig] = {}
         self.affixes: Dict[str, AffixConfig] = {}
         self.instances: Dict[str, InstanceConfig] = {}
+        self.practice_scenarios: Dict[str, PracticeScenarioConfig] = {}
 
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
@@ -69,6 +71,12 @@ class DataLoader:
 
         # 7. 加载副本配置 (Doc 13)
         self._load_from_json("instances.json", InstanceConfig, self.instances)
+
+        # 8. 加载练习场对局配置 (Doc 16)：内容级配置，文件缺省=无练习场（不阻断启动）
+        practice_path = self.data_dir / "practice_scenarios.json"
+        if practice_path.exists():
+            self._load_from_json("practice_scenarios.json", PracticeScenarioConfig, self.practice_scenarios)
+            self._validate_practice_scenarios()
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T]) -> None:
         """通用的 JSON 加载方法"""
@@ -100,6 +108,17 @@ class DataLoader:
                 container[obj.id] = obj  # type: ignore
             except Exception as e:
                 print(f"加载 {filename} 中的项失败: {item.get('id', 'unknown')}. 错误: {e}")
+
+    def _validate_practice_scenarios(self) -> None:
+        """剔除引用了不存在机体的练习场条目（配置错误在加载期暴露，不进运行时）"""
+        invalid_ids = [
+            sid for sid, s in self.practice_scenarios.items()
+            if s.mecha_a_id not in self.mechas or s.mecha_b_id not in self.mechas
+        ]
+        for sid in invalid_ids:
+            scenario = self.practice_scenarios.pop(sid)
+            print(f"练习场配置引用了不存在的机体，已剔除: {sid} "
+                  f"(a={scenario.mecha_a_id}, b={scenario.mecha_b_id})")
 
     def _load_pilots_with_sub(self) -> None:
         """加载驾驶员和副驾驶配置，根据 type 字段区分"""
@@ -183,6 +202,10 @@ class DataLoader:
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""
         return [e for e in self.equipments.values() if e.type == "WEAPON"]
+
+    def get_all_practice_scenarios(self) -> List[PracticeScenarioConfig]:
+        """练习场对局列表（保持配置文件顺序，Doc 16）"""
+        return list(self.practice_scenarios.values())
 
     # ============= 兼容性方法 (用于测试) =============
     

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "practice_classic",
+    "name": "初次出击",
+    "description": "联邦的白色恶魔对阵红色彗星——一年战争的经典对局，攻防节奏均衡，适合第一场。",
+    "mecha_a_id": "mech_rx78",
+    "mecha_b_id": "mech_zaku"
+  },
+  {
+    "id": "practice_finale",
+    "name": "宿命对决",
+    "description": "ν高达与沙扎比的最终决战：双方火力与机动俱佳，暴击与招架的演出密度最高。",
+    "mecha_a_id": "mech_nu",
+    "mecha_b_id": "mech_sazabi"
+  },
+  {
+    "id": "practice_suppression",
+    "name": "扫荡工兵",
+    "description": "旧式防卫工兵几乎无力还手——想看碾压局伤害数字与击破链，选这一场。",
+    "mecha_a_id": "mech_rx78",
+    "mecha_b_id": "mech_grunt"
+  },
+  {
+    "id": "practice_boss",
+    "name": "失控的镇守原型机",
+    "description": "厚装甲的失控原型机。火力不足时会拖入判定长局，适合检验多回合续航与气力曲线。",
+    "mecha_a_id": "mech_nu",
+    "mecha_b_id": "mech_boss_weak"
+  }
+]
