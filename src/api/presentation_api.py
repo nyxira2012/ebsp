@@ -14,7 +14,7 @@ from src.presentation.contracts import TimelineDocument
 from src import DataLoader
 from src.api.context import set_loader, get_loader
 from src.presentation.registry import initialize_shared_registry
-from src.models import PracticeScenarioKind
+from src.models import PracticeScenarioKind, PracticeScenarioConfig
 
 # 数据库与用户系统
 from src.database import init_db, close_db
@@ -142,6 +142,9 @@ def list_practice_scenarios():
       对照表解析，缺图走前端自有降级。
     """
     loader = get_loader()
+    loader.practice_scenarios.clear()
+    loader._load_from_json("practice_scenarios.json", PracticeScenarioConfig, loader.practice_scenarios, keep_first=True)
+    loader._validate_practice_scenarios()
     return [
         PracticeScenarioItem(
             name=s.name,

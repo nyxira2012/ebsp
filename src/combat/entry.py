@@ -92,9 +92,8 @@ def _apply_environment(env: EnvironmentConfig, mecha_a: MechaSnapshot, mecha_b: 
     targets = {"a": (mecha_a,), "b": (mecha_b,), "all": (mecha_a, mecha_b)}
     for grant in env.grants:
         for snapshot in targets[grant.side]:
-            owned_ids = {effect.id for effect in snapshot.effects}
             for effect_id in grant.effect_ids:
-                if effect_id in owned_ids:
+                if any(e.id == effect_id for e in snapshot.effects):
                     continue
                 # 空创建 = 未定义效果 id：不告警会静默变成零效果标签，
                 # 环境承诺的保护（如力场免死）不存在却无迹可查（告警风格
@@ -105,7 +104,6 @@ def _apply_environment(env: EnvironmentConfig, mecha_a: MechaSnapshot, mecha_b: 
                     print(f"环境 {env.id} 引用了未定义的效果，未注入: {effect_id} (side={grant.side})")
                     continue
                 snapshot.effects.extend(created)
-                owned_ids.add(effect_id)
 
 
 class BattleEntryService:
@@ -187,7 +185,7 @@ class BattleEntryService:
             # BattleRequest 的 Literal 校验已挡住 pve/pvp 伪造）
             context=EngagementContext(
                 source=req.route,
-                environment_id=req.environment_id or "",
+                environment_id=req.environment_id,
             ),
         )
 

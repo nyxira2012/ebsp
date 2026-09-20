@@ -2,7 +2,7 @@
   {
     "id": "practice_classic",
     "name": "初次出击",
-    "description": "红色彗星的专用扎古在前方候着——一年战争的经典开局，对手火力与机动均衡，适合第一场。",
+    "description": "指挥官专用的红色高机动型扎古II。推力出色且配备机枪、热能斧与火箭筒全射程武装，作为检验常规机体综合实战能力的标准对手。",
     "environment_id": "env_field",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_zaku"
@@ -10,7 +10,7 @@
   {
     "id": "practice_finale",
     "name": "宿命对决",
-    "description": "沙扎比的重火力与高机动——终局级对手，暴击与招架的演出密度最高。",
+    "description": "集重装甲、大推力与浮游感应炮于一体的总帅专属机动兵器。具备顶级的近接格斗拦截与突防能力，专供精英机师挑战高强度攻坚极限。",
     "environment_id": "env_field",
     "mecha_a_id": "mech_nu",
     "mecha_b_id": "mech_sazabi"
@@ -18,7 +18,7 @@
   {
     "id": "practice_suppression",
     "name": "扫荡工兵",
-    "description": "旧式防卫工兵几乎无力还手——想轻松看一场碾压演出，选这场。",
+    "description": "落后于时代的基地警备与工程机体。反应迟缓、装甲薄弱且仅配有轻型机炮，适合作为新机出厂的基础射击与火控校验标靶。",
     "environment_id": "env_field",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_grunt"
@@ -26,7 +26,7 @@
   {
     "id": "practice_boss",
     "name": "失控的镇守原型机",
-    "description": "厚装甲的失控原型机。火力不足会拖入判定长局，适合检验多回合续航与气力曲线。",
+    "description": "据点防卫专用的重装甲原型机。装甲冗余极大且配备高能光束步枪，适合检验长盘拉锯下的能源续航与持续作战能力。",
     "environment_id": "env_field",
     "mecha_a_id": "mech_nu",
     "mecha_b_id": "mech_boss_weak"
@@ -34,7 +34,7 @@
   {
     "id": "practice_attack_dummy",
     "name": "木桩靶场",
-    "description": "全装甲测试木桩，血厚到单局能打约五十回合，手里只有威力约等于零的训练武器——站着挨打，专心看你的输出数字。",
+    "description": "加装全覆式抗冲击测试装甲的受击靶标。仅配发基础训练武器，【特别机制：持续50回合，低伤害反击】，专用于测定机体的持续火力输出与判定上限。",
     "environment_id": "env_target_range",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_dummy"
@@ -42,7 +42,7 @@
   {
     "id": "practice_defense_dummy",
     "name": "重火力木桩",
-    "description": "重火力测试木桩，光束步枪与重锤全火力招呼——但训练力场每回合结束把你的 HP 回满、且免于击破。看的是每回合被打穿多少、闪避/招架/格挡怎么触发；人不死，测试不中断。",
+    "description": "加装光束步枪与重型火箭炮的密集压制型测试靶标。【特别机制：持续50回合，自动回血】，专门用于检验机体的装甲承伤、回避与招架表现。",
     "environment_id": "env_training_field",
     "mecha_a_id": "mech_rx78",
     "mecha_b_id": "mech_defense_dummy"

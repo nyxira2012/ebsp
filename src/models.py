@@ -448,7 +448,7 @@ class PracticeScenarioConfig(BaseModel):
     id: str
     name: str
     description: str = ""
-    environment_id: str = "env_field"   # 缺省野战=零效果标签环境
+    environment_id: str   # 规则环境引用，缺省语义归数据文件（引用合法性归加载期交叉校验）
     mecha_a_id: str   # 我方（画面左侧，Doc 14 §1.4 侧位命名；登录时为演示/降级配置）
     mecha_b_id: str   # 敌方（画面右侧）
 

@@ -170,6 +170,7 @@ def test_loader_drops_scenarios_with_unknown_mecha():
     from src.models import PracticeScenarioConfig
     loader.practice_scenarios["broken"] = PracticeScenarioConfig(
         id="broken", name="坏条目", description="",
+        environment_id="env_field",
         mecha_a_id="mech_rx78", mecha_b_id="no_such_mecha",
     )
     loader._validate_practice_scenarios()

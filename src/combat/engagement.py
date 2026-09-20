@@ -55,7 +55,7 @@ class EngagementContext:
     不见环境。不进战报契约。
     """
     source: Route
-    environment_id: str = ""
+    environment_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,7 @@
 .DS_Store
 project_context.txt
 .claude/
+.zcode/
 docs/tmp/
 
 # Byte-compiled / optimized / DLL files
