@@ -359,6 +359,7 @@ class MechaFactory:
         # Construct snapshot
         return MechaSnapshot(
             instance_id=mecha_conf.id,
+            config_id=mecha_conf.id,
             mecha_name=mecha_conf.name,
             main_portrait=mecha_conf.portrait_id,
             model_asset=mecha_conf.model_asset,

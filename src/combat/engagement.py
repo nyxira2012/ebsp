@@ -91,6 +91,8 @@ def _build_profile(snapshot: MechaSnapshot) -> ParticipantProfile:
     """从冻结快照装配参战方档案（Doc 14 §4 init 块）。"""
     return ParticipantProfile(
         mecha_id=snapshot.instance_id,
+        # 立绘对照表的键：配置直构=instance_id 同值；存档机体=底层原型配置 ID
+        mecha_config_id=snapshot.config_id,
         name=snapshot.mecha_name,
         portrait=snapshot.main_portrait,
         hp=snapshot.current_hp,

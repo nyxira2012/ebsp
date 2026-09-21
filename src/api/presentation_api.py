@@ -22,7 +22,8 @@ from src.database.session import get_async_session
 from src.database.models import User
 from src.api import user_api, inventory_api, pve_api
 from src.user.dependencies import get_current_user
-from src.user.service import OnboardingService, SquadNotReadyError
+from src.user.service import SquadNotReadyError
+from src.user.repository import UserAssetRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 app = FastAPI(title="EBSP Combat Presentation API")
@@ -175,28 +176,35 @@ async def simulate_battle(
     - **mecha_b_id**: 机体 B 的配置 ID
     - **route**: 战报入口标记（debug/training，默认 debug）
     - **environment_id**: 规则环境 ID（可选，Doc 16 §5.3；None 不注入）
-    - **use_user_save_for_a**: 是否使用用户存档覆盖机体 A
-    - **use_user_save_for_b**: 是否使用用户存档覆盖机体 B
+    - **use_user_save_for_a**: 是否使用玩家配备机体覆盖 A 位
+    - **use_user_save_for_b**: 是否使用玩家配备机体覆盖 B 位
 
-    勾选 use_user_save 时从用户的出战存档加载机体配置；编队未就绪按
-    Doc 7 v2.2 §11.2 分流 400（STARTER_NOT_CLAIMED / NO_ACTIVE_SQUAD），
-    不再静默回退请求配置机体。不勾存档为纯配置模拟（沙盘推演语义），
-    照常可用。
+    勾选 use_user_save 时以**玩家持有的机体**替换（A=首台、B=次台）——
+    2026-09-22 修订（用户裁决：编队功能暂不开放，所有对战/练习一律开玩家
+    配备的机体）：出战机体自「出战编队首机」改为「持有清单取首台」，编队
+    不再参与战斗装配；未持有任何机体按 Doc 7 §11.2 修订分流 400
+    （STARTER_NOT_CLAIMED，前端引导前往整备库领取），原「无激活编队
+    400（NO_ACTIVE_SQUAD）」臂随编队退役出战斗路径。不勾存档为纯配置
+    模拟（沙盘推演语义），照常可用。
     """
     try:
         loader = get_loader()
 
-        # 编队就绪前置校验（批A）：勾存档覆盖但编队未就绪 → 400 分流。
-        # 纯配置请求（不勾 use_user_save）不受影响——沙盘推演语义（D7）。
-        # 校验通过的编队直接透传装配，免 build_debug 二次查询
-        active_squad = None
+        # 出战资格前置校验：勾存档覆盖但未持有任何机体 → 400 分流（预取的
+        # 持有清单直接透传装配，免二次查询）；纯配置请求不受影响（D7 沙盘语义）
+        owned_mechas = None
         if req.use_user_save_for_a or req.use_user_save_for_b:
-            active_squad = await OnboardingService.assert_squad_ready(session, current_user.id)
+            owned_mechas = await UserAssetRepository.list_user_mechas(session, current_user.id)
+            if not owned_mechas:
+                raise SquadNotReadyError(
+                    "STARTER_NOT_CLAIMED",
+                    "尚未配备出击机体，请先前往整备库领取（POST /user/mechas/claim-starter）",
+                )
 
         # 装配走收发室（红线 5：单点装配，E1 收编）；
         # 未知机体 ID → KeyError → 404（Doc 14 §2 契约）
         spec = await BattleEntryService.build_debug(
-            loader, req, current_user, session, active_squad=active_squad
+            loader, req, current_user, session, owned_mechas=owned_mechas
         )
 
         # 执行裁定：快照交裁判，拿完整战报（Doc 15 §5 simulate 行；

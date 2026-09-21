@@ -108,8 +108,10 @@ class SnapshotFactory:
             affix_configs=self.static_db.affixes if hasattr(self.static_db, 'affixes') else None
         )
 
-        # 覆盖实例 ID 和昵称（来自用户数据）
+        # 覆盖实例 ID 和昵称（来自用户数据）；config_id 保留底层原型配置 ID
+        # ——立绘对照/前端配置解析的键（Doc 14 §9.1），实例 id 只是身份
         mecha.instance_id = f"user_{user_id}_mech_{user_mecha_db.id}"
+        mecha.config_id = user_mecha_db.mech_id
         if user_mecha_db.nickname:
             mecha.mecha_name = user_mecha_db.nickname
 

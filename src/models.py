@@ -507,6 +507,9 @@ class MechaSnapshot(BaseModel):
 
     instance_id: str = "default_id"
     mecha_name: str = "DefaultMecha"
+    # 底层机体配置 ID（Doc 14 §9.1 立绘对照表的键）：配置直构时与 instance_id
+    # 同值；存档机体 instance_id 是 user_* 实例 id，立绘/配置解析须读此字段
+    config_id: Optional[str] = None
     
     # 资源管理
     main_portrait: str = "default_portrait"

@@ -152,6 +152,42 @@ async def test_claim_then_simulate_use_user_save_direct(async_client):
     assert resp.json()["meta"]["route"] == "debug"
 
 
+@pytest.mark.asyncio
+async def test_simulate_own_mecha_without_any_squad(async_client):
+    """2026-09-22 修订回归（编队暂不开放）：有机体、零编队 → 勾存档照样开自己的机体。
+
+    请求 A 位故意填与持有首机不同的演示配置——init 块必须落在持有首机上，
+    证明出战机体来自持有清单而非编队/请求配置。
+    """
+    await _register_and_login(async_client, "no_squad_pilot")
+    claim = (await async_client.post("/api/user/mechas/claim-starter")).json()
+
+    resp = await async_client.post("/battle/simulate", json={
+        "mecha_a_id": "mech_rx78",
+        "mecha_b_id": "mech_zaku",
+        "use_user_save_for_a": True,
+    })
+    assert resp.status_code == 200, resp.text
+    init_a = resp.json()["init"]["a"]
+    # 我方=持有首机实例（user_* 实例 id，非请求的演示配置）；立绘对照键回落配置 id
+    assert init_a["mecha_id"].startswith("user_") and init_a["mecha_id"] != "mech_rx78"
+    assert init_a["mecha_config_id"] == claim["mecha"]["mech_id"]
+
+
+@pytest.mark.asyncio
+async def test_simulate_without_mecha_400_starter_not_claimed(async_client):
+    """未持有机体勾存档出战 → 400 STARTER_NOT_CLAIMED（前端引导前往整备库）。"""
+    await _register_and_login(async_client, "bare_pilot")
+
+    resp = await async_client.post("/battle/simulate", json={
+        "mecha_a_id": "mech_rx78",
+        "mecha_b_id": "mech_zaku",
+        "use_user_save_for_a": True,
+    })
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["code"] == "STARTER_NOT_CLAIMED"
+
+
 # ============================================================================
 # 编队属主（§11.5 引用完整性 + 现状修补项）
 # ============================================================================

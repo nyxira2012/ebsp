@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.api.presentation_api import BattleRequest
-    from src.database.models import User, UserSquad
+    from src.database.models import User, UserMecha
 
 
 @dataclass
@@ -119,20 +119,26 @@ class BattleEntryService:
         req: "BattleRequest",
         user: "User",
         db_session: "AsyncSession",
-        active_squad: "UserSquad | None" = None,
+        owned_mechas: "list[UserMecha] | None" = None,
     ) -> EngagementSpec:
         """调试来源装配（POST /battle/simulate 专用，Doc 15 §5 消费方表）。
 
-        静态配置直构快照；勾存档覆盖时用出战编队阵容覆盖（simulate 已
+        静态配置直构快照；勾存档覆盖时用**玩家持有的机体**替换（simulate 已
         强制登录，Doc 7 v2.2 §11.1 批B——user=None 匿名分支废除）。
+
+        2026-09-22 修订（用户裁决：编队功能暂不开放，所有对战/练习一律开
+        玩家配备的机体）：出战机体自出战编队改为**持有清单取首台**（B 位
+        次台、仅一台时复用首台），编队不参与战斗装配——无编队不再是降级
+        或拦截条件，只要持有即出战。
 
         Args:
             loader: 静态资源加载器。
             req: 调试请求（双方机体 ID、入口标记、存档覆盖开关与可选规则环境）。
             user: 当前登录用户（simulate 401 收口后不再有匿名调用方）。
             db_session: 数据库会话（用户存档查询用）。
-            active_squad: 预校验的出战编队——调用方已做就绪校验（assert_squad_ready）
-                时透传，免二次查询；None 时按需自行取。
+            owned_mechas: 预取的玩家持有机体列表——调用方已做出战资格校验
+                （无机体 → 400 STARTER_NOT_CLAIMED）时透传，免二次查询；
+                None 时按需自行取。
 
         Returns:
             EngagementSpec: 值冻结的战斗委托（source 取 req.route，Doc 14 v1.7）。
@@ -148,26 +154,23 @@ class BattleEntryService:
         mecha_a = MechaFactory.create_mecha_snapshot(config_a, weapon_configs=loader.equipments)
         mecha_b = MechaFactory.create_mecha_snapshot(config_b, weapon_configs=loader.equipments)
 
-        # 勾了存档覆盖则加载出战小队阵容覆盖（未勾覆盖时编队用不上，不白查）
+        # 勾了存档覆盖则以玩家持有机体替换（未勾覆盖时玩家机体用不上，不白查）
         if req.use_user_save_for_a or req.use_user_save_for_b:
-            if active_squad is None:
-                active_squad = await UserAssetRepository.get_active_squad(db_session, user.id)
+            mechas = owned_mechas
+            if mechas is None:
+                mechas = await UserAssetRepository.list_user_mechas(db_session, user.id)
 
-            if active_squad is not None and len(active_squad.mecha_ids) > 0:
+            if mechas:
                 try:
                     factory = SnapshotFactory(loader, UserAssetRepository())
-                    user_mechas = active_squad.mecha_ids
 
-                    # 取出战小队的第一台和第二台机体进行覆盖
-                    # 实际业务中应配合请求参数选择出战序号，此处作为平滑过渡
-                    if req.use_user_save_for_a and len(user_mechas) > 0:
-                        mecha_a = await factory.create_combat_snapshot(db_session, user.id, user_mechas[0])
+                    # A 位 = 持有首台；B 位 = 次台（仅一台时复用首台，平滑过渡保留）
+                    if req.use_user_save_for_a:
+                        mecha_a = await factory.create_combat_snapshot(db_session, user.id, mechas[0].id)
 
-                    if req.use_user_save_for_b and len(user_mechas) > 1:
-                        mecha_b = await factory.create_combat_snapshot(db_session, user.id, user_mechas[1])
-                    elif req.use_user_save_for_b and len(user_mechas) > 0:
-                        # 兜底：如果选了B但只有一个机甲，用那个
-                        mecha_b = await factory.create_combat_snapshot(db_session, user.id, user_mechas[0])
+                    if req.use_user_save_for_b:
+                        second_id = mechas[1].id if len(mechas) > 1 else mechas[0].id
+                        mecha_b = await factory.create_combat_snapshot(db_session, user.id, second_id)
 
                 except (ValueError, KeyError) as e:
                     # 养成数据无效/引用未知机体，忽略并使用默认配置

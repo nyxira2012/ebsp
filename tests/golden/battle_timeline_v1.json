@@ -7,6 +7,7 @@
   "init": {
     "a": {
       "mecha_id": "m_rx78",
+      "mecha_config_id": null,
       "name": "RX-78高达",
       "portrait": "m_gundam",
       "hp": 5500,
@@ -23,6 +24,7 @@
     },
     "b": {
       "mecha_id": "m_zaku",
+      "mecha_config_id": null,
       "name": "扎古II",
       "portrait": "m_zaku",
       "hp": 4500,

@@ -245,8 +245,11 @@ class UserAssetRepository:
 
     @staticmethod
     async def list_user_mechas(session: AsyncSession, user_id: int) -> List[UserMecha]:
+        """按持有先后（id 升序）列出玩家机体——战斗装配取「持有首台」的次序依据（2026-09-22）。"""
         result = await session.execute(
-            select(UserMecha).where(UserMecha.user_id == user_id)
+            select(UserMecha)
+            .where(UserMecha.user_id == user_id)
+            .order_by(UserMecha.id)
         )
         return list(result.scalars().all())
 

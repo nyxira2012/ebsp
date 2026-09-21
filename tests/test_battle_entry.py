@@ -216,18 +216,19 @@ async def test_build_debug_user_save_degrades_on_unknown_mecha(real_loader, monk
     """404 边界：存档覆盖段引用未知机体 → 降级默认配置，不向 handler 抛 KeyError。
 
     请求 ID 校验在存档段罩外——404 爆炸半径只覆盖请求字段失败（Doc 14 §2）。
+    2026-09-22：出战机体自编队改为持有清单取首台，桩同步换 list_user_mechas。
     """
     from src.api.presentation_api import BattleRequest
     from src.core.factory import SnapshotFactory
     from src.user.repository import UserAssetRepository
 
-    async def _fake_get_active_squad(session, user_id):
-        return SimpleNamespace(mecha_ids=[999])
+    async def _fake_list_user_mechas(session, user_id):
+        return [SimpleNamespace(id=999)]
 
     async def _raise_key_error(self, session, user_id, mecha_id):
         raise KeyError(f"机体配置不存在: {mecha_id}")
 
-    monkeypatch.setattr(UserAssetRepository, "get_active_squad", staticmethod(_fake_get_active_squad))
+    monkeypatch.setattr(UserAssetRepository, "list_user_mechas", staticmethod(_fake_list_user_mechas))
     monkeypatch.setattr(SnapshotFactory, "create_combat_snapshot", _raise_key_error)
 
     req = BattleRequest(mecha_a_id="mech_rx78", mecha_b_id="mech_zaku", use_user_save_for_a=True)
@@ -237,6 +238,37 @@ async def test_build_debug_user_save_degrades_on_unknown_mecha(real_loader, monk
         real_loader.get_mecha_config("mech_rx78"), weapon_configs=real_loader.equipments)
     assert spec.mecha_a == expected_a  # 降级回静态默认配置
     assert "使用默认配置" in capsys.readouterr().out
+
+
+async def test_build_debug_user_save_uses_first_owned_mecha(real_loader, monkeypatch):
+    """2026-09-22 修订回归：勾存档覆盖 → A 位 = 持有首台（与编队无关）。
+
+    持有两台时 A=首台、B（勾选时）=次台；本用例钉 A 位与请求配置不同，
+    证明覆盖真生效（非演示配置直落）。
+    """
+    from src.api.presentation_api import BattleRequest
+    from src.core.factory import SnapshotFactory
+    from src.user.repository import UserAssetRepository
+
+    captured: dict = {}
+
+    async def _fake_list_user_mechas(session, user_id):
+        return [SimpleNamespace(id=11), SimpleNamespace(id=12)]
+
+    async def _fake_snapshot(self, session, user_id, mecha_id):
+        captured[mecha_id] = True
+        return MechaFactory.create_mecha_snapshot(
+            real_loader.get_mecha_config("mech_grunt"), weapon_configs=real_loader.equipments)
+
+    monkeypatch.setattr(UserAssetRepository, "list_user_mechas", staticmethod(_fake_list_user_mechas))
+    monkeypatch.setattr(SnapshotFactory, "create_combat_snapshot", _fake_snapshot)
+
+    req = BattleRequest(mecha_a_id="mech_rx78", mecha_b_id="mech_zaku",
+                        use_user_save_for_a=True, use_user_save_for_b=True)
+    spec = await BattleEntryService.build_debug(real_loader, req, SimpleNamespace(id=1), None)
+
+    assert captured == {11: True, 12: True}  # A=首台 11、B=次台 12
+    assert spec.mecha_a.mecha_name == real_loader.get_mecha_config("mech_grunt").name
 
 
 # ============================================================================

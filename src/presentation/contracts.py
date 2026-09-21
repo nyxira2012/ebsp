@@ -42,6 +42,10 @@ class PilotProfile(BaseModel):
 class ParticipantProfile(BaseModel):
     """参战方档案与数值初值（Doc 14 §4 init 块），供前端作战板初始化。"""
     mecha_id: str
+    # 底层机体配置 ID（Doc 14 v1.10 非破坏性增补，2026-09-22）：配置直构机体
+    # 与 mecha_id 同值；存档机体 mecha_id 是 user_* 实例 id，前端立绘对照表
+    # （§9.1）与配置解析须以此字段为键。仍不是图片路径——红线不破（Doc 16 §4）
+    mecha_config_id: Optional[str] = None
     name: str
     portrait: str
     hp: int
