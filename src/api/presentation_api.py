@@ -14,14 +14,15 @@ from src.presentation.contracts import TimelineDocument
 from src import DataLoader
 from src.api.context import set_loader, get_loader
 from src.presentation.registry import initialize_shared_registry
-from src.models import PracticeScenarioKind, PracticeScenarioConfig
+from src.models import PracticeScenarioKind
 
 # 数据库与用户系统
 from src.database import init_db, close_db
 from src.database.session import get_async_session
 from src.database.models import User
 from src.api import user_api, inventory_api, pve_api
-from src.user.dependencies import get_optional_user
+from src.user.dependencies import get_current_user
+from src.user.service import OnboardingService, SquadNotReadyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 app = FastAPI(title="EBSP Combat Presentation API")
@@ -131,20 +132,18 @@ def health():
 
 
 @app.get("/battle/practice", response_model=List[PracticeScenarioItem])
-def list_practice_scenarios():
+def list_practice_scenarios(current_user: User = Depends(get_current_user)):
     """
     练习场对局列表（只读配置，Doc 16）。
 
-    - 纯静态投影：读 `data/practice_scenarios.json`，无状态、无鉴权、不触战斗引擎。
+    - 纯静态投影：读 `data/practice_scenarios.json`，无状态、不触战斗引擎；
+      强制登录（Doc 7 §11.1 批B 401 收口，v1.0"无鉴权只读"裁决随之废除）。
     - 前端选一场后，以条目里的 `mecha_a_id` / `mecha_b_id` 直接调
       `POST /battle/simulate`（列表不发明第二个开战入口）。
     - 立绘规则（Doc 14 §9.1 裁决）：后端契约只报配置 ID，图片路径由前端
       对照表解析，缺图走前端自有降级。
     """
     loader = get_loader()
-    loader.practice_scenarios.clear()
-    loader._load_from_json("practice_scenarios.json", PracticeScenarioConfig, loader.practice_scenarios, keep_first=True)
-    loader._validate_practice_scenarios()
     return [
         PracticeScenarioItem(
             name=s.name,
@@ -166,27 +165,39 @@ def list_practice_scenarios():
 @app.post("/battle/simulate", response_model=TimelineDocument)
 async def simulate_battle(
     req: BattleRequest,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     """
-    模拟战斗
+    模拟战斗（强制登录，Doc 7 §11.1 批B 401 收口）
 
     - **mecha_a_id**: 机体 A 的配置 ID
     - **mecha_b_id**: 机体 B 的配置 ID
     - **route**: 战报入口标记（debug/training，默认 debug）
     - **environment_id**: 规则环境 ID（可选，Doc 16 §5.3；None 不注入）
-    - **use_user_save_for_a**: 是否使用用户存档覆盖机体 A (需要登录)
-    - **use_user_save_for_b**: 是否使用用户存档覆盖机体 B (需要登录)
+    - **use_user_save_for_a**: 是否使用用户存档覆盖机体 A
+    - **use_user_save_for_b**: 是否使用用户存档覆盖机体 B
 
-    如果用户已登录并设置 use_user_save，则从用户的出战存档加载机体配置。
+    勾选 use_user_save 时从用户的出战存档加载机体配置；编队未就绪按
+    Doc 7 v2.2 §11.2 分流 400（STARTER_NOT_CLAIMED / NO_ACTIVE_SQUAD），
+    不再静默回退请求配置机体。不勾存档为纯配置模拟（沙盘推演语义），
+    照常可用。
     """
     try:
         loader = get_loader()
 
+        # 编队就绪前置校验（批A）：勾存档覆盖但编队未就绪 → 400 分流。
+        # 纯配置请求（不勾 use_user_save）不受影响——沙盘推演语义（D7）。
+        # 校验通过的编队直接透传装配，免 build_debug 二次查询
+        active_squad = None
+        if req.use_user_save_for_a or req.use_user_save_for_b:
+            active_squad = await OnboardingService.assert_squad_ready(session, current_user.id)
+
         # 装配走收发室（红线 5：单点装配，E1 收编）；
         # 未知机体 ID → KeyError → 404（Doc 14 §2 契约）
-        spec = await BattleEntryService.build_debug(loader, req, current_user, session)
+        spec = await BattleEntryService.build_debug(
+            loader, req, current_user, session, active_squad=active_squad
+        )
 
         # 执行裁定：快照交裁判，拿完整战报（Doc 15 §5 simulate 行；
         # 契约即响应模型，序列化漏字段在结构上不可能——红线 1）
@@ -198,6 +209,8 @@ async def simulate_battle(
         raise HTTPException(status_code=404, detail="机体配置不存在")
     except HTTPException:
         raise
+    except SquadNotReadyError as e:
+        raise HTTPException(status_code=400, detail={"code": e.code, "message": e.message})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

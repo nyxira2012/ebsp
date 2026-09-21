@@ -26,8 +26,10 @@ from src.user.schemas import (
     MothershipCatalogItem,
     MothershipPurchaseRequest,
     MothershipSwitchRequest,
+    StarterClaimResponse,
 )
 from src.user.repository import UserRepository, UserAssetRepository, MothershipRepository
+from src.user.service import MechasNotOwnedError, OnboardingService, SquadNotReadyError
 from src.user.auth import create_access_token
 from src.user.dependencies import get_current_user
 
@@ -81,9 +83,51 @@ async def login(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
-    """获取当前用户信息"""
-    return UserResponse.model_validate(current_user)
+    """获取当前用户信息（含新号引导状态位，Doc 7 v2.2 §11.4）"""
+    resp = UserResponse.model_validate(current_user)
+    mechas = await UserAssetRepository.list_user_mechas(session, current_user.id)
+    resp.has_mecha = bool(mechas)
+    resp.has_active_squad = await UserAssetRepository.get_active_squad(session, current_user.id) is not None
+    return resp
+
+# ==============================================================================
+# 初始机体领取（Doc 7 v2.2 §11.4）
+# ==============================================================================
+
+@router.post("/mechas/claim-starter", response_model=StarterClaimResponse)
+async def claim_starter_mecha(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """领取初始机体：授予旧式防卫工兵一台 + 编队补齐并激活，一步到位可玩"""
+    result = await OnboardingService.claim_starter(session, current_user.id)
+
+    if not result["claimed"]:
+        # 409 终态等价成功语义：detail 附当前首机与出战编队摘要，
+        # 超时重试的前端据此自愈展示，不弹"领取失败"
+        mecha = UserMechaDB.model_validate(result["mecha"])
+        squad = (
+            UserSquadDB.model_validate(result["squad"])
+            if result["squad"] is not None
+            else None
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "STARTER_ALREADY_CLAIMED",
+                "message": "初始机体已领取过",
+                "mecha": mecha.model_dump(mode="json"),
+                "squad": squad.model_dump(mode="json") if squad else None,
+            },
+        )
+
+    await session.commit()
+    return StarterClaimResponse(
+        mecha=UserMechaDB.model_validate(result["mecha"]),
+        squad=UserSquadDB.model_validate(result["squad"]),
+    )
 
 # ==============================================================================
 # 资产与编队 API (部分示例)
@@ -105,7 +149,18 @@ async def create_squad(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """创建一个新编队"""
+    """创建一个新编队（成员归属校验：他人机体 ID → 400，Doc 7 v2.2 §11.5）"""
+    try:
+        await OnboardingService.assert_mechas_owned(session, current_user.id, mecha_ids)
+    except MechasNotOwnedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": e.code,
+                "message": "编队包含不属于你的机体",
+                "mecha_ids": e.mecha_ids,
+            },
+        )
     squad = await UserAssetRepository.create_user_squad(session, current_user.id, name, mecha_ids)
     await session.commit()
     return UserSquadDB.model_validate(squad)

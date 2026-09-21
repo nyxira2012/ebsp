@@ -99,9 +99,17 @@ def pve_sessions():
 
 @pytest.fixture
 async def auth_client(async_client, db_session):
-    """登录态客户端：建用户 → 登录 → 带 Bearer 头（对齐 test_inventory_api 模式）。"""
+    """登录态客户端：建用户 → 登录 → 带 Bearer 头（对齐 test_inventory_api 模式）。
+
+    engage/extract 现读玩家母舰记录（ms_01 拆雷，Doc 7 v2.2 §11.8），
+    用户须带默认母舰行——直接走注册流程同款 create_default。
+    """
+    from src.user.repository import MothershipRepository
+
     user = User(username="replay_user", password_hash=hash_password("pass123"))
     db_session.add(user)
+    await db_session.flush()
+    await MothershipRepository.create_default(db_session, user.id)
     await db_session.commit()
 
     resp = await async_client.post(
@@ -114,8 +122,8 @@ async def auth_client(async_client, db_session):
 
 @pytest.fixture
 def patched_mothership(monkeypatch):
-    """engage 端点硬编码的母舰 ID（ms_01）不在真实数据中——实例级替换
-    get_mothership_config 回退到数值替身（预存 Mock，非本批引入）。"""
+    """engage 端点现读玩家母舰记录（current_id=light_corvette，真实存在），
+    但本套件用数值替身稳定回能断言——实例级替换 get_mothership_config。"""
     from src.api.context import get_loader
     loader = get_loader()
     monkeypatch.setattr(

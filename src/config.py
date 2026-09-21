@@ -25,7 +25,6 @@ class Config:
     
     # ========== PVE 装配缺省资源 ID ==========
     # 收发室（entry）与锁定回退（services）共用的兜底口径；数据侧声明缺省前先在此收口
-    DEFAULT_PLAYER_MECHA_ID = "rx78"
     DEFAULT_ENEMY_TEMPLATE_ID = "zaku2"
     DEFAULT_ENEMY_MECHA_ID = "mech_grunt"
 

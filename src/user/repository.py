@@ -66,7 +66,7 @@ class UserRepository:
             raise ValueError(f"用户名 '{user_data.username}' 已存在")
 
     @staticmethod
-    async def get_by_id(session: AsyncSession, user_id: int) -> Optional[User]:
+    async def get_by_id(session: AsyncSession, user_id: int, for_update: bool = False) -> Optional[User]:
         """
         根据 ID 获取用户
 
@@ -75,15 +75,17 @@ class UserRepository:
         Args:
             session: 数据库会话
             user_id: 用户 ID
+            for_update: 是否加行锁（并发写同用户状态的场景，如领取初始机体）
 
         Returns:
             用户对象，不存在或已删除返回 None
         """
-        result = await session.execute(
-            select(User).where(
-                and_(User.id == user_id, User.deleted_at.is_(None))
-            )
+        stmt = select(User).where(
+            and_(User.id == user_id, User.deleted_at.is_(None))
         )
+        if for_update:
+            stmt = stmt.with_for_update()
+        result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -249,6 +251,14 @@ class UserAssetRepository:
         return list(result.scalars().all())
 
     @staticmethod
+    async def list_user_mecha_ids(session: AsyncSession, user_id: int) -> set:
+        """当前用户名下机体 ID 集合（ID 投影：归属校验只需 ID，不整行水合）"""
+        result = await session.execute(
+            select(UserMecha.id).where(UserMecha.user_id == user_id)
+        )
+        return set(result.scalars().all())
+
+    @staticmethod
     async def update_mecha_upgrades(
         session: AsyncSession, user_mecha_id: int, upgrades: dict
     ) -> Optional[UserMecha]:
@@ -287,7 +297,16 @@ class UserAssetRepository:
                 and_(UserSquad.user_id == user_id, UserSquad.is_active == True)
             )
         )
-        return result.scalar_one_or_none()
+        # first() 而非 scalar_one_or_none()：存量数据可能出现双 is_active，
+        # 后者抛 MultipleResultsFound（500），绕过调用方的未就绪 400 语义
+        return result.scalars().first()
+
+    @staticmethod
+    async def list_user_squads(session: AsyncSession, user_id: int) -> List[UserSquad]:
+        result = await session.execute(
+            select(UserSquad).where(UserSquad.user_id == user_id)
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def set_active_squad(session: AsyncSession, user_id: int, squad_id: int) -> Optional[UserSquad]:
@@ -297,19 +316,22 @@ class UserAssetRepository:
             .where(and_(UserSquad.user_id == user_id, UserSquad.is_active == True))
             .values(is_active=False)
         )
-        
-        # 将选中编队设为 Active
+
+        # 将选中编队设为 Active（user_id 过滤：仅凭 squad_id 会激活他人编队，
+        # Doc 7 v2.2 §11.5 现状修补项）
         result = await session.execute(
-            select(UserSquad).where(UserSquad.id == squad_id)
+            select(UserSquad).where(
+                and_(UserSquad.id == squad_id, UserSquad.user_id == user_id)
+            )
         )
         db_squad = result.scalar_one_or_none()
-        
+
         if db_squad:
             db_squad.is_active = True
             db_squad.updated_at = datetime.now(timezone.utc)
             await session.flush()
             await session.refresh(db_squad)
-            
+
         return db_squad
 
 # --- Equipment (装备) 系列操作 ---

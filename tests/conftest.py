@@ -1102,3 +1102,25 @@ async def async_client(test_app):
     ) as client:
         yield client
 
+
+@pytest.fixture
+async def authenticated_client(async_client, db_session):
+    """
+    注册并登录一个用户，返回 (client, user)；client 已注入 Bearer 头。
+
+    批B（Doc 7 v2.2 §11.1）401 收口后的共享夹具——仿 test_inventory_api.py
+    同名夹具上提；后者因需初始化母舰保留本地特化版（同名遮蔽本通用版）。
+    """
+    from src.database.models import User
+    from src.user.security import hash_password
+
+    user = User(username="auth_user", password_hash=hash_password("pass123"))
+    db_session.add(user)
+    await db_session.flush()
+
+    resp = await async_client.post(
+        "/api/user/login", json={"username": "auth_user", "password": "pass123"}
+    )
+    assert resp.status_code == 200, resp.text
+    async_client.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
+    return async_client, user

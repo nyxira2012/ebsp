@@ -19,7 +19,7 @@ from .schemas import (
 )
 from .repository import UserRepository, UserAssetRepository
 from .auth import create_access_token, decode_access_token, SECRET_KEY, ALGORITHM
-from .dependencies import get_current_user, get_optional_user
+from .dependencies import get_current_user
 
 __all__ = [
     # 安全
@@ -46,5 +46,4 @@ __all__ = [
     "ALGORITHM",
     # Dependencies
     "get_current_user",
-    "get_optional_user",
 ]

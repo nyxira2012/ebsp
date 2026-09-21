@@ -37,10 +37,16 @@ class UserCreate(UserBase):
         return v
 
 class UserResponse(UserBase):
-    """用户响应模型"""
+    """用户响应模型
+
+    has_mecha / has_active_squad 为新号引导状态位（Doc 7 v2.2 §11.4）：
+    前端据此主动触发领取引导，而非等玩家踩 400 被动发现。
+    """
     id: int
     status: str
     created_at: datetime
+    has_mecha: bool = False
+    has_active_squad: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -143,6 +149,11 @@ class UserSquadDB(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+class StarterClaimResponse(BaseModel):
+    """初始机体领取响应（Doc 7 v2.2 §11.4）"""
+    mecha: UserMechaDB
+    squad: UserSquadDB
 
 class BattleRecordDB(BaseModel):
     id: int

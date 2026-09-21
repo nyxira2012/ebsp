@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.api.presentation_api import BattleRequest
-    from src.database.models import User
+    from src.database.models import User, UserSquad
 
 
 @dataclass
@@ -117,19 +117,22 @@ class BattleEntryService:
     async def build_debug(
         loader: Any,
         req: "BattleRequest",
-        user: "User | None",
+        user: "User",
         db_session: "AsyncSession",
+        active_squad: "UserSquad | None" = None,
     ) -> EngagementSpec:
         """调试来源装配（POST /battle/simulate 专用，Doc 15 §5 消费方表）。
 
-        静态配置直构快照；登录用户可请求用出战存档覆盖（覆盖失败
-        降级回静态配置）。行为自旧 simulate handler 原样搬移。
+        静态配置直构快照；勾存档覆盖时用出战编队阵容覆盖（simulate 已
+        强制登录，Doc 7 v2.2 §11.1 批B——user=None 匿名分支废除）。
 
         Args:
             loader: 静态资源加载器。
             req: 调试请求（双方机体 ID、入口标记、存档覆盖开关与可选规则环境）。
-            user: 当前登录用户（匿名为 None）。
+            user: 当前登录用户（simulate 401 收口后不再有匿名调用方）。
             db_session: 数据库会话（用户存档查询用）。
+            active_squad: 预校验的出战编队——调用方已做就绪校验（assert_squad_ready）
+                时透传，免二次查询；None 时按需自行取。
 
         Returns:
             EngagementSpec: 值冻结的战斗委托（source 取 req.route，Doc 14 v1.7）。
@@ -145,9 +148,10 @@ class BattleEntryService:
         mecha_a = MechaFactory.create_mecha_snapshot(config_a, weapon_configs=loader.equipments)
         mecha_b = MechaFactory.create_mecha_snapshot(config_b, weapon_configs=loader.equipments)
 
-        # 如果用户已登录，尝试加载出战小队阵容覆盖
-        if user is not None:
-            active_squad = await UserAssetRepository.get_active_squad(db_session, user.id)
+        # 勾了存档覆盖则加载出战小队阵容覆盖（未勾覆盖时编队用不上，不白查）
+        if req.use_user_save_for_a or req.use_user_save_for_b:
+            if active_squad is None:
+                active_squad = await UserAssetRepository.get_active_squad(db_session, user.id)
 
             if active_squad is not None and len(active_squad.mecha_ids) > 0:
                 try:
@@ -202,8 +206,8 @@ class BattleEntryService:
     ) -> tuple[EngagementSpec, PveAssemblyContext]:
         """PVE 接敌装配（Doc 15 §5：会话还原 + 事件点实例化）。
 
-        我方从 locked_config 还原（回退链 snapshot_dict → mecha_id →
-        默认机体），时间回能与残血注入全部算进快照——不触碰
+        我方从 locked_config 还原（snapshot_dict → mecha_id，缺配即
+        ValueError），时间回能与残血注入全部算进快照——不触碰
         PveEntityState（失败原子的前提）；敌方由事件点模板 + 缩放
         实例化，已接敌过的事件点注入敌方残血。全程不 mutate session。
 
@@ -224,25 +228,31 @@ class BattleEntryService:
         Raises:
             ValueError: 当 event_index 在序列中越界时。
         """
-        # 1. 还原己方机体（回退链 snapshot_dict → mecha_id → 默认机体）
+        # 1. 还原己方机体（snapshot_dict → mecha_id，双链都缺即缺陷：
+        # 默认机体静默回退已废除——Doc 7 v2.2 §11.2 rx78 假 ID 地雷拆除，
+        # enter 期 400 后不可达，此处显式失败）
         player_state = session.squad_state.members[player_index]
 
         mechas_config = session.squad_state.locked_config.get("mechas", [])
-        if player_index < len(mechas_config):
-            m_config_data = mechas_config[player_index]
-            snapshot_dict = m_config_data.get("snapshot_dict")
+        if player_index >= len(mechas_config):
+            raise ValueError(
+                f"PVE 锁定配置缺成员快照（成员下标 {player_index}，共 {len(mechas_config)} 台）"
+            )
 
-            if snapshot_dict:
-                player_snapshot = MechaSnapshot.model_validate(snapshot_dict)
-            else:
-                mecha_id = m_config_data.get("mecha_id", Config.DEFAULT_PLAYER_MECHA_ID)
-                try:
-                    mecha_config = loader.get_mecha_config(mecha_id)
-                except KeyError:
-                    mecha_config = loader.get_mecha_config(Config.DEFAULT_PLAYER_MECHA_ID)
-                player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
+        m_config_data = mechas_config[player_index]
+        snapshot_dict = m_config_data.get("snapshot_dict")
+
+        if snapshot_dict:
+            player_snapshot = MechaSnapshot.model_validate(snapshot_dict)
         else:
-            mecha_config = loader.get_mecha_config(Config.DEFAULT_PLAYER_MECHA_ID)
+            mecha_id = m_config_data.get("mecha_id")
+            if not mecha_id:
+                raise ValueError("PVE 锁定配置缺 mecha_id 且无快照，无法还原机体")
+            try:
+                mecha_config = loader.get_mecha_config(mecha_id)
+            except KeyError:
+                # 引用未知机体同属缺陷级，统一 ValueError（Doc 7 v2.2 §11.2）
+                raise ValueError(f"PVE 锁定配置引用未知机体: {mecha_id}")
             player_snapshot = mecha_factory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
 
         # 2. 时间回能 + 残血注入：算进快照拷贝，不触碰 PveEntityState（失败原子）

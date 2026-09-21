@@ -220,43 +220,42 @@ class TestPveEntryService:
         assert locked_config["mechas"][0]["user_mecha_id"] == 1
 
     @pytest.mark.asyncio
-    async def test_prepare_locked_config_empty_with_fallback(self, mock_loader):
-        """测试空机体列表时使用 fallback"""
+    async def test_prepare_locked_config_empty_falls_back_to_demo(self, mock_loader):
+        """空锁定列表（且无出战编队）→ 回退演示机体（Doc 7 v2.3 §11.2
+        开发期放宽：编队不再强制；v2.2 的显式 ValueError 仅剩演示配置
+        缺失的缺陷级场景）"""
         db = Mock(spec=AsyncSession)
 
-        # Mock 失败的 snapshot_factory
-        snapshot_factory = Mock()
-        snapshot_factory.create_combat_snapshot = AsyncMock(side_effect=ValueError("Not found"))
-
-        # 为 loader 提供更完整的 mock，避免 fallback 逻辑出错
-        from src.models import MechaConfig
-        mock_loader.get_mecha_config.return_value = MechaConfig(
-            id="rx78",
-            name="RX-78",
-            portrait_id="m_rx78",
-            series="RX",
-            init_hp=5000,
-            init_en=100,
-            init_armor=1000,
-            init_mobility=100,
-            init_hit=10.0,
-            init_precision=10.0,
-            init_crit=5.0,
-            init_dodge=10.0,
-            init_parry=10.0,
-            init_block=10.0,
-            init_block_red=500,
-            slots=[],
-            fixed_weapons=[]
-        )
+        # 空锁定列表会取出战编队（无 → None）
+        mock_result = Mock()
+        mock_result.scalars.return_value.first.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
 
         locked_config = await PveEntryService._prepare_locked_config(
-            db, user_id=1, locked_mecha_ids=[], loader=mock_loader, snapshot_factory=snapshot_factory
+            db, user_id=1, locked_mecha_ids=[], loader=mock_loader, snapshot_factory=Mock()
         )
 
-        assert "mechas" in locked_config
-        # 应该使用 fallback 逻辑创建默认机体
-        assert len(locked_config["mechas"]) >= 0
+        assert len(locked_config["mechas"]) == 1
+        demo = locked_config["mechas"][0]
+        # 演示回退走静态配置工厂，无 user_mecha_id（与养成快照区分）
+        assert "user_mecha_id" not in demo
+        assert demo["mecha_id"] == "rx78"  # mock_loader 配置的 instance_id
+        assert demo["snapshot_dict"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_locked_config_demo_config_missing_raises(self, mock_loader):
+        """回退兜底也失败（演示机体配置缺失）→ 显式 ValueError（缺陷级）"""
+        db = Mock(spec=AsyncSession)
+        mock_loader.get_mecha_config = Mock(side_effect=KeyError("mech_rx78"))
+
+        mock_result = Mock()
+        mock_result.scalars.return_value.first.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(ValueError, match="演示机体配置缺失"):
+            await PveEntryService._prepare_locked_config(
+                db, user_id=1, locked_mecha_ids=[], loader=mock_loader, snapshot_factory=Mock()
+            )
 
     @pytest.mark.asyncio
     async def test_prepare_locked_config_exception_continues(self, mock_loader):
@@ -283,7 +282,7 @@ class TestPveEntryService:
         assert len(locked_config["mechas"]) == 1
 
     @pytest.mark.asyncio
-    async def test_enter_region_basic(self, reset_session_manager, mock_loader):
+    async def test_enter_region_basic(self, reset_session_manager, mock_loader, monkeypatch):
         """测试基本进入区域流程"""
         db = Mock(spec=AsyncSession)
 
@@ -295,7 +294,8 @@ class TestPveEntryService:
         db.refresh = AsyncMock()
         db.add = Mock()
 
-        # Mock snapshot_factory
+        # 快照工厂替身：enter_region 内部自建 SnapshotFactory（真工厂在 Mock db
+        # 上必然失败→空编队 ValueError），注入替身锁定一台有效机体
         snapshot_factory = Mock()
         snapshot_factory.create_combat_snapshot = AsyncMock(
             return_value=Mock(
@@ -304,6 +304,9 @@ class TestPveEntryService:
                 final_max_en=100,
                 model_dump=Mock(return_value={})
             )
+        )
+        monkeypatch.setattr(
+            "src.pve.services.SnapshotFactory", lambda loader, repo: snapshot_factory
         )
 
         session_data = await PveEntryService.enter_region(
@@ -321,11 +324,12 @@ class TestPveEntryService:
         assert session_data.region_id == "test_region"
 
     @pytest.mark.asyncio
-    async def test_enter_region_without_mechas(self, reset_session_manager, mock_loader):
-        """测试不指定机体时进入区域"""
+    async def test_enter_region_without_mothership_raises(self, reset_session_manager, mock_loader):
+        """缺省母舰 + 玩家无母舰记录 → ValueError（ms_01 硬编码拆除后
+        缺省改读玩家记录，记录缺失显式失败，Doc 7 v2.2 §11.8）"""
         db = Mock(spec=AsyncSession)
 
-        # Mock 数据库查询结果
+        # Mock 数据库查询结果（玩家无母舰记录）
         mock_result = Mock()
         mock_result.scalar_one_or_none.return_value = None
         db.execute = AsyncMock(return_value=mock_result)
@@ -333,18 +337,16 @@ class TestPveEntryService:
         db.refresh = AsyncMock()
         db.add = Mock()
 
-        session_data = await PveEntryService.enter_region(
-            db=db,
-            user_id=1,
-            region_id="test_region",
-            zone_id="test_zone",
-            mothership_id=None,
-            locked_mecha_ids=None,
-            loader=mock_loader
-        )
-
-        assert session_data is not None
-        # 应使用 fallback 逻辑创建默认配置
+        with pytest.raises(ValueError, match="未找到玩家母舰记录"):
+            await PveEntryService.enter_region(
+                db=db,
+                user_id=1,
+                region_id="test_region",
+                zone_id="test_zone",
+                mothership_id=None,
+                locked_mecha_ids=None,
+                loader=mock_loader
+            )
 
     @pytest.mark.asyncio
     async def test_is_pve_session_active_true(self):

@@ -2,12 +2,14 @@
 装配单点测试（Doc 15 §8 入口回归）。
 
 覆盖收发室 BattleEntryService（E1 收编）：
-- build_debug：静态配置装配与 MechaFactory 直构等价、值冻结、未知 ID → KeyError；
+- build_debug：静态配置装配与 MechaFactory 直构等价、值冻结、未知 ID → KeyError
+  （批B 401 收口后 user 恒为登录用户，用例改持离线 User 实例）；
 - build_pve：locked_config 回退链（snapshot_dict → mecha_id → 默认）、
   残血与时间回能算进快照且 session 零触碰（失败原子前提）、
   敌方模板 + 缩放、敌方残血、事件越界 ValueError、spec 值冻结；
 - 失败原子：裁判 resolve 抛异常 → engage 传播且 session 零变更；
-- 入口契约：simulate 未知 ID → 404（Doc 14 §2）、正常 ID → 200 四块结构。
+- 入口契约：simulate 强制登录（Doc 7 §11.1 批B：匿名 401）、未知 ID → 404
+  （Doc 14 §2）、正常 ID → 200 四块结构。
 """
 
 from dataclasses import dataclass
@@ -17,11 +19,18 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.combat.entry import BattleEntryService
+from src.database.models import User
 from src.factory import MechaFactory
 from src.models import MechaSnapshot, WeaponSnapshot, WeaponType
 from src.pve.battle_bridge import BattleBridge
 from src.pve.enums import CombatOutcome, EventType
 from src.pve.models import PveEntityState, PveEnemyState, PveEvent, PveSessionData, PveSquadState, EventSequence
+
+
+def _offline_user(user_id: int = 1) -> User:
+    """离线 User 实例（不入库）：build_debug 仅在勾存档覆盖时读 user.id，
+    静态装配用例持一个类型合法的实例即可（批B 后不再接受 None）。"""
+    return User(id=user_id, username="entry_user", password_hash="x")
 
 
 # ============================================================================
@@ -156,7 +165,7 @@ async def test_build_debug_static_config_equivalence(real_loader):
     from src.api.presentation_api import BattleRequest
 
     req = BattleRequest(mecha_a_id="mech_rx78", mecha_b_id="mech_zaku")
-    spec = await BattleEntryService.build_debug(real_loader, req, None, None)
+    spec = await BattleEntryService.build_debug(real_loader, req, _offline_user(), None)
 
     expected_a = MechaFactory.create_mecha_snapshot(
         real_loader.get_mecha_config("mech_rx78"), weapon_configs=real_loader.equipments)
@@ -186,7 +195,7 @@ async def test_build_debug_value_frozen(real_loader, monkeypatch):
     )
 
     req = BattleRequest(mecha_a_id="mech_rx78", mecha_b_id="mech_zaku")
-    spec = await BattleEntryService.build_debug(real_loader, req, None, None)
+    spec = await BattleEntryService.build_debug(real_loader, req, _offline_user(), None)
 
     held_a.current_hp = 1
     held_b.final_max_hp = 7
@@ -200,7 +209,7 @@ async def test_build_debug_unknown_id_raises_key_error(real_loader):
 
     req = BattleRequest(mecha_a_id="mech_rx78", mecha_b_id="no_such_mecha")
     with pytest.raises(KeyError):
-        await BattleEntryService.build_debug(real_loader, req, None, None)
+        await BattleEntryService.build_debug(real_loader, req, _offline_user(), None)
 
 
 async def test_build_debug_user_save_degrades_on_unknown_mecha(real_loader, monkeypatch, capsys):
@@ -249,8 +258,9 @@ def test_build_pve_restores_locked_snapshot_dict():
     assert spec.mecha_a.mecha_name == "LockedSnap"
 
 
-def test_build_pve_fallback_mecha_id_then_default():
-    """回退链：无 snapshot_dict → mecha_id；mecha_id 缺失 → 默认 rx78。"""
+def test_build_pve_mecha_id_then_strict_fail():
+    """还原链：无 snapshot_dict → mecha_id；mecha_id 未知/成员缺位 →
+    显式 ValueError（默认机体静默回退已废除，Doc 7 v2.2 §11.2）。"""
     loader = _std_loader()
 
     # 第二优先：mecha_id 在 loader.mechas 中
@@ -258,15 +268,15 @@ def test_build_pve_fallback_mecha_id_then_default():
     spec, _ = _build_pve(session, loader)
     assert spec.mecha_a.instance_id == "m_alpha"
 
-    # 第三优先：mecha_id 不在 mechas → 默认 rx78
+    # mecha_id 不在 mechas → 缺陷级，显式失败（不再回落默认 rx78）
     session = _combat_session(locked_mechas=[{"mecha_id": "ghost"}])
-    spec, _ = _build_pve(session, loader)
-    assert spec.mecha_a.instance_id == "rx78"
+    with pytest.raises(ValueError):
+        _build_pve(session, loader)
 
-    # 第三优先：locked_config 无对应成员 → 默认 rx78
+    # locked_config 无对应成员 → 同口径显式失败
     session = _combat_session(locked_mechas=[])
-    spec, _ = _build_pve(session, loader)
-    assert spec.mecha_a.instance_id == "rx78"
+    with pytest.raises(ValueError):
+        _build_pve(session, loader)
 
 
 def test_build_pve_regen_into_snapshot_only():
@@ -456,12 +466,25 @@ def test_engage_draw_keeps_enemy_residual_state():
 
 
 # ============================================================================
-# 入口契约（Doc 14 §2：simulate 语义不变 + 404 修复）
+# 入口契约（Doc 14 §2：simulate 语义不变 + 404 修复；批B 401 收口）
 # ============================================================================
 
-async def test_simulate_unknown_mecha_returns_404(async_client):
-    """POST /battle/simulate 未知机体 ID → 404（此前误走 500，B2 实证遗留）。"""
+async def test_simulate_anonymous_rejected_401(async_client):
+    """强制登录（Doc 7 §11.1 批B 401 收口）：simulate 匿名 → 401。"""
     resp = await async_client.post(
+        "/battle/simulate",
+        json={"mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_simulate_unknown_mecha_returns_404(authenticated_client):
+    """POST /battle/simulate 未知机体 ID → 404（此前误走 500，B2 实证遗留）。
+
+    批B 401 收口后登录态下验证：401 不遮蔽 404 的请求字段语义（Doc 14 §2）。
+    """
+    client, _user = authenticated_client
+    resp = await client.post(
         "/battle/simulate",
         json={"mecha_a_id": "mech_rx78", "mecha_b_id": "no_such_mecha"},
     )
@@ -469,9 +492,10 @@ async def test_simulate_unknown_mecha_returns_404(async_client):
     assert resp.json()["detail"] == "机体配置不存在"
 
 
-async def test_simulate_returns_four_block_timeline(async_client):
+async def test_simulate_returns_four_block_timeline(authenticated_client):
     """POST /battle/simulate 正常 ID → 200 四块结构（meta/init/rounds/result）。"""
-    resp = await async_client.post(
+    client, _user = authenticated_client
+    resp = await client.post(
         "/battle/simulate",
         json={"mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku"},
     )

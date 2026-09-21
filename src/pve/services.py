@@ -1,13 +1,12 @@
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.config import Config
 from src.models import RegionConfig, MothershipConfig, InstanceConfig
 from src.pve.enums import ZoneStatus
 from src.pve.models import PveSessionData
 from src.pve.session_manager import PveSessionManager
 from src.factory import MechaFactory
 from src.core.factory import SnapshotFactory
-from src.user.repository import UserAssetRepository
+from src.user.repository import MothershipRepository, UserAssetRepository
 
 class MothershipIntegrationService:
     """提供母舰系统与外部环境 (如 PVE, 背包, 商店) 集成的逻辑层/钩子."""
@@ -129,47 +128,77 @@ class PveEntryService:
          Args:
             db (AsyncSession): 数据库异步会话。
             user_id (int): 玩家 ID。
-            locked_mecha_ids (List[int]): 选定的机体 ID 列表。
+            locked_mecha_ids (List[int]): 选定的机体 ID 列表；为空时取当前出战编队，
+                仍无有效编队则回退演示机体（Doc 7 v2.3 §11.2 开发期放宽）。
             loader (Any): 资源加载器。
             snapshot_factory (SnapshotFactory): 快照工厂。
 
         Returns:
             Dict[str, Any]: 包含所有选定机体快照的配置字典。
+
+        Raises:
+            ValueError: 演示机体配置缺失（回退兜底也失败即缺陷级）。
         """
         locked_config = {"mechas": []}
 
-        if locked_mecha_ids:
-            # 顺序构建机体快照：AsyncSession 绑定单连接，并发查询既无收益也不安全；
-            # 编队通常 3-4 台，串行延迟可接受
-            for user_mecha_id in locked_mecha_ids:
-                try:
-                    snapshot = await snapshot_factory.create_combat_snapshot(db, user_id, user_mecha_id)
-                except Exception:
-                    continue  # 单台失败跳过，不阻断编队
+        mecha_ids = list(locked_mecha_ids)
+        if not mecha_ids:
+            squad = await UserAssetRepository.get_active_squad(db, user_id)
+            if squad is not None:
+                mecha_ids = list(squad.mecha_ids)
 
-                locked_config["mechas"].append({
-                    "user_mecha_id": user_mecha_id,
-                    "mecha_id": snapshot.instance_id,
-                    "max_hp": snapshot.final_max_hp,
-                    "max_en": snapshot.final_max_en,
-                    "snapshot_dict": snapshot.model_dump()
-                })
+        # 顺序构建机体快照：AsyncSession 绑定单连接，并发查询既无收益也不安全；
+        # 编队通常 3-4 台，串行延迟可接受
+        for user_mecha_id in mecha_ids:
+            try:
+                snapshot = await snapshot_factory.create_combat_snapshot(db, user_id, user_mecha_id)
+            except Exception:
+                continue  # 单台失败跳过，不阻断编队
+
+            locked_config["mechas"].append({
+                "user_mecha_id": user_mecha_id,
+                "mecha_id": snapshot.instance_id,
+                "max_hp": snapshot.final_max_hp,
+                "max_en": snapshot.final_max_en,
+                "snapshot_dict": snapshot.model_dump()
+            })
 
         if not locked_config["mechas"]:
-            # Fallback 逻辑：如果未选机体或加载失败，尝试构建默认机体 (测试用)
+            # 开发期放宽（Doc 7 v2.3 §11.2）：编队不再是进入战斗的硬门槛——
+            # 未锁定机体且无有效出战编队时回退演示机体，保证开发中随时可玩。
+            # 必须用配置真实 ID mech_rx78：v2.2 拆除的 "rx78" 假 ID 曾让旧
+            # 回退永远 KeyError 落空（那才是地雷，回退本身没问题）。
             try:
-                mecha_config = loader.get_mecha_config(Config.DEFAULT_PLAYER_MECHA_ID)
-                snapshot = MechaFactory.create_mecha_snapshot(mecha_config, weapon_configs=loader.equipments)
-                locked_config["mechas"].append({
-                    "mecha_id": snapshot.instance_id,
-                    "max_hp": snapshot.final_max_hp,
-                    "max_en": snapshot.final_max_en,
-                    "snapshot_dict": snapshot.model_dump()
-                })
-            except (KeyError, AttributeError):
-                pass
-                
+                demo_config = loader.get_mecha_config("mech_rx78")
+                demo_snapshot = MechaFactory.create_mecha_snapshot(
+                    demo_config, weapon_configs=loader.equipments
+                )
+            except KeyError as e:
+                raise ValueError("出战编队无有效机体，且演示机体配置缺失") from e
+            locked_config["mechas"].append({
+                "mecha_id": demo_snapshot.instance_id,
+                "max_hp": demo_snapshot.final_max_hp,
+                "max_en": demo_snapshot.final_max_en,
+                "snapshot_dict": demo_snapshot.model_dump(),
+            })
+
         return locked_config
+
+    @staticmethod
+    async def resolve_current_mothership_config(
+        db: AsyncSession, user_id: int, loader: Any
+    ) -> MothershipConfig:
+        """读玩家当前母舰配置（D13 拆雷：ms_01 假 ID 硬编码的替代，Doc 7 v2.2 §11.8）。
+
+        解析机制单点维护：enter_region 缺省母舰与 engage/extract 的母舰读取
+        都走这里。注册流程保证玩家有母舰记录（默认 light_corvette），记录
+        缺失属数据缺陷 → ValueError；current_id 引用未知配置让 loader 的
+        KeyError 上抛（API 层翻译为 404）。
+        """
+        db_mothership = await MothershipRepository.get_by_user_id(db, user_id)
+        if not db_mothership:
+            raise ValueError("未找到玩家母舰记录")
+        return loader.get_mothership_config(db_mothership.data.get("current_id"))
 
     @classmethod
     async def enter_region(
@@ -184,7 +213,11 @@ class PveEntryService:
         idempotency_key: Optional[str] = None
     ) -> PveSessionData:
         """进入 PVE 副本的完整编排流程。"""
-        mothership_config = loader.get_mothership_config(mothership_id or "ms_01")
+        if mothership_id is None:
+            # 缺省读玩家当前母舰（Doc 7 v2.2 §11.8：ms_01 假 ID 硬编码拆除）
+            mothership_config = await cls.resolve_current_mothership_config(db, user_id, loader)
+        else:
+            mothership_config = loader.get_mothership_config(mothership_id)
         region_config = loader.get_region_config(region_id)
         
         # 0. 准入与进度校验

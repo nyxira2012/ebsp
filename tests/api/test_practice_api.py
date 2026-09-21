@@ -1,4 +1,4 @@
-"""练习场 API 契约测试（Doc 16 v1.2）
+"""练习场 API 契约测试（Doc 16 v1.2；批B 随 401 收口改登录态，Doc 7 §11.1）
 
 只读列表接口的红线：
 1. 条目字段恰为八项（名字/描述/敌我机体 ID/敌我机体官方名/环境 ID/类别）
@@ -10,7 +10,9 @@
    且练习场对局 route=training 落进战报 meta（Doc 14 v1.7）；
 4. 加载期坏配置处置：无效机体/环境引用的条目剔除，不阻断启动
    （v1.2 起 kind 被环境吸收，列表角标从 environment_id 派生）；
-5. 防御测试全链路（Doc 16 §5.3）：力场保护下玩家不可败、全程免死。
+5. 防御测试全链路（Doc 16 §5.3）：力场保护下玩家不可败、全程免死；
+6. 强制登录（Doc 7 §11.1 批B）：列表与 simulate 匿名一律 401，
+   v1.0"无鉴权只读"裁决废除。
 """
 
 import json
@@ -35,9 +37,22 @@ VALID_KINDS = {"standard", "attack_test", "defense_test"}
 
 
 @pytest.mark.asyncio
-async def test_practice_list_returns_scenarios(async_client: AsyncClient):
-    """列表非空、免鉴权可读、保持配置文件顺序（首个为经典演示局）"""
-    resp = await async_client.get("/battle/practice")
+async def test_practice_anonymous_rejected(async_client: AsyncClient):
+    """401 收口（Doc 7 §11.1 批B）：列表与 simulate 匿名一律 401"""
+    list_resp = await async_client.get("/battle/practice")
+    assert list_resp.status_code == 401
+
+    battle_resp = await async_client.post("/battle/simulate", json={
+        "mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku",
+    })
+    assert battle_resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_practice_list_returns_scenarios(authenticated_client):
+    """登录后列表非空、保持配置文件顺序（首个为经典演示局）"""
+    client, _user = authenticated_client
+    resp = await client.get("/battle/practice")
     assert resp.status_code == 200
     scenarios = resp.json()
     assert isinstance(scenarios, list) and len(scenarios) > 0
@@ -45,9 +60,10 @@ async def test_practice_list_returns_scenarios(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_practice_item_fields_exactly_minimal(async_client: AsyncClient):
+async def test_practice_item_fields_exactly_minimal(authenticated_client):
     """契约最小化：条目字段恰为八项，无面板数值/胜率/图片路径等任何多余字段"""
-    resp = await async_client.get("/battle/practice")
+    client, _user = authenticated_client
+    resp = await client.get("/battle/practice")
     assert resp.status_code == 200
     for item in resp.json():
         assert set(item.keys()) == EXPECTED_FIELDS
@@ -57,11 +73,12 @@ async def test_practice_item_fields_exactly_minimal(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_practice_mecha_refs_and_names_derived(async_client: AsyncClient):
+async def test_practice_mecha_refs_and_names_derived(authenticated_client):
     """机体 ID 必须存在，官方名必须与机体配置逐字一致（派生而非另写）；
     环境 ID 必须存在于 environments.json（列表能选、规则就在）"""
+    client, _user = authenticated_client
     loader = get_loader()
-    resp = await async_client.get("/battle/practice")
+    resp = await client.get("/battle/practice")
     assert resp.status_code == 200
     for item in resp.json():
         assert item["mecha_a_id"] in loader.mechas
@@ -72,10 +89,11 @@ async def test_practice_mecha_refs_and_names_derived(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_practice_content_floor(async_client: AsyncClient):
+async def test_practice_content_floor(authenticated_client):
     """内容底线（Doc 16 §3，v1.2 全量生效）：标准局 >=2、攻击测试 >=1、
     防御测试 >=1（防御木桩内容随 v1.2 批次 2 上线）"""
-    resp = await async_client.get("/battle/practice")
+    client, _user = authenticated_client
+    resp = await client.get("/battle/practice")
     kinds = [item["kind"] for item in resp.json()]
     assert kinds.count("standard") >= 2
     assert kinds.count("attack_test") >= 1
@@ -83,13 +101,14 @@ async def test_practice_content_floor(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_practice_scenario_is_simulatable(async_client: AsyncClient):
+async def test_practice_scenario_is_simulatable(authenticated_client):
     """全链路：取列表第一场，其机体 ID 直接打 simulate 出结算"""
-    resp = await async_client.get("/battle/practice")
+    client, _user = authenticated_client
+    resp = await client.get("/battle/practice")
     assert resp.status_code == 200
     first = resp.json()[0]
 
-    battle = await async_client.post("/battle/simulate", json={
+    battle = await client.post("/battle/simulate", json={
         "mecha_a_id": first["mecha_a_id"],
         "mecha_b_id": first["mecha_b_id"],
         "route": "training",
@@ -105,16 +124,17 @@ async def test_practice_scenario_is_simulatable(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_simulate_route_default_and_rejected(async_client: AsyncClient):
+async def test_simulate_route_default_and_rejected(authenticated_client):
     """route 参数：缺省 debug 不变（金样张同路径）；pve/pvp 伪造被 422 拒绝"""
-    default_resp = await async_client.post("/battle/simulate", json={
+    client, _user = authenticated_client
+    default_resp = await client.post("/battle/simulate", json={
         "mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku",
     })
     assert default_resp.status_code == 200
     assert default_resp.json()["meta"]["route"] == "debug"
 
     for forged in ("pve", "pvp"):
-        resp = await async_client.post("/battle/simulate", json={
+        resp = await client.post("/battle/simulate", json={
             "mecha_a_id": "mech_rx78", "mecha_b_id": "mech_zaku", "route": forged,
         })
         assert resp.status_code == 422
@@ -125,7 +145,7 @@ async def test_simulate_route_default_and_rejected(async_client: AsyncClient):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_practice_defense_dummy_full_chain(async_client: AsyncClient, reloaded_skills):
+async def test_practice_defense_dummy_full_chain(authenticated_client, reloaded_skills):
     """防御测试全链路：从列表取 defense_test 条目，按条目透传开战——
 
     力场两效果（回合回满 + 致死钳制）经 reloaded_skills 共享夹具
@@ -133,13 +153,14 @@ async def test_practice_defense_dummy_full_chain(async_client: AsyncClient, relo
     不可能败（winner 恒 a，draw 实际不可达），全程任一事件落地后 HP
     均不落零。回合数不写死（D4 目标 40-60，随机方差写死必 flake）。
     """
-    resp = await async_client.get("/battle/practice")
+    client, _user = authenticated_client
+    resp = await client.get("/battle/practice")
     assert resp.status_code == 200
     defense = [s for s in resp.json() if s["kind"] == "defense_test"]
     assert len(defense) >= 1
     target = defense[0]
 
-    battle = await async_client.post("/battle/simulate", json={
+    battle = await client.post("/battle/simulate", json={
         "mecha_a_id": target["mecha_a_id"],
         "mecha_b_id": target["mecha_b_id"],
         "environment_id": target["environment_id"],
