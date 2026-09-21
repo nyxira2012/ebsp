@@ -1,5 +1,81 @@
 # Development Log (DEVLOG.md)
 
+## 2026-09-21 用户系统批B「401 收口」落地——文档7后端收口（Doc 7 §11.0，gate 先行兑现）
+
+> **项目快照**：批B 唯一剩余后端项，按其自带的 gate 顺序执行——ebs-duo 登录最小闭环先行合入，随即落 401 收口 | simulate/练习场强制登录、匿名回退语义整体废除 | Doc 16 v1.5 + Doc 14 v1.9 升版 | 测试 677→679 全绿，Pyright 0 错误
+
+### 执行顺序说明（gate 不是摆设）
+
+批B的放行条件是 ebs-duo 前端登录闭环（注册/登录页 + apiClient token 注入 + 401 拦截，Doc 7 §11.0），本次按序兑现：先落前端闭环（`#/auth` 注册/登录页 + `engine/session` token 持久化 + `fetchEngineJson` 全通路 Bearer 注入与 401 统一拦截），再收后端口子。注意区分：ebs-duo 的 4.1 门面登录页（`#/login`）是彩蛋页，其规格明文"不是真账号系统"，与本次闭环无关。
+
+### 交付内容（批B）
+
+1. **simulate/practice 强制登录**（`src/api/presentation_api.py`）：两端点换 `get_current_user`，匿名 401；练习场 v1.0"无鉴权只读"裁决随之废除（Doc 16 v1.5 落字）。
+2. **匿名回退语义整体废除**：`get_optional_user`/`optional_security` 移除（`src/user/dependencies.py` + `user/__init__` re-export，消费面清零）；`build_debug` 签名收口为 `user: User`（`src/combat/entry.py`），`user is not None` 分支删除——存档缺陷降级臂保留（养成数据无效仍降级演示配置，Doc 14 §2 语义）。
+3. **存量匿名用例重写**（F6 清单）：`test_practice_api.py` 七例改登录态 + 新增匿名 401 断言；`test_battle_entry.py` 两例 HTTP 用例改 `authenticated_client` + 新增匿名 401 用例，三例 build_debug 直构用例改持离线 User（不再传 None）；`authenticated_client` 通用夹具仿 test_inventory_api.py 上提 `tests/conftest.py`（inventory 本地特化版保留，同名遮蔽）。
+
+### 文档联动（Doc 7 §11.7 清单）
+
+- **Doc 16 v1.5**：§2 列表鉴权收口；§2.1 降级口径"四态作废两态"（匿名臂死于 401、无编队臂死于批A 400 分流，仅存存档缺陷一态）；新号动线两段式注记（领取前 `use_user_save=false` 演示局即可玩）。字段契约不变（八项）。
+- **Doc 14 v1.9**：§2 鉴权改强制 JWT；错误码补 `401` 与 `400` 两码分流，冻结 401（`detail` 字符串）与 400（`detail: {code, message, ...}`）错误体结构——前端按状态码 + `detail.code` 分支。
+- roadmap §9 批B ✅、§1 ebs-duo 登录闭环 ✅。
+
+### 坑（下一个实现者会踩的）
+
+- **登录接口自身的 401 别落进全局拦截**：`POST /user/login` 凭据错误也回 401——前端 `fetchEngineJson` 的 401 拦截（清会话+跳 `#/auth`）若先吃掉它，登录页会把自己弹走。解法是 statusErrors 先行抛出（登录通路自备 `{ 401: '账号或密码错误' }`），骨架顺序：statusErrors → 401 拦截 → ok 检查。
+- **ebs-duo 取数是单点骨架**：token 注入与 401 拦截都落在 `engine/client.js#fetchEngineJson` 一处（全站唯一 fetch 通路，已核实无裸 fetch）；调用方显式传的 Authorization 头优先不被覆盖（战报重放自管 token 通路不受影响）。
+- **测试配置 `-rN` 吞摘要**：pytest.ini 不打印 passed 汇总行，验收看退出码与 `--collect-only -q` 计数（当前 679）。
+
+---
+
+## 2026-09-21 用户系统 v2.3 开发期放宽——编队不再强制进入战斗（Doc 7 §11.2.1）
+
+> **项目快照**：用户裁决"编队内容不要设置成必须的，因为这是开发中" | enter 通道拆除无编队 400 门槛，恢复演示机体回退（`mech_rx78` 正确 ID）| 测试 676→677 全绿
+
+### 交付内容
+
+1. **`_prepare_locked_config` 回退链恢复并修正**（`src/pve/services.py`）：未锁定机体 → 取出战编队 → 仍无有效编队 → 回退演示机体 `mech_rx78` 静态快照（条目无 `user_mecha_id`，与养成快照区分）。v2.2 拆掉的 "rx78" 定性修正：真地雷是假 ID 让旧回退永远 KeyError 落空，回退语义本身开发期合理。
+2. **enter-region 前置门槛拆除**（`src/api/pve_api.py`）：`assert_squad_ready` 从 enter 通道移除，`STARTER_NOT_CLAIMED`/`NO_ACTIVE_SQUAD` 两码在 enter 停用；`locked_mechas` 显式指定的归属校验（`MECHA_NOT_OWNED`）保留。
+
+### 保留不变
+
+- simulate 勾 `use_user_save` 仍走编队就绪 400 分流（显式请求存档，静默降级违背显式语义）；
+- 归属校验全量保留（建队/部署/会话属主）；claim-starter 与 `/user/me` 引导状态位照旧。
+- 转正条件：编队玩法正式化（阵位/轮换）时恢复 enter 前置校验，§11.2.1 随即废除。
+
+### 测试
+
+- `test_prepare_locked_config_empty_raises` → `test_prepare_locked_config_empty_falls_back_to_demo` + 新增 `test_prepare_locked_config_demo_config_missing_raises`（缺陷级 ValueError 兜底）；
+- `test_enter_region_without_claim_points_to_claim` / `..._with_mecha_but_no_squad_points_to_squad` 改断言 200 回退进入（含内存态会话管理器跨用例销毁收尾）；
+- 全量 677 passed。
+
+---
+
+## 2026-09-21 用户系统 v2.2 批A收口——新号动线与属主安全（Doc 7 §11）
+
+> **项目快照**：newfun 三轮拷问（D1–D13，用户逐项批复）+ 四角色评审（26 条 findings，用户拍板拆批与 ms_01 拆雷）| 批A 落地：claim-starter、400 结构化分流、PVE/编队属主、三处地雷拆除 | 测试 643→676 全绿，Pyright 0 错误
+
+### 交付内容（批A「新号动线与属主安全」）
+
+1. **claim-starter（`POST /user/mechas/claim-starter`）**：免费领取 `mech_grunt` + 编队防御性补齐（无队建「默认编队」，有队塞入并激活）+ 出战标记，同事务落库；users 行锁串行化并发领取，重复领取 409 附当前资产摘要（终态等价成功语义）。`/user/me` 扩 `has_mecha`/`has_active_squad` 引导状态位。破除 D3+D4 死锁（新号无机体进不了任何战斗）。
+2. **无编队 400 结构化分流**：simulate 勾 `use_user_save` 与 PVE enter-region 前置校验——无机体质 `STARTER_NOT_CLAIMED`、有机体无有效编队 `NO_ACTIVE_SQUAD`，不再指错门/静默回退。
+3. **PVE 属主统一入口**：`get_pve_session_or_404(session_id, user_id)` 六端点接入（含重放端点换用），他人会话与不存在同口径 404。
+4. **编队引用完整性**：create_squad 校验 `mecha_ids` 归属（他人机体 400 `MECHA_NOT_OWNED`，封堵借队以他人养成资产出账的后门）；`set_active_squad` 补属主过滤（现状即可激活他人编队，评审侦察员 F2）；`get_active_squad` 改 `.first()` 防存量双激活 500。
+5. **三处地雷拆除**：engage/extract 母舰硬编码 `ms_01` 改读玩家当前母舰记录（D13）；`_prepare_locked_config` 与 build_pve 三处 `rx78` 假 ID 静默回退改显式 ValueError——顺手发现并补实"空锁定取出战编队"语义从未实装（旧实现全靠假 ID 回退兜底）。
+
+### 关键裁决
+
+- **D12 拆批**：401 收口（simulate/练习场强制登录、匿名回退删除、Doc 16/14 修订、存量用例重写）独立为批B，gate 在 ebs-duo 前端登录闭环——顾问 F1：后端 401 先落地会掐死 roadmap 第一优先级（前端练习场全链路验证）。
+- **D13 ms_01 顺手拆**：否则新号全链在 engage 断头（测试全绿但玩家动线 500），验收新增 `test_new_account_full_pve_chain`（enter→advance→engage→extract 全程 2xx）。
+- **评审否决与采纳**：金样张 401 全红之虞被侦察员证据否决（直构路径不经 HTTP）；claim 并发双领、409 死胡同、编队后门等 9 项 Blocker 全部采纳落地；extract 幂等缓存次序与 replay 锚会话寿命为存量语义，挂账不混入。
+
+### 留痕
+
+- 拷问记录：`docs/tmp/7_需求拷问记录.md`（D1–D13）
+- 评审 findings：`docs/tmp/7_评审findings.md`（四角色 26 条 + 处置）
+- 契约：`docs/7.user_system_implementation.md` v2.2 §11（含 §11.0 批A/批B拆分与 §11.8 测试要求）
+- 新用例：`tests/api/test_user_onboarding.py`（11 项）；存量回退用例重写 3 处（test_battle_entry.py / test_pve_services.py ×2）
+
 ## 2026-09-19 Doc 16 v1.2/v1.3 实现：环境通道 + 训练力场 + 防御测试木桩上线（mawang 两批交付）
 
 > **项目快照**：D9 设计落地 | 引擎零改动（engine/resolver 未动）| 列表契约七项→八项（增 `environment_id`，主 agent 裁决待追认）| 防御局 5 种子实测 45–53 回合落 D4 带带 | 测试 643→665 全绿 | 新增 data/environments.json（训练力场/靶场/野战）
