@@ -54,6 +54,10 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False,
     )
 
+    # 信用点余额（Doc 17）：货币唯一账面——发放/交换/购买的资金腿都走此列，
+    # 经 src/user/item_system.py 门面进出，玩法不得直改
+    credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # 关系: 用户的资产
     mechas: Mapped[list["UserMecha"]] = relationship(
         "UserMecha", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
@@ -300,11 +304,73 @@ class PveSession(Base, TimestampMixin):
 class PveRewardLedger(Base, TimestampMixin):
     """PVE 收益发放流水表 — 幂等性硬防线"""
     __tablename__ = "pve_reward_ledger"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)  # 唯一约束
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     rewards_summary: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+# ==============================================================================
+# 物品系统票据与台账 (Item System - Doc 17)
+# ==============================================================================
+
+class ItemTicket(Base, TimestampMixin):
+    """发放票据 — 临时货舱的凭据（Doc 17）。
+
+    玩法向物品系统递发放单时，清单与回执编号绑定成票据由系统保管：玩家
+    确认前寄存于临时货舱（容量不够先寄存不丢件，掉线重登仍在），处理完
+    留档不删供对账（附录 C3）。receipt_id 全局唯一是防重复发放的硬防线
+    （场景 4.4/4.12：同回执再交原样退回已有票据）。
+
+    status 状态机（字面量单一源见 src/user/item_system.py 的 TicketStatus）：
+        pending   待处理——可整批放行或逐件丢弃，占用「有 N 件待处理」提醒
+        accepted  已放行入包（终态）
+        discarded 清单被逐件丢弃清空（终态）
+        rejected  清单不符拒收留档——不入包、不占待处理提醒（场景 4.10）
+
+    Attributes:
+        manifest: 发放清单 JSON：
+            {"credits": int, "equipments": [{equipment_id, enhancement_level,
+            random_stats}], "items": [{item_id, item_type, quantity}]}
+        source_detail: 溯源信息（session_id 等），可空。
+    """
+    __tablename__ = "item_tickets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    receipt_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    manifest: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    source_detail: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
+
+class ExternalGrantLedger(Base, TimestampMixin):
+    """外部发放台账 — 只记外部来源的实际到账（Doc 17 附录 C1）。
+
+    「外部」＝玩家无法主动重试的一次性发放（PVE 掉落、补偿、活动任务奖励，
+    §8 裁决 3）：仅在票据放行入包时写一行（品种、数量、时间、回执编号），
+    丢弃/rejected 不写，玩法内转换（购买、消耗、出售/拆解）不走票据也不入
+    台账。receipt_id 唯一 = 防重复到账硬防线；仅供系统侧对账，无玩家界面。
+
+    Attributes:
+        manifest: 实际到账清单（与票据 manifest 同结构）。
+        credits_granted: 实际入账信用点。
+        result: 处理结果，当前恒为 "accepted"。
+    """
+    __tablename__ = "external_grant_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    receipt_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(30))
+    manifest: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    credits_granted: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[str] = mapped_column(String(20), default="accepted")
 
 
 # ==============================================================================

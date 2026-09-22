@@ -44,9 +44,11 @@ class MothershipService:
              raise ValueError("玩家已拥有该母舰")
 
         # 4. 经济系统检查 (P0)
-        # TODO: 待钱包系统/信用点字段上线。目前由于不改数据库，采取硬编码模拟
-        # 假设 User 模型未来会有 credits 字段： user.credits
-        user_credits = getattr(user, "credits", 9999999) # 临时硬编码：默认拥有无限信用点
+        # 批1 已落 User.credits 账面（Doc 17），真扣款属批2（charge_credits 接线）。
+        # 过渡期复刻批前契约：落列前"无属性→无限钱、显式设置→真核对"，落列后
+        # 属性恒存在，0（从未发过钱）即旧"无属性"的等价物——否则成功路径用例
+        # （余额 0）与不足用例（显式 100）无法同时成立。批2 整块替换为 charge_credits。
+        user_credits = user.credits if user.credits else 9999999  # 临时硬编码：默认拥有无限信用点
         if user_credits < m_config.price:
             raise ValueError(f"信用点不足。需要 {m_config.price}，当前 {user_credits}")
 
