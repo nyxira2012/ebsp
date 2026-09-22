@@ -32,6 +32,8 @@ from src.user.repository import UserRepository, UserAssetRepository, MothershipR
 from src.user.service import MechasNotOwnedError, OnboardingService, SquadNotReadyError
 from src.user.auth import create_access_token
 from src.user.dependencies import get_current_user
+from src.user.item_system import GrantManifestMismatchError
+from src.api.errors import commit_and_report_mismatch
 
 # ==============================================================================
 # 路由器
@@ -101,8 +103,18 @@ async def claim_starter_mecha(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """领取初始机体：授予旧式防卫工兵一台 + 编队补齐并激活，一步到位可玩"""
-    result = await OnboardingService.claim_starter(session, current_user.id)
+    """领取初始机体：旧式防卫工兵一台 + 编队补齐并激活 + 起步信用点与材料，
+    一步到位（Doc 7 v2.2 §11.4 + Doc 17 场景 4.9）"""
+    from src.api.context import get_loader
+
+    try:
+        result = await OnboardingService.claim_starter(
+            session, current_user.id, loader=get_loader()
+        )
+    except GrantManifestMismatchError:
+        # starter 清单是代码内置常量，走到这里属数据事故——与 pve/debug 同一
+        # 收口：先提交 rejected 留档再 400「本批未发放，已记录」（回滚约束）
+        await commit_and_report_mismatch(session)
 
     if not result["claimed"]:
         # 409 终态等价成功语义：detail 附当前首机与出战编队摘要，

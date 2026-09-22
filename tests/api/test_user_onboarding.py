@@ -23,6 +23,7 @@ from src.pve.models import (
     PveSquadState,
 )
 from src.pve.session_manager import PveSessionManager
+from src.user.service import OnboardingService
 
 STARTER_MECHA_ID = "mech_grunt"
 
@@ -106,6 +107,20 @@ async def test_claim_starter_grants_mecha_squad_active(async_client):
     me = await async_client.get("/api/user/me")
     assert me.json()["has_mecha"] is True
     assert me.json()["has_active_squad"] is True
+
+
+@pytest.mark.asyncio
+async def test_claim_starter_grants_credits_visible_via_me(async_client):
+    """起步包到账（Doc 17 场景 4.9）：领取后 /me 余额 == 起步信用点。
+
+    StarterClaimResponse 不含余额（形状不变），余额经 /me 查询路径核对。
+    """
+    await _register_and_login(async_client, "starter_credits_user")
+    resp = await async_client.post("/api/user/mechas/claim-starter")
+    assert resp.status_code == 200, resp.text
+
+    me = await async_client.get("/api/user/me")
+    assert me.json()["credits"] == OnboardingService.STARTER_CREDITS
 
 
 @pytest.mark.asyncio

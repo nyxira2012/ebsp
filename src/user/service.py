@@ -7,10 +7,11 @@
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from src.user.repository import MothershipRepository, UserAssetRepository, UserRepository
-from src.user.item_system import ItemSystem
+from src.user.item_system import ItemSystem, make_receipt_id
+from src.user.schemas import ItemData
 from src.pve.services import MothershipIntegrationService
 from src.database.models import User, UserSquad
 
@@ -132,6 +133,11 @@ class OnboardingService:
 
     STARTER_MECHA_ID = "mech_grunt"
 
+    # 起步包数值（Doc 17 场景 4.9）：占位值，经济内容立项时重定——数值变更
+    # 只动这两处；材料取 data/items.json 现成低价值物品 mat_scrap
+    STARTER_CREDITS = 500
+    STARTER_MATERIALS: List[Tuple[str, str, int]] = [("mat_scrap", "material", 5)]
+
     @staticmethod
     async def assert_squad_ready(session: AsyncSession, user_id: int) -> UserSquad:
         """校验出战编队就绪，未就绪抛 SquadNotReadyError。
@@ -179,19 +185,34 @@ class OnboardingService:
             raise MechasNotOwnedError(invalid)
 
     @staticmethod
-    async def claim_starter(session: AsyncSession, user_id: int) -> dict:
-        """领取初始机体：授予 mech_grunt + 编队防御性补齐，同事务一次落库。
+    async def claim_starter(
+        session: AsyncSession, user_id: int, loader: Optional["DataLoader"] = None
+    ) -> dict:
+        """领取初始机体：工兵机 + 默认编队 + 起步包，同事务一次落库（Doc 17 场景 4.9）。
 
         并发防线：对 users 行 with_for_update 串行化同用户并发领取
         （SQLite 单写者下退化为无锁，生产 PostgreSQL 生效）。已有机体时
         返回 claimed=False 的终态快照——由 API 层翻译为 409 终态等价成功
         （附当前首机与出战编队摘要，超时重试据此自愈展示）。
 
+        起步包（起步信用点 + 起步材料）凭回执 starter:{user_id} 走发放门面
+        建票据，随即整批放行入包——「一步拿到」语义，不留 pending（新号
+        保底 50 格容量必够）；票据与台账留档共同兜防重发。任何一环失败
+        整笔随事务回滚（禁止只领到一半）。
+
+        Args:
+            session: 数据库异步会话（事务边界归调用方）。
+            user_id: 领取用户 ID。
+            loader: 物品模板库；None 时门面跳过模板校验并回退 Mock 容量
+                （测试缝隙），生产接线必须传。
+
         Returns:
             dict: {"claimed": bool, "mecha": UserMecha, "squad": UserSquad}。
 
         Raises:
             ValueError: 用户不存在。
+            GrantManifestMismatchError: 起步包清单校验失败——清单是代码内置
+                常量，不符属数据事故，直接上抛由 API 层先提交留档再 400。
         """
         user_row = await UserRepository.get_by_id(session, user_id, for_update=True)
         if user_row is None:
@@ -221,4 +242,21 @@ class OnboardingService:
             )
 
         activated = await UserAssetRepository.set_active_squad(session, user_id, squad.id)
+
+        # 起步包：同事务 submit_grant + 立即放行（场景 4.9「一步拿到」）。
+        # 回执与票据/台账的防重发由门面承担，本层不重复记账。
+        item_system = ItemSystem(session, loader=loader)
+        ticket = await item_system.submit_grant(
+            user_id,
+            make_receipt_id("starter", str(user_id)),
+            "starter",
+            equipments=[],
+            items=[
+                ItemData(item_id=item_id, item_type=item_type, quantity=quantity)
+                for item_id, item_type, quantity in OnboardingService.STARTER_MATERIALS
+            ],
+            credits=OnboardingService.STARTER_CREDITS,
+        )
+        await item_system.accept_ticket(user_id, ticket.id)
+
         return {"claimed": True, "mecha": mecha, "squad": activated}

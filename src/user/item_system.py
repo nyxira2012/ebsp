@@ -332,7 +332,8 @@ class ItemSystem:
         if add_result == AddResult.OVERFLOW:
             # 预检与写入之间存在并发窗口：add_assets 内部复查容量失败（OVERFLOW
             # 是返回值不是异常）。fail-closed——货物没进包就不得入账/写台账/转
-            # accepted，整体不进（附录 B2）；本次事务内的残留改动由调用方回滚。
+            # accepted，整体不进（附录 B2）。OVERFLOW 在任何写入前返回，事务内
+            # 零残留，调用方可安全提交（debug 端点依赖此语义让溢出票据留 pending）。
             fresh = await self.inventory.get_status(user_id)
             shortfall = max(0, required - fresh.available)
             raise CapacityShortfallError(f"货舱放不下，还差 {shortfall} 格", shortfall=shortfall)
