@@ -6,13 +6,13 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List, Type, TypeVar
+from typing import Dict, List, Optional, Type, TypeVar
 from pydantic import BaseModel
 
 from .models import (
     PilotConfig, SubPilotConfig, EquipmentConfig, MechaConfig,
     WeaponType, MothershipConfig, RegionConfig, AffixConfig, InstanceConfig,
-    PracticeScenarioConfig, EnvironmentConfig
+    PracticeScenarioConfig, EnvironmentConfig, MaterialConfig
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -40,6 +40,7 @@ class DataLoader:
         self.instances: Dict[str, InstanceConfig] = {}
         self.environments: Dict[str, EnvironmentConfig] = {}
         self.practice_scenarios: Dict[str, PracticeScenarioConfig] = {}
+        self.materials: Dict[str, MaterialConfig] = {}  # 材料模板 (items.json, Doc 17 §5.6)
 
     @property
     def weapons(self) -> Dict[str, EquipmentConfig]:
@@ -83,6 +84,11 @@ class DataLoader:
         if practice_path.exists():
             self._load_from_json("practice_scenarios.json", PracticeScenarioConfig, self.practice_scenarios, keep_first=True)
             self._validate_practice_scenarios()
+
+        # 10. 加载材料模板 (Doc 17 §5.6)：内容级配置，文件缺省=无材料模板（不阻断启动）
+        items_path = self.data_dir / "items.json"
+        if items_path.exists():
+            self._load_from_json("items.json", MaterialConfig, self.materials)
     
     def _load_from_json(self, filename: str, model_cls: Type[T], container: Dict[str, T],
                         keep_first: bool = False) -> None:
@@ -221,6 +227,14 @@ class DataLoader:
         if environment_id not in self.environments:
             raise KeyError(f"环境配置不存在: {environment_id}")
         return self.environments[environment_id]
+
+    def get_material_config(self, item_id: str) -> Optional[MaterialConfig]:
+        """获取材料配置，查无返回 None (Doc 17 §5.6 材料模板库)。
+
+        get-or-None 而非 KeyError：loot 掉的 item_id 可能不在模板库，
+        展示侧「查无回退 item_id」的惯例经本方法单点入口。
+        """
+        return self.materials.get(item_id)
 
     def get_all_weapons(self) -> List[EquipmentConfig]:
         """筛选所有类型为 WEAPON 的配置"""

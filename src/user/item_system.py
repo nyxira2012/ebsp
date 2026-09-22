@@ -19,7 +19,7 @@ equipment_service（容量检查已统一走 InventoryService）。
 import logging
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -431,6 +431,17 @@ class ItemSystem:
             return []
         inventory_status = await self.inventory.get_status(user_id)
         return [await self._ticket_view(t, inventory_status.available) for t in tickets]
+
+    async def count_pending_tickets(self, user_id: int) -> int:
+        """待处理票据计数（常驻入口「临时货舱有 N 件待处理」数据源）。
+
+        一条 COUNT 而非 list_tickets 全量视图：状态查询高频、画面只要个数
+        （Doc 17 场景 4.1/4.3）；rejected 不占计数（场景 4.10）。
+        """
+        stmt = select(func.count()).select_from(ItemTicket).where(
+            ItemTicket.user_id == user_id, ItemTicket.status == TicketStatus.PENDING
+        )
+        return (await self.session.execute(stmt)).scalar_one()
 
     async def get_ticket(self, user_id: int, ticket_id: int) -> Dict[str, Any]:
         """单张票据的画面形状（含非 pending，供清理页回看留档清单）。

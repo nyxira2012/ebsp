@@ -1,224 +1,275 @@
 """背包系统 REST API (Inventory API)
 
-提供背包状态查询、物品列表获取及超载确认处理的 HTTP 接口。
+提供背包状态查询、资产清单、临时货舱票据处理、丢弃与锁定的 HTTP 接口。
 
 设计原则：
     - 所有接口均需 JWT 认证（通过 get_current_user 依赖注入）
-    - 数据库会话由 get_async_session 自动管理
-    - 响应格式遵循 RESTful 规范
+    - 资产进出全部走 ItemSystem 门面（Doc 17 六招之外无路），本层只做
+      编排与错误翻译，不重写任何门面/服务层逻辑
+    - 全程 user_id 过滤，别人的家当动不得（所有权 404 与 pve 属主口径一致）
 
 端点概览：
-    - GET  /inventory/status     - 获取货舱容量状态
-    - GET  /inventory/items       - 列出背包内所有资产
-    - POST /inventory/finalize    - 超载确认处理（核心业务逻辑）
+    - GET  /inventory/status                        - 货舱容量状态 + 待处理票据数
+    - GET  /inventory/items                         - 背包资产清单（信用点/装备/穿戴中/材料）
+    - GET  /inventory/tickets                       - 待处理票据清单（常驻入口数据源）
+    - POST /inventory/tickets/{id}/accept           - 票据放行入包
+    - POST /inventory/tickets/{id}/discard          - 逐件丢弃寄存物
+    - POST /inventory/equipments/{id}/lock|unlock   - 装备锁定/解锁
+    - POST /inventory/equipments/{id}/discard       - 背包装备丢弃
+    - POST /inventory/items/{item_id}/discard       - 材料丢弃
+    - POST /inventory/debug/generate-item           - 调试发放（走门面票据）
 
-参考文档：Doc 12 背包与货舱系统设计
+参考文档：Doc 17 物品管理系统（接管 Doc 12 超载流程，旧 /finalize 已退役）
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import uuid4
+from collections.abc import Coroutine
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Dict, Any
 
 from src.database.session import get_async_session
 from src.database.models import User, UserEquipment, UserItem
 from src.user.dependencies import get_current_user
 from src.user.inventory import InventoryService
+from src.user.item_system import (
+    CapacityShortfallError,
+    GrantManifestMismatchError,
+    ItemLockedError,
+    ItemSystem,
+    TicketStateError,
+    make_receipt_id,
+)
 from src.user.schemas import (
     InventoryStatus,
     UserEquipmentDB,
     UserItemDB,
-    AddResult,
+    MaterialItemDB,
+    InventoryItemsResponse,
+    TicketListResponse,
+    TicketView,
+    DiscardTicketItemRequest,
+    DiscardItemRequest,
     EquipmentData,
-    ItemData
 )
 from src.api.context import get_loader
+from src.api.errors import commit_and_report_mismatch
 
 router = APIRouter(prefix="/inventory", tags=["背包系统"])
+
+
+def _item_system(session: AsyncSession) -> ItemSystem:
+    """构造物品系统门面（每请求一个；loader 为全局单例）。"""
+    return ItemSystem(session, loader=get_loader())
+
+
+def _translate_facade_error(e: ValueError) -> HTTPException:
+    """门面 ValueError → HTTP 翻译（本 router 统一口径）。
+
+    映射（Doc 17 批3）：
+        - ItemLockedError → 400 物品已锁定，请先解锁（场景 4.7）
+        - CapacityShortfallError → 400 + 结构化短差 {message, shortfall}（场景 4.2）
+        - TicketStateError → 409 清单已变更，请刷新（场景 4.11 并发冲突）
+        - 其余 ValueError（归属/查无/装备使用中/清单下标越界/材料不存在或
+          数量不足等业务拒绝）→ 404（与 pve 会话属主 404 口径一致）
+
+    GrantManifestMismatchError 不经本映射：它要求先提交 rejected 留档
+    再翻译（回滚约束见其 docstring），走 commit_and_report_mismatch。
+    """
+    if isinstance(e, ItemLockedError):
+        return HTTPException(status_code=400, detail="物品已锁定，请先解锁")
+    if isinstance(e, CapacityShortfallError):
+        return HTTPException(status_code=400, detail={
+            "message": f"货舱放不下，还差 {e.shortfall} 格",
+            "shortfall": e.shortfall,
+        })
+    if isinstance(e, TicketStateError):
+        return HTTPException(status_code=409, detail="清单已变更，请刷新")
+    return HTTPException(status_code=404, detail=str(e))
+
+
+async def _commit_facade(session: AsyncSession, call: Coroutine[Any, Any, Any]) -> Any:
+    """门面调用统一编排壳：异常翻译 + 成功后提交（变动端点共用）。
+
+    GrantManifestMismatchError 不经此壳——须先提交 rejected 留档再翻译，
+    走 commit_and_report_mismatch（回滚约束）。
+    """
+    try:
+        result = await call
+    except ValueError as e:
+        raise _translate_facade_error(e)
+    await session.commit()
+    return result
+
 
 @router.get("/status", response_model=InventoryStatus)
 async def get_inventory_status(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """获取当前背包容量状态。
+    """获取当前背包容量状态与待处理票据数。
 
-    返回玩家的货舱使用情况，包括：
-        - current: 当前占用格子数
-        - capacity: 容量上限（基于拥有的母舰）
-        - available: 剩余可用格子数
+    pending_tickets 是背包页常驻入口「临时货舱有 N 件待处理」的数据源
+    （Doc 17 场景 4.1/4.3；无寄存时为 0，前端据此隐藏入口）。
 
     Args:
         current_user: 当前登录用户（由JWT Token解析）
         session: 数据库会话
 
     Returns:
-        InventoryStatus: 包含 current、capacity、available 的状态对象
-
-    Example:
-        >>> GET /api/inventory/status
-        {
-            "current": 15,
-            "capacity": 80,
-            "available": 65
-        }
+        InventoryStatus: current/capacity/available + pending_tickets
     """
     loader = get_loader()
-    service = InventoryService(session, loader=loader)
-    return await service.get_status(current_user.id)
+    inv_status = await InventoryService(session, loader=loader).get_status(current_user.id)
+    inv_status.pending_tickets = await _item_system(session).count_pending_tickets(current_user.id)
+    return inv_status
 
-@router.get("/items")
+
+@router.get("/items", response_model=InventoryItemsResponse)
 async def list_inventory_items(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """列出背包内所有未装备的资产（装备 + 材料）。
+    """列出背包资产（Doc 17 场景 4.8：看家当）。
 
-    查询两类资产：
-        - equipments: 未装备的武器/防具（is_equipped=False）
-        - items: 所有堆叠材料（按 item_id 合并后）
-
-    Args:
-        current_user: 当前登录用户（由JWT Token解析）
-        session: 数据库会话
+    信用点单独显示；穿戴中装备单列一栏（不占货舱格）；材料带展示名，
+    查不到模板回退 item_id（loot 的 item_id 可能不在 items.json，不因
+    展示断链）。
 
     Returns:
-        Dict[str, List]: 包含 equipments 和 items 两个列表的字典
-
-    Example:
-        >>> GET /api/inventory/items
-        {
-            "equipments": [
-                {
-                    "id": 42,
-                    "equipment_id": "beam_rifle_mk2",
-                    "enhancement_level": 3,
-                    "random_stats": {"attack": 15},
-                    "is_locked": false,
-                    "is_equipped": false
-                }
-            ],
-            "items": [
-                {
-                    "id": 1,
-                    "item_id": "titanium_alloy",
-                    "item_type": "ALLOY",
-                    "quantity": 500
-                }
-            ]
-        }
+        InventoryItemsResponse: credits / equipments(未装备) / equipped(穿戴中) / items
     """
-    from sqlalchemy import select
+    loader = get_loader()
 
-    # 1. 未装备的武器/防具
-    stmt_equip = select(UserEquipment).where(
-        UserEquipment.user_id == current_user.id,
-        UserEquipment.is_equipped == False
+    equip_res = await session.execute(
+        select(UserEquipment).where(UserEquipment.user_id == current_user.id)
     )
-    equip_res = await session.execute(stmt_equip)
-    equipments = [UserEquipmentDB.model_validate(e) for e in equip_res.scalars().all()]
+    all_equips = equip_res.scalars().all()
+    equipments = [UserEquipmentDB.model_validate(e) for e in all_equips if not e.is_equipped]
+    equipped = [UserEquipmentDB.model_validate(e) for e in all_equips if e.is_equipped]
 
-    # 2. 堆叠材料
-    stmt_item = select(UserItem).where(UserItem.user_id == current_user.id)
-    item_res = await session.execute(stmt_item)
-    items = [UserItemDB.model_validate(i) for i in item_res.scalars().all()]
+    item_res = await session.execute(
+        select(UserItem).where(UserItem.user_id == current_user.id)
+    )
+    items = []
+    for row in item_res.scalars().all():
+        config = loader.get_material_config(row.item_id)
+        name = config.name if config else row.item_id
+        items.append(MaterialItemDB(**UserItemDB.model_validate(row).model_dump(), name=name))
 
-    return {
-        "equipments": equipments,
-        "items": items
-    }
+    credits = await _item_system(session).get_credits(current_user.id)
+    return InventoryItemsResponse(
+        credits=credits, equipments=equipments, equipped=equipped, items=items
+    )
 
-@router.post("/finalize")
-async def finalize_overload(
-    add_equipments: List[EquipmentData],
-    add_items: List[ItemData],
-    discard_ids: List[int],
+
+@router.get("/tickets", response_model=TicketListResponse)
+async def list_tickets(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """超载确认处理（核心业务逻辑）。
+    """待处理票据清单（临时货舱，Doc 17 场景 4.3 常驻入口数据源）。
 
-    当 PVE 战斗结算后，若玩家货舱溢出，客户端需引导玩家丢弃部分物品
-    后调用此接口完成最终确认。流程如下：
-
-        1. 彻底销毁 discard_ids 指定的现有装备（对应 UI 中的勾选丢弃）
-        2. 验证丢弃列表的合法性（数量匹配、权属校验）
-        3. 尝试将新获得的资产写入数据库
-        4. 若写入后依然超载，则报错拦截（防止客户端作弊直接跳过清理）
-
-    Args:
-        add_equipments: 待添加的装备列表（来自 PVE 结算）
-        add_items: 待添加的材料列表（来自 PVE 结算）
-        discard_ids: 玩家选择丢弃的装备 ID 列表
-        current_user: 当前登录用户
-        session: 数据库会话
-
-    Returns:
-        Dict[str, str]: {"status": "success"} 表示操作成功
-
-    Raises:
-        HTTPException 400: 丢弃列表包含无效资产或已装备资产
-        HTTPException 400: 货舱空间仍然不足，需要丢弃更多物品
-
-    Example:
-        >>> POST /api/inventory/finalize
-        {
-            "add_equipments": [
-                {"equipment_id": "beam_saber", "enhancement_level": 0, "random_stats": {}}
-            ],
-            "add_items": [
-                {"item_id": "titanium_alloy", "item_type": "ALLOY", "quantity": 100}
-            ],
-            "discard_ids": [42, 43]
-        }
-        Response: {"status": "success"}
-
-    Note:
-        [安全性增强] 显式验证 discard_ids 的合法性
-        [TODO] 验证 add_assets 源自合法的 PVE 结算会话（需 pending_rewards 表支持）
+    rejected 留档票据不占待处理提醒（场景 4.10）；每条附系统算好的
+    required_slots/shortfall，画面只显示（附录 A4）。
     """
-    from sqlalchemy import delete, select, func
-    loader = get_loader()
-    service = InventoryService(session, loader=loader)
+    tickets = await _item_system(session).list_tickets(current_user.id)
+    return TicketListResponse(tickets=[TicketView.model_validate(t) for t in tickets])
 
-    # 1. 显式验证待丢弃物品
-    if discard_ids:
-        # 去重处理
-        unique_discard_ids = list(set(discard_ids))
-        check_stmt = select(func.count(UserEquipment.id)).where(
-            UserEquipment.id.in_(unique_discard_ids),
-            UserEquipment.user_id == current_user.id,
-            UserEquipment.is_equipped == False
-        )
-        existing_count = (await session.execute(check_stmt)).scalar() or 0
-        if existing_count != len(unique_discard_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="丢弃列表中包含无效资产或已装备资产"
-            )
 
-        # 执行物理删除
-        stmt = delete(UserEquipment).where(
-            UserEquipment.id.in_(unique_discard_ids),
-            UserEquipment.user_id == current_user.id,
-            UserEquipment.is_equipped == False
-        )
-        await session.execute(stmt)
+@router.post("/tickets/{ticket_id}/accept")
+async def accept_ticket(
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """放行票据入包（Doc 17 场景 4.1/4.2：整批全进或全不进）。
 
-    # 2. TODO: 验证 add_equipments/add_items 是否与当前活跃的 PveSession.pending_rewards 匹配
-    # 防止客户端直接构造请求刷取非结算物品
+    容量不够 → 400 结构化短差（寄存不动，腾格后再来）；票据已放行 →
+    幂等 200 already=true（场景 4.4 连点只到账一次）；票据已清空/已拒收
+    → 409 提示刷新（场景 4.11）。
+    """
+    return await _commit_facade(
+        session, _item_system(session).accept_ticket(current_user.id, ticket_id)
+    )
 
-    # 3. 执行添加逻辑
-    result = await service.add_assets(current_user.id, add_equipments, add_items)
 
-    if result == AddResult.OVERFLOW:
-        # 如果处理完丢弃任务后依然塞不下，说明玩家没清够
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="货舱空间仍然不足，请丢弃更多物品"
-        )
+@router.post("/tickets/{ticket_id}/discard")
+async def discard_ticket_item(
+    ticket_id: int,
+    body: DiscardTicketItemRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """逐件丢弃寄存物（Doc 17 场景 4.2；二次确认在画面层）。
 
-    await session.commit()
-    return {"status": "success"}
+    丢弃直接生效不可恢复；票据非 pending（旧画面并发点丢）→ 409 提示
+    刷新清单（场景 4.11）。
+    """
+    return await _commit_facade(
+        session,
+        _item_system(session).discard_ticket_item(
+            current_user.id, ticket_id, body.entry_type, body.index
+        ),
+    )
+
+
+@router.post("/equipments/{equipment_id}/lock")
+async def lock_equipment(
+    equipment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """锁定装备（Doc 17 场景 4.7：锁定后丢弃/出售/消耗类一律被拒）。"""
+    await _commit_facade(
+        session, _item_system(session).set_lock(current_user.id, equipment_id, True)
+    )
+    return {"status": "locked"}
+
+
+@router.post("/equipments/{equipment_id}/unlock")
+async def unlock_equipment(
+    equipment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """解锁装备（恢复可丢弃/可消耗）。"""
+    await _commit_facade(
+        session, _item_system(session).set_lock(current_user.id, equipment_id, False)
+    )
+    return {"status": "unlocked"}
+
+
+@router.post("/equipments/{equipment_id}/discard")
+async def discard_equipment(
+    equipment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """丢弃背包装备（物理删除，真没了不可恢复，Doc 17 §8 D7）。
+
+    已锁定 → 400 先解锁（场景 4.7）；穿戴使用中/不属于本人 → 拒绝。
+    """
+    await _commit_facade(
+        session, _item_system(session).discard_equipment(current_user.id, equipment_id)
+    )
+    return {"status": "discarded"}
+
+
+@router.post("/items/{item_id}/discard")
+async def discard_item(
+    item_id: str,
+    body: DiscardItemRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """丢弃背包材料（按数量扣减，归零删行腾格）。"""
+    await _commit_facade(
+        session, _item_system(session).discard_item(current_user.id, item_id, body.quantity)
+    )
+    return {"status": "discarded"}
 
 
 @router.post("/debug/generate-item")
@@ -228,31 +279,48 @@ async def debug_generate_item(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """
-    调试接口：测试装备词条随机构建并入库（Doc 8）
+    """调试接口：随机词条装备生成并经统一发放门面入库（Doc 8 + Doc 17 §5.5）。
+
+    不再直接写背包：submit_grant 建票据后立即放行。容量不够时票据留
+    pending（返回 pending 而非 400），玩家从临时货舱清理后收入；deprecated
+    模板拒发生成（场景 4.14：新发放不再产出停用模板）。
     """
     from src.core.item_generator import EquipmentGenerator
+
     loader = get_loader()
+    config = loader.equipments.get(equipment_id)
+    if config is not None and config.deprecated:
+        raise HTTPException(status_code=400, detail="模板已停用，不再发放")
+
     generator = EquipmentGenerator(loader)
     try:
         random_stats = generator.generate_equipment(equipment_id, base_ilvl)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-    service = InventoryService(session, loader=loader)
+
+    item_system = _item_system(session)
     equip_data = EquipmentData(
         equipment_id=equipment_id,
         enhancement_level=0,
         random_stats=random_stats
     )
-    result = await service.add_assets(current_user.id, equipments=[equip_data], items=[])
-    
-    if result == AddResult.OVERFLOW:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="货舱空间不足，无法放入新生成的装备"
+    try:
+        ticket = await item_system.submit_grant(
+            current_user.id,
+            make_receipt_id("debug", uuid4().hex),
+            "debug",
+            equipments=[equip_data],
+            items=[],
         )
-        
+    except GrantManifestMismatchError:
+        await commit_and_report_mismatch(session)  # 先提交 rejected 留档再 400（回滚约束）
+
+    try:
+        await item_system.accept_ticket(current_user.id, ticket.id)
+    except CapacityShortfallError:
+        # 容量不够：票据留 pending 寄存（不 400），常驻入口兜底
+        await session.commit()
+        return {"status": "pending", "ticket_id": ticket.id, "generated_stats": random_stats}
+
     await session.commit()
     return {"status": "success", "generated_stats": random_stats}
-

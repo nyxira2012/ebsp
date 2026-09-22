@@ -276,8 +276,9 @@ class UserPveProgress(Base, TimestampMixin):
 class PveSession(Base, TimestampMixin):
     """PVE 探索会话表
 
-    用于记录玩家当前的副本进度、血量/能量状态以及尚未结算的掉落物。
-    作为“断线保护”的核心：掉落物在被 finalize_overload 确定入库前，始终保存在此处。
+    用于记录玩家当前的副本进度、血量/能量状态以及战斗暂存的掉落物。
+    断线保护由 ItemTicket 常驻接管：未处理寄存永不过期（Doc 17 场景 4.3），
+    会话内 pending_rewards 只承担战斗暂存。
     """
     __tablename__ = "pve_sessions"
 

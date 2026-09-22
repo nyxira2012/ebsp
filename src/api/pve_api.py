@@ -17,6 +17,7 @@ from src.pve.reward_controller import RewardController
 from src.pve.services import PveEntryService
 from src.pve.progress_service import PveProgressService
 from src.api.context import get_loader
+from src.api.errors import commit_and_report_mismatch
 from src.pve.enums import SessionStatus, CombatOutcome, ExitMethod
 from src.factory import MechaFactory
 from src.user.item_system import GrantManifestMismatchError, ItemSystem
@@ -281,11 +282,9 @@ async def extract_loot(
             loader=loader
         )
     except GrantManifestMismatchError:
-        # 清单不符（场景 4.10）：rejected 留档票据已 flush 进当前事务，先提交
-        # 让留档落库（回滚约束见 GrantManifestMismatchError docstring），再翻译
-        # 400——当场不入包、有提示、日志有痕；会话未删，资产不凭空消失
-        await db.commit()
-        raise HTTPException(status_code=400, detail="本批未发放，已记录")
+        # 清单不符（场景 4.10）：先提交 rejected 留档（回滚约束）再 400；
+        # 会话未删，资产不凭空消失
+        await commit_and_report_mismatch(db)
 
     # 销毁内存中的 session
     PveSessionManager.destroy_session(session_id)

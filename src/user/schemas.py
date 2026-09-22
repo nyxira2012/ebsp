@@ -10,7 +10,7 @@
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 from enum import Enum
 from src.models import UserMothershipData
@@ -189,6 +189,8 @@ class InventoryStatus(BaseModel):
     current: int      # 当前占用格数
     capacity: int     # 容量上限
     available: int    # 剩余可用格数
+    # 常驻入口「临时货舱有 N 件待处理」的数据源（Doc 17 场景 4.1/4.3，无寄存=0）
+    pending_tickets: int = 0
 
 class AddResult(Enum):
     """添加结果"""
@@ -206,6 +208,53 @@ class ItemData(BaseModel):
     item_id: str
     item_type: str = "material"
     quantity: int = 1
+
+class MaterialItemDB(UserItemDB):
+    """材料条目 = UserItemDB + 展示名。
+
+    name 查不到模板时回退 item_id——loot 掉的 item_id 可能不在
+    items.json，不能因展示断链（Doc 17 场景 4.14 旧档照常显示）。
+    """
+    name: str
+
+class InventoryItemsResponse(BaseModel):
+    """背包资产清单响应（Doc 17 场景 4.8）。
+
+    信用点单独显示、穿戴中装备单列一栏（不占货舱格）、材料带展示名。
+    """
+    credits: int
+    equipments: List[UserEquipmentDB]   # 未装备（占格）
+    equipped: List[UserEquipmentDB]     # 穿戴中（不占格，单列）
+    items: List[MaterialItemDB]
+
+class TicketView(BaseModel):
+    """票据画面形状——字段与门面 ItemSystem._ticket_view 一一对应。
+
+    附录 A4：占用格数与还差几格由系统算好定死，画面只显示、不改数。
+    equipments/items 为票据 manifest 的原始条目（装备含随机词条、材料含数量）。
+    """
+    ticket_id: int
+    receipt_id: str
+    source: str
+    status: str
+    credits: int
+    equipments: List[Dict[str, Any]] = Field(default_factory=list)
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    required_slots: int
+    shortfall: int
+
+class TicketListResponse(BaseModel):
+    """待处理票据清单响应（GET /inventory/tickets，场景 4.3 常驻入口数据源）。"""
+    tickets: List[TicketView] = Field(default_factory=list)
+
+class DiscardTicketItemRequest(BaseModel):
+    """逐件丢弃寄存物请求（二次确认在画面层，Doc 17 附录 A3）。"""
+    entry_type: Literal["equipment", "item"]
+    index: int = Field(ge=0, description="票据清单对应列表中的下标")
+
+class DiscardItemRequest(BaseModel):
+    """背包材料丢弃请求（丢弃直接生效不可恢复，Doc 17 §8 D7）。"""
+    quantity: int = Field(gt=0)
 
 
 # ==============================================================================

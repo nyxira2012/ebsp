@@ -181,6 +181,17 @@ class EquipmentConfig(BaseModel):
 
         return data
 
+class MaterialConfig(BaseModel):
+    """材料配置表 (data/items.json，Doc 17 §5.6 材料模板库)
+
+    编号永不变更（附录 C1）；loot 掉的 item_id 可能不在库中，展示侧
+    查不到时回退 item_id，不因展示断链。
+    """
+    id: str
+    name: str
+    description: str = ""
+    type: str = "material"
+
 class PilotConfig(BaseModel):
     """驾驶员配置表"""
     id: str
