@@ -19,7 +19,7 @@ from src.pve.progress_service import PveProgressService
 from src.api.context import get_loader
 from src.pve.enums import SessionStatus, CombatOutcome, ExitMethod
 from src.factory import MechaFactory
-from src.user.inventory import InventoryService
+from src.user.item_system import GrantManifestMismatchError, ItemSystem
 from src.user.service import MechasNotOwnedError, OnboardingService
 
 router = APIRouter(prefix="/pve", tags=["pve-system"])
@@ -267,31 +267,41 @@ async def extract_loot(
     session = get_pve_session_or_404(session_id, user.id)
     loader = get_loader()
     mothership_config = await _resolve_player_mothership(db, user.id, loader)
-    
-    inv_service = InventoryService(session=db, loader=loader)
+
     exit_method = ExitMethod(req.exit_method)
-    
-    summary = await RewardController.finalize(
-        db=db,
-        session_data=session,
-        exit_method=exit_method,
-        inventory_service=inv_service,
-        mothership_config=mothership_config,
-        loader=loader
-    )
-    
+    item_system = ItemSystem(db, loader=loader)
+
+    try:
+        summary = await RewardController.finalize(
+            db=db,
+            session_data=session,
+            exit_method=exit_method,
+            item_system=item_system,
+            mothership_config=mothership_config,
+            loader=loader
+        )
+    except GrantManifestMismatchError:
+        # 清单不符（场景 4.10）：rejected 留档票据已 flush 进当前事务，先提交
+        # 让留档落库（回滚约束见 GrantManifestMismatchError docstring），再翻译
+        # 400——当场不入包、有提示、日志有痕；会话未删，资产不凭空消失
+        await db.commit()
+        raise HTTPException(status_code=400, detail="本批未发放，已记录")
+
     # 销毁内存中的 session
     PveSessionManager.destroy_session(session_id)
-    
+
     # API 层的 DB commit 交给中间件或主动提交
     await db.commit()
-    
+
     return FinalizeResponse(
         exit_method=summary.get("exit_method", ""),
         original_equips=summary.get("original_equips", 0),
         final_equips=summary.get("final_equips", 0),
         original_items=summary.get("original_items", 0),
-        final_items=summary.get("final_items", 0)
+        final_items=summary.get("final_items", 0),
+        ticket_id=summary.get("ticket_id"),
+        ticket_status=summary.get("ticket_status"),
+        credits=summary.get("credits", 0)
     )
 
 @router.post("/sessions/{session_id}/abandon")

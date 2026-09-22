@@ -79,9 +79,16 @@ class BattleReplayResponse(BaseModel):
     battle_report: Dict[str, Any]
 
 class FinalizeResponse(BaseModel):
+    """撤离结算响应（Doc 17 场景 4.1：清单先示，未直接入包）。
+
+    ticket_id/ticket_status 指向本批战利品的寄存票据；战败等全空批次
+    不建票据（ticket_id=None）。credits 为本批折算出的信用点。
+    """
     exit_method: str
     original_equips: int
     final_equips: int
     original_items: int
     final_items: int
-    received_items_detail: Optional[Dict[str, Any]] = None
+    ticket_id: Optional[int] = None
+    ticket_status: Optional[str] = None
+    credits: int = 0

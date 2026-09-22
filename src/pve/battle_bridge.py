@@ -84,7 +84,9 @@ class BattleBridge:
 
             if random.random() <= drop_chance:
                 if drop.type == "equipment" and drop.equipment_id:
-                    if drop.equipment_id in loader.equipments:
+                    # 停用模板不产出（Doc 17 场景 4.14）：旧档持有按 id 读配置
+                    # 照常展示，只有新掉落在这一闸被拦
+                    if drop.equipment_id in loader.equipments and not loader.equipments[drop.equipment_id].deprecated:
                         random_stats = generator.generate_equipment(drop.equipment_id, base_ilvl)
                         loot_drops.append({
                             "type": "equipment",

@@ -7,6 +7,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.user.service import MothershipService
+from src.user.item_system import InsufficientCreditsError
 from src.user.security import hash_password
 from src.database.models import User, UserMothership
 from src.loader import DataLoader
@@ -97,7 +98,13 @@ def mock_loader() -> DataLoader:
 
 @pytest.mark.asyncio
 async def test_purchase_mothership_success(db_session: AsyncSession, service_test_user: User, mock_loader: DataLoader):
-    """测试成功购买母舰"""
+    """测试成功购买母舰：钱货一笔，余额同步扣减（Doc 17 场景 4.5）
+
+    Doc 17 契约变更：真扣款落地后余额 0 购买从"成功"变"拒绝"，
+    成功路径须预置足够信用点。
+    """
+    service_test_user.credits = 10000  # medium_frigate 定价 5000
+
     result = await MothershipService.purchase_mothership(
         db_session, service_test_user, "medium_frigate", mock_loader
     )
@@ -105,6 +112,7 @@ async def test_purchase_mothership_success(db_session: AsyncSession, service_tes
     assert result is not None
     assert "medium_frigate" in result.data.get("owned_ids", [])
     assert result.data["current_id"] == "medium_frigate"
+    assert service_test_user.credits == 5000  # 扣款 5000，余额同步减
 
 
 @pytest.mark.asyncio
@@ -118,11 +126,13 @@ async def test_purchase_mothership_invalid_id(db_session: AsyncSession, service_
 
 @pytest.mark.asyncio
 async def test_purchase_mothership_already_owned(db_session: AsyncSession, service_test_user: User, mock_loader: DataLoader):
-    """测试购买已拥有的母舰"""
+    """测试购买已拥有的母舰：提示已拥有，余额不动（Doc 17 场景 4.5 防双扣）"""
+    service_test_user.credits = 10000
     # 先购买一次
     await MothershipService.purchase_mothership(
         db_session, service_test_user, "medium_frigate", mock_loader
     )
+    balance_after_first = service_test_user.credits
 
     # 再次购买应该失败
     with pytest.raises(ValueError, match="玩家已拥有该母舰"):
@@ -130,18 +140,22 @@ async def test_purchase_mothership_already_owned(db_session: AsyncSession, servi
             db_session, service_test_user, "medium_frigate", mock_loader
         )
 
+    assert service_test_user.credits == balance_after_first  # 分文不动
+
 
 @pytest.mark.asyncio
 async def test_purchase_mothership_insufficient_credits(db_session: AsyncSession, service_test_user: User, mock_loader: DataLoader):
-    """测试信用点不足"""
-    # 直接在 User 对象上设置 credits 属性
-    # service.py 中使用 getattr(user, "credits", 9999999)，有属性时会返回实际值
+    """测试信用点不足：InsufficientCreditsError 带短差信息，余额分文不动（Doc 17 场景 4.6）"""
     service_test_user.credits = 100  # 只有100，但需要5000
 
-    with pytest.raises(ValueError, match="信用点不足"):
+    with pytest.raises(InsufficientCreditsError) as exc_info:
         await MothershipService.purchase_mothership(
             db_session, service_test_user, "medium_frigate", mock_loader
         )
+
+    assert exc_info.value.shortfall == 4900  # 还差 4900
+    assert "信用点不够，还差 4900" in str(exc_info.value)
+    assert service_test_user.credits == 100  # 分文不动
 
 
 @pytest.mark.asyncio
@@ -165,7 +179,8 @@ async def test_purchase_mothership_achievement_requirement(db_session: AsyncSess
 @pytest.mark.asyncio
 async def test_switch_mothership_success(db_session: AsyncSession, service_test_user: User, mock_loader: DataLoader):
     """测试成功切换母舰"""
-    # 先购买第二艘母舰
+    # 先购买第二艘母舰（真扣款落地后需预置足够信用点）
+    service_test_user.credits = 10000
     await MothershipService.purchase_mothership(
         db_session, service_test_user, "medium_frigate", mock_loader
     )

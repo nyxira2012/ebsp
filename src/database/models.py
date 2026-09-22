@@ -275,7 +275,7 @@ class UserPveProgress(Base, TimestampMixin):
 
 class PveSession(Base, TimestampMixin):
     """PVE 探索会话表
-    
+
     用于记录玩家当前的副本进度、血量/能量状态以及尚未结算的掉落物。
     作为“断线保护”的核心：掉落物在被 finalize_overload 确定入库前，始终保存在此处。
     """
@@ -289,26 +289,17 @@ class PveSession(Base, TimestampMixin):
 
     region_id: Mapped[str] = mapped_column(String(50))
     zone_id: Mapped[str] = mapped_column(String(50))
-    
+
     # 完整会话状态 JSON Blob（EventSequence + 双方 EntityState + pending_rewards）
     session_data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
-    
+
     # 幂等性约束：防止重复领取
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
-    
+
     # TTL 管控：断线保护超时时间
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="pve_sessions")
-
-class PveRewardLedger(Base, TimestampMixin):
-    """PVE 收益发放流水表 — 幂等性硬防线"""
-    __tablename__ = "pve_reward_ledger"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)  # 唯一约束
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
-    rewards_summary: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
 # ==============================================================================

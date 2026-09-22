@@ -142,7 +142,11 @@ class MothershipRepository:
     async def get_by_user_id(session: AsyncSession, user_id: int, for_update: bool = False) -> Optional[UserMothership]:
         stmt = select(UserMothership).where(UserMothership.user_id == user_id)
         if for_update:
-            stmt = stmt.with_for_update()
+            # 行锁读保证读最新已提交版本：identity map 不回填已加载属性
+            # （User.mothership selectin 常使本行早已入缓存），行锁等待横跨
+            # 他人提交后必须重读，锁后复查才不拿旧 owned_ids（同
+            # item_system._get_user 手法，单点维护）
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 

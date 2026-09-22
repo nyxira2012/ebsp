@@ -20,6 +20,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import ExternalGrantLedger, ItemTicket, User, UserEquipment, UserItem
@@ -188,6 +189,8 @@ class ItemSystem:
         日志，再抛 GrantManifestMismatchError——rejected 不占待处理提醒、
         不入包（场景 4.10）。同回执再交原样返回已有票据，不再发一次
         （场景 4.4/4.12）；回执被其他用户占用视作清单不符拒绝（所有权把关）。
+        rejected 留档不占回执幂等位：同回执重交重走清单校验，数据修复后
+        可置换回 pending，仍不符则刷新留档再拒（重新结算语义，场景 4.10）。
 
         Args:
             user_id: 发放对象用户。
@@ -199,22 +202,40 @@ class ItemSystem:
             source_detail: 溯源信息（session_id 等），可选。
 
         Returns:
-            ItemTicket: 本次新建或既有的票据（幂等）。
+            ItemTicket: 本次新建或既有的票据（非 rejected 回执幂等）。
 
         Raises:
             GrantManifestMismatchError: 清单校验失败（票据已留档）。
                 回滚约束：捕获后不得整体 rollback，否则 rejected 留档被
                 一并回滚（违反 4.10）；API 层应让留档随事务提交再翻译 400。
         """
+        problem = _validate_manifest(equipments, items, credits, self.loader)
+
         existing = (await self.session.execute(
             select(ItemTicket).where(ItemTicket.receipt_id == receipt_id)
         )).scalar_one_or_none()
         if existing is not None:
             if existing.user_id != user_id:
                 raise GrantManifestMismatchError(f"回执编号已被其他用户占用: {receipt_id}")
+            if existing.status != TicketStatus.REJECTED:
+                return existing
+            # rejected 复检：仍不符刷新留档 manifest 再拒；已修复则置换回
+            # pending（更新 manifest/source/source_detail），同回执重新结算
+            if problem is not None:
+                existing.manifest = _pack_manifest(equipments, items, credits)
+                await self.session.flush()
+                logger.error(
+                    "发放清单不符，已拒收留档 receipt_id=%s source=%s reason=%s",
+                    receipt_id, source, problem,
+                )
+                raise GrantManifestMismatchError(f"发放清单不符: {problem}")
+            existing.manifest = _pack_manifest(equipments, items, credits)
+            existing.source = source
+            existing.source_detail = source_detail
+            existing.status = TicketStatus.PENDING
+            await self.session.flush()
             return existing
 
-        problem = _validate_manifest(equipments, items, credits, self.loader)
         if problem is not None:
             ticket = ItemTicket(
                 user_id=user_id,
@@ -224,8 +245,7 @@ class ItemSystem:
                 manifest=_pack_manifest(equipments, items, credits),
                 source_detail=source_detail,
             )
-            self.session.add(ticket)
-            await self.session.flush()
+            await self._flush_new_ticket(ticket)
             logger.error(
                 "发放清单不符，已拒收留档 receipt_id=%s source=%s reason=%s",
                 receipt_id, source, problem,
@@ -240,8 +260,38 @@ class ItemSystem:
             manifest=_pack_manifest(equipments, items, credits),
             source_detail=source_detail,
         )
-        self.session.add(ticket)
-        await self.session.flush()
+        return await self._flush_new_ticket(ticket)
+
+    async def _flush_new_ticket(self, ticket: ItemTicket) -> ItemTicket:
+        """SAVEPOINT 内落库新票据，撞 receipt_id 唯一时按回执重查。
+
+        先查后插在 PostgreSQL 并发下第二路 flush 会裸抛 unique 冲突——
+        在 SAVEPOINT 内落库（失败回退保存点，外层事务继续可用），按回执
+        重查返回竞态对手的既有票据（旧 PveRewardLedger 硬防线同款语义），
+        不向调用方裸抛 500。
+
+        Returns:
+            ItemTicket: 实际生效的票据行（新建或竞态对手的既有票据）。
+
+        Raises:
+            GrantManifestMismatchError: 回执被其他用户占用。
+            IntegrityError: 非回执唯一冲突的其它落库失败（原样上抛）。
+        """
+        try:
+            async with self.session.begin_nested():
+                self.session.add(ticket)
+                await self.session.flush()
+        except IntegrityError:
+            rival = (await self.session.execute(
+                select(ItemTicket).where(ItemTicket.receipt_id == ticket.receipt_id)
+            )).scalar_one_or_none()
+            if rival is None:
+                raise
+            if rival.user_id != ticket.user_id:
+                raise GrantManifestMismatchError(
+                    f"回执编号已被其他用户占用: {ticket.receipt_id}"
+                )
+            return rival
         return ticket
 
     async def accept_ticket(self, user_id: int, ticket_id: int) -> Dict[str, Any]:
@@ -612,12 +662,19 @@ class ItemSystem:
     async def _get_user(self, user_id: int, *, for_update: bool = False) -> User:
         """按 ID 取用户行；for_update 行锁串行化同用户并发资金变动。
 
+        行锁读附带 populate_existing：行锁等待可能横跨他人事务提交，而
+        identity map 不回填已加载属性（User 关系 selectin 常使本行早已入
+        缓存）——不重读会拿过期余额核对扣减（实测踩中），锁后必须见最新
+        已提交行版本。读前先 flush：会话可能是 autoflush=False，调用方
+        对余额的未落库改动若不同步会被 populate_existing 静默丢弃。
+
         Raises:
             ValueError: 用户不存在。
         """
         stmt = select(User).where(User.id == user_id)
         if for_update:
-            stmt = stmt.with_for_update()
+            await self.session.flush()
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         user = (await self.session.execute(stmt)).scalar_one_or_none()
         if user is None:
             raise ValueError("用户不存在")

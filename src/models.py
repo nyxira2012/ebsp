@@ -138,6 +138,10 @@ class EquipmentConfig(BaseModel):
     # 携带技能
     passive_skills: List[str] = []
 
+    # 模板停用标记（Doc 17 附录 C1/场景 4.14）：编号永不变更，废弃只打停用——
+    # 停用后新掉落不再产出，旧档持有的物品照常显示可用
+    deprecated: bool = False
+
     model_config = ConfigDict(populate_by_name=True)
 
     @model_validator(mode='before')

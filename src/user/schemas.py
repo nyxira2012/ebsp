@@ -41,9 +41,12 @@ class UserResponse(UserBase):
 
     has_mecha / has_active_squad 为新号引导状态位（Doc 7 v2.2 §11.4）：
     前端据此主动触发领取引导，而非等玩家踩 400 被动发现。
+    credits 为信用点余额（Doc 17 场景 4.5：买前看得清定价与余额），
+    from_attributes 下自动读取 users.credits 列。
     """
     id: int
     status: str
+    credits: int = 0
     created_at: datetime
     has_mecha: bool = False
     has_active_squad: bool = False

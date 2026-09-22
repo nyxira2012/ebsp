@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, TYPE_CHECKING
 
 from src.user.repository import MothershipRepository, UserAssetRepository, UserRepository
+from src.user.item_system import ItemSystem
 from src.pve.services import MothershipIntegrationService
 from src.database.models import User, UserSquad
 
@@ -26,8 +27,8 @@ class MothershipService:
         mothership_id: str,
         loader: "DataLoader"  # 静态数据加载器
     ):
-        """购买母舰的完整业务流"""
-        
+        """购买母舰的完整业务流（Doc 17 场景 4.5/4.6：钱货一笔，同事务完成）"""
+
         # 1. PVE 锁定检查 (P0)
         if await MothershipIntegrationService.is_pve_session_active(session, user.id):
             raise ValueError("PVE 出征期间全盘系统锁定，无法购买母舰")
@@ -35,24 +36,15 @@ class MothershipService:
         # 2. 静态配置检查
         if mothership_id not in loader.motherships:
             raise ValueError("无效的母舰型号")
-        
+
         m_config = loader.motherships[mothership_id]
 
-        # 3. 拥有状态检查
+        # 3. 拥有状态快查（快速失败；正确性由步骤 6 锁后复查兜底）
         db_mothership = await MothershipRepository.get_by_user_id(session, user.id)
         if db_mothership and mothership_id in db_mothership.data.get("owned_ids", []):
              raise ValueError("玩家已拥有该母舰")
 
-        # 4. 经济系统检查 (P0)
-        # 批1 已落 User.credits 账面（Doc 17），真扣款属批2（charge_credits 接线）。
-        # 过渡期复刻批前契约：落列前"无属性→无限钱、显式设置→真核对"，落列后
-        # 属性恒存在，0（从未发过钱）即旧"无属性"的等价物——否则成功路径用例
-        # （余额 0）与不足用例（显式 100）无法同时成立。批2 整块替换为 charge_credits。
-        user_credits = user.credits if user.credits else 9999999  # 临时硬编码：默认拥有无限信用点
-        if user_credits < m_config.price:
-            raise ValueError(f"信用点不足。需要 {m_config.price}，当前 {user_credits}")
-
-        # 5. 前置条件检查 (P0)
+        # 4. 前置条件检查 (P0)
         # TODO: 待成就系统/关卡进度系统对接
         if m_config.required_chapter:
             # current_chapter = user.progression.get("max_chapter", 0)
@@ -66,13 +58,26 @@ class MothershipService:
             if m_config.required_achievement not in owned_achievements:
                 raise ValueError(f"购买失败。需达成成就: {m_config.required_achievement}")
 
-        # 6. 执行购买
+        # 5. 真扣款（场景 4.6）：行锁 users 行核对扣减，不够→InsufficientCreditsError
+        #    分文不动；行锁同时串行化同用户并发购买——T2 在 T1 提交后才能扣款
+        item_system = ItemSystem(session, loader=loader)
+        await item_system.charge_credits(user.id, m_config.price)
+
+        # 6. 锁后复查拥有状态（场景 4.5 防双扣）：并发同款购买在扣款处排队，
+        #    T1 提交后 T2 才走到这里——复查发现已拥有 → 抛错整笔回滚，已扣款
+        #    随事务回滚，余额不动（行锁读的新鲜度由 repository 的
+        #    populate_existing 单点保证）
+        db_mothership = await MothershipRepository.get_by_user_id(session, user.id, for_update=True)
+        if db_mothership and mothership_id in db_mothership.data.get("owned_ids", []):
+            raise ValueError("玩家已拥有该母舰")
+
+        # 7. 执行购买
         updated = await MothershipRepository.purchase_mothership(
             session, user.id, mothership_id, cost=m_config.price
         )
         if not updated:
             raise ValueError("修改用户母舰记录失败")
-            
+
         return updated
 
     @staticmethod
